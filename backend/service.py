@@ -7,12 +7,50 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Optional
 
-from .config import TABLE_MAPPING_BASE_DIR, INSTANCE_BASE_DIR, RETURNS_XML_PATH
+from .config import (
+    TABLE_MAPPING_BASE_DIR,
+    INSTANCE_BASE_DIR,
+    RETURNS_XML_PATH,
+    IS_SP_TABLE_DATA_ENABLED,
+    DP_TABLE_SCHEMA,
+)
 from .xml_loader import load_xml_tree
-from .report_lookup import find_matching_reports, _parse_returns
+from .report_lookup import (
+    find_matching_reports, _parse_returns, get_is_excel_by_return_code,
+    search_returns_scored, AUTO_SELECT_THRESHOLD,
+)
 from .calculate_variance import calculate_variance
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_report_table_name(
+    return_id: str,
+    table_name: str,
+    is_non_xbrl: bool = False,
+) -> str:
+    """
+    Mirror of the .NET table-name resolution block:
+
+        bool isExcel = GetIsExcelByReturnCode(returnCode, isNonXbrl);
+        string reportName = tableName;
+        if (isSpTableDataEnabled && !isExcel)
+            reportName = tableName + "_DP";
+    """
+    is_excel = get_is_excel_by_return_code(return_id, is_non_xbrl=is_non_xbrl)
+
+    report_name = table_name
+    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
+        report_name = f"{table_name}_DP"
+
+    # Required detailed logging (matches .NET diagnostic pattern)
+    logger.info("[table_resolution] ReturnCode=%s", return_id)
+    logger.info("[table_resolution] IsExcel=%s", is_excel)
+    logger.info("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
+    logger.info("[table_resolution] OriginalTable=%s", table_name)
+    logger.info("[table_resolution] FinalReportName=%s", report_name)
+
+    return report_name
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -110,19 +148,63 @@ def _load_table_mapping(return_id: str, tbl_path: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def find_return_and_tables(return_input: str) -> Dict[str, Any]:
-    """Find a return by name and list available tables from its mapping XML."""
+    """Find a return by name and list available tables from its mapping XML.
+
+    Response variants:
+      • Exact / unique high-confidence match  → normal result dict
+      • Multiple plausible matches            → {"candidates": [...]}
+      • Nothing found                         → {"error": "..."}
+    """
     logger.info("[service] Finding return=%s", return_input)
 
-    matches = find_matching_reports(return_input)
-    if not matches:
+    scored = search_returns_scored(return_input)
+    if not scored:
         return {"error": f"Return '{return_input}' not found."}
 
-    r         = matches[0]
+    top_score   = scored[0]["score"]
+    top_matches = [item for item in scored if item["score"] == top_score]
+
+    # Auto-select only when the single best result is clearly above the threshold
+    # AND no other row shares the same score.
+    if top_score >= AUTO_SELECT_THRESHOLD and len(top_matches) == 1:
+        r = top_matches[0]["return"]
+    elif len(scored) > 1:
+        # Return all unique candidates so the frontend can show a pick-list.
+        # Only include returns that have TblPath (can actually be queried) first,
+        # then fallback rows without TblPath, so the UI can flag them.
+        unique_ids: set = set()
+        candidates = []
+        for item in scored:
+            rid = item["return"].get("Id", "")
+            if rid in unique_ids:
+                continue
+            unique_ids.add(rid)
+            candidates.append({
+                "score":       item["score"],
+                "return_id":   rid,
+                "return_name": item["return"].get("Name", ""),
+                "report_freq": item["return"].get("RepFreq", ""),
+                "tbl_path":    (item["return"].get("TblPath") or "").strip(),
+                "has_mapping": bool((item["return"].get("TblPath") or "").strip()),
+            })
+        logger.info(
+            "[service] Ambiguous query=%r → %d candidates (top_score=%d)",
+            return_input, len(candidates), top_score,
+        )
+        return {"candidates": candidates, "query": return_input}
+    else:
+        r = scored[0]["return"]
+
     return_id = r.get("Id")
-    tbl_path  = r.get("TblPath")
+    tbl_path  = (r.get("TblPath") or "").strip()
 
     if not tbl_path:
-        return {"error": "Table mapping path not specified."}
+        return {
+            "error": (
+                f"Return '{r.get('Name', return_input)}' (Id={return_id}) does not define "
+                "TblPath in Returns.xml — it has no table-mapping metadata."
+            )
+        }
 
     root, resolved_path = _load_table_mapping(return_id, tbl_path)
 
@@ -132,9 +214,9 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
     tables = []
     for el in root.findall("Row"):
         tables.append({
-            "table_name":        el.attrib.get("TableName"),
-            "filter_col":        el.attrib.get("FilterColumn"),
-            "primary_column":    el.attrib.get("PrimaryColumn"),
+            "table_name":           el.attrib.get("TableName"),
+            "filter_col":          el.attrib.get("FilterColumn"),
+            "primary_column":      el.attrib.get("PrimaryColumn"),
             "comp_filter_col_name": el.attrib.get("CompFilterColName"),
             **el.attrib,
         })
@@ -210,6 +292,28 @@ def compute_variance(
         return_id, report_freq, table_name, reporting_date, reporting_period,
     )
 
+    # ── Table-name resolution (mirrors .NET IsExcel / IsSpTableDataEnabled logic) ──
+    # Use return_meta already fetched above instead of a second XML lookup.
+    is_excel = (
+        str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
+        if return_meta
+        else get_is_excel_by_return_code(return_id)
+    )
+    report_name = table_name
+    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
+        dp_name = f"{table_name}_DP"
+        # Prefix with the owning schema so Oracle resolves the table correctly
+        # e.g. CRILC.CIMS_RAQ_Q_SEC1_PART_A_DOM_DP
+        report_name = f"{DP_TABLE_SCHEMA}.{dp_name}" if DP_TABLE_SCHEMA else dp_name
+    resolved_table_name = report_name
+
+    logger.info("[table_resolution] ReturnCode=%s", return_id)
+    logger.info("[table_resolution] IsExcel=%s", is_excel)
+    logger.info("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
+    logger.info("[table_resolution] ReturnFoundInXml=%s", return_meta is not None)
+    logger.info("[table_resolution] OriginalTable=%s", table_name)
+    logger.info("[table_resolution] FinalReportName=%s", resolved_table_name)
+
     table_meta = _get_table_metadata(return_id, return_tbl_path, table_name)
 
     metadata = {
@@ -230,12 +334,29 @@ def compute_variance(
         cols, rows, err = execute_query_fn(query)
 
         if err:
-            raise RuntimeError(err)
+            logger.error(
+                "[service] QUERY FAILED\n"
+                "  return_id        = %s\n"
+                "  original_table   = %s\n"
+                "  resolved_table   = %s\n"
+                "  reporting_date   = %s\n"
+                "  reporting_period = %s\n"
+                "  is_excel         = %s\n"
+                "  sp_table_enabled = %s\n"
+                "  error            = %s",
+                return_id, table_name, resolved_table_name,
+                reporting_date, reporting_period,
+                is_excel, IS_SP_TABLE_DATA_ENABLED, err,
+            )
+            raise RuntimeError(
+                f"{err} | table_queried={resolved_table_name} "
+                f"| original_table={table_name}"
+            )
 
         if not rows:
             logger.error("[service] Zero rows — firing diagnostics")
             _run_table_diagnostics(
-                table_name=table_name,
+                table_name=resolved_table_name,
                 filter_col=metadata["filter_col"],
                 execute_query_fn=execute_query_fn,
             )
@@ -248,7 +369,7 @@ def compute_variance(
 
     return calculate_variance(
         return_code=return_id,
-        table_name=table_name,
+        table_name=resolved_table_name,
         reporting_date=reporting_date,
         get_table_metadata_fn=get_table_metadata_fn,
         execute_query_fn=execute_query_adapter,

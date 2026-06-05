@@ -1,4 +1,5 @@
-import DataVarianceWizard from './DataVarianceWizard.jsx'
+import LayoutContainer from './components/LayoutContainer.jsx'
+import './layout.css'
 
 export default function App() {
   return (
@@ -11,8 +12,8 @@ export default function App() {
         </div>
       </header>
 
-      <main className="app-main">
-        <DataVarianceWizard />
+      <main className="app-main-full">
+        <LayoutContainer />
       </main>
     </div>
   )

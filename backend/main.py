@@ -46,13 +46,20 @@ async def health():
 # ── GET /variance/find ─────────────────────────────────────────────────────────
 @app.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_find(return_name: str) -> dict:
-    """Find a return by name and list available tables from the table-mapping XML."""
+    """Find a return by name.
+
+    Returns one of:
+      • Normal result  — return_id, tables, etc.  (exact / unique high-confidence match)
+      • Candidates     — {candidates: [...]}       (multiple plausible matches)
+      • 404 error      — {detail: "..."}           (nothing found)
+    """
     result = service.find_return_and_tables(return_name)
     if result.get("error"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=result["error"],
         )
+    # candidates list passes through as 200 — frontend handles the pick-list
     return result
 
 
@@ -60,6 +67,10 @@ async def variance_find(return_name: str) -> dict:
 @app.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_compute(payload: VarianceComputeRequest) -> dict:
     """Compute variance for the given return / table / date / periods."""
+    logger.info(
+        "[main] POST /variance/compute | return_id=%s | table=%s | date=%s | periods=%s",
+        payload.return_id, payload.table_name, payload.reporting_date, payload.reporting_period,
+    )
     try:
         res = service.compute_variance(
             return_id=payload.return_id,
@@ -70,10 +81,37 @@ async def variance_compute(payload: VarianceComputeRequest) -> dict:
             execute_query_fn=execute_query,
             connection_string=None,
         )
+        logger.info(
+            "[main] compute_variance SUCCESS | return_id=%s | table=%s",
+            payload.return_id, payload.table_name,
+        )
     except FileNotFoundError as exc:
+        logger.error(
+            "[main] 404 FileNotFoundError | return_id=%s | table=%s | %s",
+            payload.return_id, payload.table_name, exc,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except KeyError as exc:
+        logger.error(
+            "[main] 404 KeyError (table not in mapping XML) | return_id=%s | table=%s | %s",
+            payload.return_id, payload.table_name, exc,
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RuntimeError as exc:
+        logger.error(
+            "[main] 500 RuntimeError | return_id=%s | table=%s | %s",
+            payload.return_id, payload.table_name, exc,
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception(
+            "[main] 500 Unhandled exception | return_id=%s | table=%s",
+            payload.return_id, payload.table_name,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected server error: {type(exc).__name__}: {exc}",
+        ) from exc
 
     return res
 

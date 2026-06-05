@@ -170,6 +170,7 @@ def get_variance_summary(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any
 
 
 def build_identifier(row: Dict[str, Any], comp_filter_cols: List[str]) -> str:
+    """Build a composite business-key string from the given columns."""
     row_upper = {k.upper(): v for k, v in row.items()}
     parts = [
         str(row_upper.get(col.upper(), "")).strip()
@@ -251,6 +252,23 @@ def _normalize_row_keys(row: Dict[str, Any]) -> Dict[str, Any]:
     return {k.upper(): v for k, v in row.items()}
 
 
+def _is_numeric_col(col: str, rows: List[Dict]) -> bool:
+    """Return True if at least one row has a parseable numeric value for col."""
+    for row in rows:
+        v = row.get(col)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if not s:
+            continue
+        try:
+            Decimal(s.replace(",", ""))
+            return True
+        except Exception:
+            pass
+    return False
+
+
 def calculate_variance(
     return_code: Any,
     table_name: str,
@@ -310,23 +328,98 @@ def calculate_variance(
             )
         }
 
+    comp_cols = [c.upper() for c in (metadata.get("comp_filter_col_names") or [])]
+
+    # All columns to display (exclude date/filter col and identifier/comp cols)
+    all_display_cols = [
+        k for k in all_rows[0].keys()
+        if k.upper() != fc and k.upper() not in set(comp_cols)
+    ]
+
+    if selected_columns is None:
+        # Only numeric, non-code columns get variance computed
+        selected_columns = [
+            c for c in all_display_cols
+            if "CODE" not in c.upper()
+            and _is_numeric_col(c, all_rows)
+        ]
+        logger.info(
+            "[variance] Numeric value columns selected for comparison (%d): %s",
+            len(selected_columns), selected_columns,
+        )
+
+    # ── Auto-detect identifier columns when CompFilterColName is absent in XML ──
+    if not comp_cols:
+        numeric_set = {c.upper() for c in (selected_columns or [])}
+        auto_id = [
+            k for k in all_rows[0].keys()
+            if k.upper() != fc
+            and k.upper() not in numeric_set
+            and not _is_numeric_col(k, all_rows)
+        ]
+        # Last resort: any non-date column
+        if not auto_id:
+            auto_id = [k for k in all_rows[0].keys() if k.upper() != fc]
+        if not auto_id:
+            return {"error": (
+                f"Cannot build row identifier for table '{table_name}': "
+                "CompFilterColName is empty in the table-mapping XML and no "
+                "non-numeric columns exist to use as fallback identifiers."
+            )}
+        comp_cols = [c.upper() for c in auto_id]
+        logger.warning(
+            "[row_match] CompFilterColName is empty for table '%s'. "
+            "Auto-detected identifier columns from non-numeric columns: %s. "
+            "Set CompFilterColName in the table-mapping XML for reliable matching.",
+            table_name, comp_cols,
+        )
+        # Recompute all_display_cols now that comp_cols is known
+        all_display_cols = [
+            k for k in all_rows[0].keys()
+            if k.upper() != fc and k.upper() not in set(comp_cols)
+        ]
+
+    logger.info("[row_match] Identifier columns: %s", comp_cols)
+
+    # ── Build previous-period lookup tables keyed by business identifier ──
     prev_row_sets: Dict[str, Any] = {}
     for i, pd in enumerate(prev_dates):
         period_rows = [r for r in all_rows if dates_match(r.get(fc), pd)]
         lookup: Dict[str, Any] = {}
+        duplicate_ids: set = set()
         for row in period_rows:
-            ident = build_identifier(row, metadata.get("comp_filter_col_names") or [])
+            ident = build_identifier(row, comp_cols)
+            if ident in lookup:
+                duplicate_ids.add(ident)
             lookup[ident] = row
+        if duplicate_ids:
+            logger.error(
+                "[row_match] Duplicate previous-row identifiers on %s: %s | "
+                "Identifier columns=%s. "
+                "Add more columns to CompFilterColName in the table-mapping XML.",
+                pd.strftime('%d-%b-%Y'), sorted(duplicate_ids), comp_cols,
+            )
+        logger.info(
+            "[row_match] Previous period %d (%s): %d rows, %d unique identifiers",
+            i + 1, pd.strftime("%d-%b-%Y"), len(period_rows), len(lookup),
+        )
         prev_row_sets[f"previous_{i + 1}"] = {"date": pd, "lookup": lookup}
 
-    if selected_columns is None:
-        selected_columns = [k for k in all_rows[0].keys() if k.upper() != fc]
-
-    comp_cols   = [c.upper() for c in (metadata.get("comp_filter_col_names") or [])]
     result_rows = []
+    seen_current_ids: set = set()
 
     for curr_row in current_rows:
         identifier = build_identifier(curr_row, comp_cols)
+
+        if identifier in seen_current_ids:
+            logger.error(
+                "[row_match] Duplicate current-row identifier: '%s' | "
+                "Identifier columns=%s. "
+                "Add more columns to CompFilterColName so the key is unique.",
+                identifier, comp_cols,
+            )
+        seen_current_ids.add(identifier)
+
         row_result: Dict[str, Any] = {
             "identifier": identifier,
             "current":    curr_row,
@@ -336,6 +429,10 @@ def calculate_variance(
         for period_key, pdata in prev_row_sets.items():
             matched = pdata["lookup"].get(identifier)
             if not matched:
+                logger.warning(
+                    "[row_match] No previous row found | Identifier=%s | period=%s",
+                    identifier, period_key,
+                )
                 continue
 
             metrics: Dict[str, Any] = {}
@@ -343,6 +440,10 @@ def calculate_variance(
                 col_up = col.upper()
                 prev_v = matched.get(col_up)
                 curr_v = curr_row.get(col_up)
+                logger.info(
+                    "[row_match] Identifier=%s | Col=%s | Current=%s | Previous=%s",
+                    identifier, col, curr_v, prev_v,
+                )
                 metrics[col] = {
                     "value":            prev_v,
                     "change":           get_difference(prev_v, curr_v),
@@ -358,5 +459,6 @@ def calculate_variance(
         "reporting_date":    reporting_date,
         "comparison_periods": [pd.strftime("%d-%b-%Y").upper() for pd in prev_dates],
         "columns":           selected_columns,
+        "display_columns":   all_display_cols,
         "rows":              result_rows,
     }

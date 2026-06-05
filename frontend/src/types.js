@@ -3,11 +3,12 @@
  */
 
 export const VARIANCE_STEPS = {
-  RETURN_NAME: 'return_name',
-  TABLE:       'table',
-  DATE:        'date',
-  PERIODS:     'periods',
-  RESULT:      'result',
+  RETURN_NAME:   'return_name',
+  DISAMBIGUATE:  'disambiguate',   // multiple candidates — user must pick
+  TABLE:         'table',
+  DATE:          'date',
+  PERIODS:       'periods',
+  RESULT:        'result',
 }
 
 export function freqLabel(freq) {

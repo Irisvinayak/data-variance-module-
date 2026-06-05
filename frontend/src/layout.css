@@ -1,0 +1,1064 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   layout.css — Dashboard-style layout for the Data Variance app.
+   CSS variables inherited from App.css (:root block).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── App shell: full height, no scroll on outer container ──────────────── */
+.app-main-full {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Root layout container ──────────────────────────────────────────────── */
+.lc-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CONTROL BAR (top compact toolbar — ~10-12% height)
+   ════════════════════════════════════════════════════════════════════════════ */
+.ctrl-bar {
+  flex-shrink: 0;
+  padding: 10px 20px 10px;
+  background: #13181f;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Each row is a horizontal flex line */
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 34px;
+}
+
+/* Section label (tiny uppercase) */
+.ctrl-label {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+/* Text inputs in the toolbar */
+.ctrl-input {
+  height: 34px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 0.84rem;
+  outline: none;
+  transition: border-color 0.15s;
+  min-width: 190px;
+}
+.ctrl-input:focus        { border-color: var(--accent); }
+.ctrl-input::placeholder { color: var(--text-muted); opacity: 0.65; }
+.ctrl-input:disabled     { opacity: 0.45; cursor: not-allowed; }
+
+/* Date input — fixed-width monospace */
+.ctrl-input-date {
+  min-width: 130px;
+  width: 130px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+/* Table select dropdown */
+.ctrl-select {
+  height: 34px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 0.84rem;
+  outline: none;
+  cursor: pointer;
+  min-width: 210px;
+  max-width: 320px;
+  transition: border-color 0.15s;
+}
+.ctrl-select:focus  { border-color: var(--accent); }
+.ctrl-select option { background: #1c2128; color: var(--text); }
+
+/* Vertical separator between groups */
+.ctrl-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(48, 54, 61, 0.8);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+/* Return info tag */
+.ctrl-return-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 9px;
+  background: rgba(88, 166, 255, 0.07);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.ctrl-return-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+
+/* Period chips */
+.ctrl-chips   { display: flex; gap: 3px; }
+
+.ctrl-chip {
+  width: 34px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ctrl-chip:hover { background: rgba(255, 255, 255, 0.09); color: var(--text); }
+.ctrl-chip.ctrl-chip-on {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Action button group */
+.ctrl-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* "Visualize Data" button — distinct green tone */
+.ctrl-viz-btn {
+  background: rgba(63, 185, 80, 0.12);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+.ctrl-viz-btn:not(:disabled):hover {
+  background: rgba(63, 185, 80, 0.22);
+  border-color: rgba(63, 185, 80, 0.5);
+}
+.ctrl-viz-btn-on {
+  background: rgba(63, 185, 80, 0.2);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.5);
+}
+.ctrl-viz-btn-on:not(:disabled):hover {
+  background: rgba(63, 185, 80, 0.28);
+}
+
+/* Inline error */
+.ctrl-error-inline {
+  font-size: 0.78rem;
+  color: var(--danger);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DISAMBIGUATION PICK-LIST
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.ctrl-disambig-row {
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 8px;
+  background: rgba(88, 166, 255, 0.04);
+  border-top: 1px solid rgba(88, 166, 255, 0.15);
+  padding: 10px 20px 12px;
+}
+
+.ctrl-disambig-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.ctrl-disambig-label strong { color: var(--accent); }
+
+.ctrl-disambig-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.ctrl-disambig-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+  font-size: 0.82rem;
+  color: var(--text);
+  text-align: left;
+}
+.ctrl-disambig-item:hover:not(:disabled) {
+  background: rgba(88, 166, 255, 0.1);
+  border-color: rgba(88, 166, 255, 0.4);
+}
+.ctrl-disambig-no-map {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ctrl-disambig-name  { font-weight: 600; }
+.ctrl-disambig-meta  { font-size: 0.72rem; color: var(--text-muted); }
+.ctrl-disambig-nomapping {
+  font-size: 0.66rem;
+  background: rgba(248,81,73,0.1);
+  border: 1px solid rgba(248,81,73,0.3);
+  color: #f85149;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* Confidence score badges */
+.ctrl-score-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.score-exact    { background: rgba(63,185,80,0.18);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+.score-high     { background: rgba(88,166,255,0.18); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
+.score-contains { background: rgba(227,179,65,0.18); color: #e3b341; border: 1px solid rgba(227,179,65,0.3); }
+.score-partial  { background: rgba(139,148,158,0.18); color: #8b949e; border: 1px solid rgba(139,148,158,0.3); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BOTTOM ANALYSIS AREA
+   ════════════════════════════════════════════════════════════════════════════ */
+.lc-bottom {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px 16px 12px;
+}
+
+/* Fade + slide animation when analysis area first appears */
+.lc-bottom-enter {
+  animation: lc-appear 0.28s ease forwards;
+}
+@keyframes lc-appear {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Pre-compute idle placeholder ─────────────────────────────────────── */
+.lc-idle {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  text-align: center;
+  min-height: 200px;
+}
+.lc-idle-icon   { font-size: 2.8rem; opacity: 0.25; }
+.lc-idle-spinner { width: 32px; height: 32px; border-width: 3px; opacity: 0.6; }
+.lc-idle-title  { font-size: 1rem; font-weight: 600; color: var(--text-muted); }
+.lc-idle-sub    { font-size: 0.82rem; opacity: 0.65; max-width: 340px; line-height: 1.55; }
+
+/* ── Vertical (column) resize handle between Table and Viz panels ───────── */
+.lc-vresize-handle {
+  flex: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  z-index: 10;
+}
+.lc-vresize-bar {
+  width: 3px;
+  height: 56px;
+  border-radius: 99px;
+  background: var(--border);
+  transition: background 0.15s, height 0.15s;
+}
+.lc-vresize-handle:hover .lc-vresize-bar,
+.lc-vresize-handle[data-resize-handle-active] .lc-vresize-bar {
+  background: var(--accent);
+  height: 80px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PANEL SHELL (used for Table & Viz panels)
+   ════════════════════════════════════════════════════════════════════════════ */
+.bottom-panel-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.18s;
+}
+.bottom-panel-shell:focus-within {
+  border-color: rgba(88, 166, 255, 0.3);
+}
+.panel-shell-collapsed { overflow: hidden; }
+
+/* ── Panel header (sticky top bar of each panel) ───────────────────────── */
+.ph-root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  flex-shrink: 0;
+  min-height: 40px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.ph-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.ph-icon        { font-size: 0.95rem; line-height: 1; }
+.ph-state-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ph-controls    { display: flex; gap: 4px; }
+
+/* Individual control buttons */
+.ph-btn {
+  height: 26px;
+  padding: 0 9px;
+  min-width: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.ph-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+
+.ph-btn-restore {
+  background: rgba(88, 166, 255, 0.1);
+  border-color: rgba(88, 166, 255, 0.3);
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+.ph-btn-restore:hover {
+  background: rgba(88, 166, 255, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Scrollable panel body ─────────────────────────────────────────────── */
+.bottom-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 14px;
+}
+.bottom-panel-body::-webkit-scrollbar        { width: 5px; height: 5px; }
+.bottom-panel-body::-webkit-scrollbar-thumb  { background: #444c56; border-radius: 99px; }
+
+/* ── Minimized collapsed strip ─────────────────────────────────────────── */
+.panel-collapsed-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2px 0;
+}
+.panel-collapsed-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* ── Loading state ─────────────────────────────────────────────────────── */
+.bottom-panel-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 40px 0;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VISUALIZATION PLACEHOLDER
+   ════════════════════════════════════════════════════════════════════════════ */
+.viz-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 120px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.viz-placeholder-icon  { font-size: 2.8rem; opacity: 0.25; }
+.viz-placeholder-title { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); }
+.viz-placeholder-sub   { font-size: 0.78rem; opacity: 0.6; max-width: 240px; line-height: 1.5; }
+
+
+/* ── App shell override: full-height, no max-width ──────────────────────── */
+.app-main-full {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Root layout container ──────────────────────────────────────────────── */
+.lc-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 14px 18px;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+/* ── TOP ROW (fixed height, two side-by-side panels) ─────────────────────── */
+.lc-top {
+  display: flex;
+  gap: 12px;
+  height: 310px;
+  flex-shrink: 0;
+}
+
+.lc-top-input {
+  flex: 0 0 60%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lc-top-search {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── BOTTOM ROW (fills remaining height) ────────────────────────────────── */
+.lc-bottom {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Resize handle ──────────────────────────────────────────────────────── */
+.lc-resize-handle {
+  flex: 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.lc-resize-bar {
+  width: 3px;
+  height: 48px;
+  border-radius: 99px;
+  background: var(--border);
+  transition: background 0.15s, height 0.15s;
+}
+
+.lc-resize-handle:hover .lc-resize-bar,
+.lc-resize-handle[data-resize-handle-active] .lc-resize-bar {
+  background: var(--accent);
+  height: 72px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TOP PANEL SHELL (no expand/minimize — used for Input & Search)
+   ════════════════════════════════════════════════════════════════════════════ */
+.top-panel-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.top-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+}
+
+.top-panel-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.top-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.top-panel-body::-webkit-scrollbar { width: 4px; }
+.top-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BOTTOM PANEL SHELL (used for Table & Viz — includes PanelHeader)
+   ════════════════════════════════════════════════════════════════════════════ */
+.bottom-panel-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s;
+}
+
+.bottom-panel-shell:focus-within {
+  border-color: rgba(88, 166, 255, 0.35);
+}
+
+/* Collapsed/minimized shell */
+.panel-shell-collapsed {
+  overflow: hidden;
+}
+
+/* ── PanelHeader ─────────────────────────────────────────────────────────── */
+.ph-root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  flex-shrink: 0;
+  min-height: 42px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.ph-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ph-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.ph-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.ph-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  line-height: 1;
+  padding: 0;
+}
+
+.ph-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.ph-btn.ph-btn-active {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Bottom panel scrollable body ───────────────────────────────────────── */
+.bottom-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 16px;
+}
+
+.bottom-panel-body::-webkit-scrollbar { width: 5px; height: 5px; }
+.bottom-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
+
+/* ── Collapsed panel "minimized" state body ─────────────────────────────── */
+.panel-collapsed-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.panel-collapsed-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+
+/* ── Empty states ────────────────────────────────────────────────────────── */
+.bottom-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 180px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.bottom-panel-empty-icon {
+  font-size: 2.4rem;
+  opacity: 0.45;
+}
+
+.bottom-panel-empty-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.bottom-panel-empty-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* ── Loading state ───────────────────────────────────────────────────────── */
+.bottom-panel-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 40px 0;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   INPUT PANEL specific styles
+   ════════════════════════════════════════════════════════════════════════════ */
+.ip-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 140px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.ip-empty-icon { font-size: 2rem; opacity: 0.4; }
+
+.ip-empty-text {
+  font-size: 0.82rem;
+  max-width: 220px;
+  line-height: 1.5;
+}
+
+.ip-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ip-return-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(88, 166, 255, 0.06);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 8px;
+}
+
+.ip-return-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.ip-return-name {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--accent);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ip-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ip-table-list {
+  max-height: 100px;
+}
+
+.ip-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ip-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 16px 0;
+}
+
+.ip-success-icon { font-size: 2rem; }
+
+.ip-success-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.ip-success-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SEARCH PANEL specific styles
+   ════════════════════════════════════════════════════════════════════════════ */
+.sp-result {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: rgba(63, 185, 80, 0.06);
+  border: 1px solid rgba(63, 185, 80, 0.2);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sp-result-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sp-result-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sp-result-id {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.sp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.sp-empty-icon { font-size: 1.8rem; opacity: 0.3; }
+
+.sp-empty-text {
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VISUALIZATION PANEL placeholder
+   ════════════════════════════════════════════════════════════════════════════ */
+.viz-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 200px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.viz-placeholder-icon {
+  font-size: 3rem;
+  opacity: 0.3;
+}
+
+.viz-placeholder-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.viz-placeholder-sub {
+  font-size: 0.78rem;
+  opacity: 0.6;
+  max-width: 220px;
+  line-height: 1.5;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VISUALIZATION PANEL — chart content
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Panel body override: flex column, no padding so chart fills full height */
+.viz-panel-body {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 8px;
+  gap: 10px;
+}
+
+/* ── Controls row ─────────────────────────────────────────────────────────── */
+.viz-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.viz-ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viz-ctrl-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.viz-select {
+  height: 28px;
+  padding: 0 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  outline: none;
+  cursor: pointer;
+  max-width: 200px;
+  transition: border-color 0.15s;
+}
+.viz-select:focus { border-color: var(--accent); }
+.viz-select option { background: #1c2128; }
+
+.viz-type-btns { display: flex; gap: 3px; }
+
+.viz-type-btn {
+  height: 26px;
+  padding: 0 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.viz-type-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+.viz-type-btn-on {
+  background: rgba(88,166,255,0.14);
+  border-color: rgba(88,166,255,0.4);
+  color: var(--accent);
+}
+
+/* ── Viz content wrapper (flex column, fills remaining panel height) ──────── */
+.viz-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+}
+
+/* ── Chart area ───────────────────────────────────────────────────────────── */
+.viz-chart-wrap {
+  /* Fixed pixel height — recharts ResponsiveContainer cannot reliably resolve
+     percentage heights inside flex/overflow-auto parents. A fixed height is
+     the only fully reliable approach. */
+  height: 340px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* ── Custom tooltip ───────────────────────────────────────────────────────── */
+.viz-tooltip {
+  background: #1c2128;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  font-size: 0.78rem;
+  min-width: 160px;
+}
+
+.viz-tooltip-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viz-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.viz-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.viz-tooltip-name {
+  color: var(--text-muted);
+  flex: 1;
+  font-size: 0.74rem;
+}
+
+.viz-tooltip-val {
+  color: var(--text);
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  font-size: 0.76rem;
+}

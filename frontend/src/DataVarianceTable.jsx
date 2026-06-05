@@ -58,78 +58,132 @@ export function DataVarianceBlock({ result }) {
     reporting_date,
     comparison_periods = [],
     columns = [],
+    display_columns,
     rows = [],
   } = result
 
-  const displayRows = showAll ? rows : rows.slice(0, 15)
+  const displayRows    = showAll ? rows : rows.slice(0, 20)
+  const periodCount    = comparison_periods.length
+  const colSpanWidth   = periodCount * 2
 
-  const colorClass = (colorStr) => {
-    if (colorStr === 'success') return 'vt-pos'
-    if (colorStr === 'danger')  return 'vt-neg'
+  // All columns to show; columns = only the comparable (numeric, non-code) subset
+  const allDisplayCols = display_columns ?? columns
+  const comparableSet  = new Set(columns.map((c) => c.toUpperCase()))
+
+  const cellClass = (color) => {
+    if (color === 'success') return 'vt-pos'
+    if (color === 'danger')  return 'vt-neg'
     return ''
   }
 
   return (
     <div className="variance-block">
-      <div className="variance-title">📈 Data Variance — {table_name}</div>
-      <div className="variance-subtitle">
-        Reporting: <strong>{reporting_date}</strong>
-        {comparison_periods.length > 0 && (
-          <> &nbsp;vs&nbsp; <strong>{comparison_periods.join(', ')}</strong></>
-        )}
+
+      {/* ── Title + period badges ── */}
+      <div className="variance-header">
+        <div className="variance-title">📊 {table_name}</div>
+        <div className="vt-period-row">
+          {comparison_periods.map((p, i) => (
+            <span key={i} className="vt-badge vt-badge-prev">
+              {periodCount > 1 ? `Prev ${i + 1}` : 'Previous'}: <strong>{p}</strong>
+            </span>
+          ))}
+          <span className="vt-badge vt-badge-curr">
+            Current: <strong>{reporting_date}</strong>
+          </span>
+        </div>
       </div>
 
       <div className="variance-table-wrapper">
         <table className="variance-table">
           <thead>
+
+            {/* Row 1 — column group labels */}
             <tr>
-              <th className="vt-concept-col">Identifier</th>
-              {columns.map((col) => (
-                <th key={col} className="vt-num-col" colSpan={1 + comparison_periods.length}>
-                  {col}
-                </th>
-              ))}
-            </tr>
-            <tr>
-              <th />
-              {columns.map((col) =>
-                ['Current', ...comparison_periods.map((_, i) => `Prev ${i + 1}`)].map((lbl) => (
-                  <th key={col + lbl} className="vt-num-col vt-sub">{lbl}</th>
-                ))
+              <th className="vt-id-th" rowSpan={2}>Identifier</th>
+              {allDisplayCols.map((col) =>
+                comparableSet.has(col.toUpperCase()) ? (
+                  // Comparable (numeric): spans Prev + Current sub-columns
+                  <th key={col} className="vt-group-th" colSpan={colSpanWidth}>
+                    {col}
+                  </th>
+                ) : (
+                  // Display-only (description / code): single cell across both header rows
+                  <th key={col} className="vt-group-th vt-info-th" rowSpan={2}>
+                    {col}
+                  </th>
+                )
               )}
             </tr>
+
+            {/* Row 2 — Prev / Current sub-labels for comparable columns only */}
+            <tr>
+              {allDisplayCols
+                .filter((col) => comparableSet.has(col.toUpperCase()))
+                .map((col) =>
+                  comparison_periods.map((p, i) => [
+                    <th key={`${col}_p${i}`} className="vt-sub vt-sub-prev">
+                      {periodCount > 1 ? `Prev ${i + 1}` : 'Previous'}
+                      <span className="vt-sub-date">{p}</span>
+                    </th>,
+                    <th key={`${col}_c${i}`} className="vt-sub vt-sub-curr">
+                      Current
+                      <span className="vt-sub-date">{reporting_date}</span>
+                    </th>,
+                  ])
+                )}
+            </tr>
+
           </thead>
           <tbody>
             {displayRows.map((row, ri) => (
-              <tr key={row.identifier ?? ri}>
-                <td className="vt-concept">{row.identifier || '—'}</td>
-                {columns.map((col) => {
-                  const curr = row.current?.[col]
-                  return [
-                    <td key={col + '_curr'} className="vt-num">{curr ?? '—'}</td>,
-                    ...comparison_periods.map((_, pi) => {
-                      const pKey = `previous_${pi + 1}`
-                      const m    = row.previous?.[pKey]?.[col]
-                      const vs   = m?.variance_summary
-                      return (
-                        <td
-                          key={col + pKey}
-                          className={`vt-num ${colorClass(vs?.color ?? '')}`}
-                          title={vs?.text ?? ''}
-                        >
-                          {m ? (
-                            <>
-                              {m.value ?? '—'}
-                              {vs?.arrow && <span className="vt-arrow">{vs.arrow}</span>}
-                              {m.pct_change?.value && (
-                                <span className="vt-pct">{m.pct_change.value}</span>
-                              )}
-                            </>
-                          ) : '—'}
-                        </td>
-                      )
-                    }),
-                  ]
+              <tr key={row.identifier ?? ri} className={ri % 2 === 0 ? '' : 'vt-row-alt'}>
+
+                {/* Identifier cell */}
+                <td className="vt-id-td" title={row.identifier}>{row.identifier || '—'}</td>
+
+                {allDisplayCols.map((col) => {
+                  const isComparable = comparableSet.has(col.toUpperCase())
+
+                  if (!isComparable) {
+                    // Display-only: show current value only, no comparison
+                    const val = row.current?.[col]
+                    return (
+                      <td key={col} className="vt-info-cell">
+                        {val != null ? val : '—'}
+                      </td>
+                    )
+                  }
+
+                  // Comparable: [Prev | Current+arrow] per period
+                  return comparison_periods.map((_, pi) => {
+                    const pKey  = `previous_${pi + 1}`
+                    const m     = row.previous?.[pKey]?.[col]
+                    const currV = row.current?.[col]
+                    const vs    = m?.variance_summary
+                    const cc    = cellClass(vs?.color ?? '')
+
+                    return [
+                      <td key={`${col}_${pi}_prev`} className="vt-num vt-prev-cell">
+                        {m?.value != null ? m.value : '—'}
+                      </td>,
+                      <td
+                        key={`${col}_${pi}_curr`}
+                        className={`vt-num vt-curr-cell ${cc}`}
+                        title={vs?.text ?? ''}
+                      >
+                        <span className="vt-curr-val">{currV != null ? currV : '—'}</span>
+                        {vs?.arrow && (
+                          <span className={`vt-arrow-icon ${cc}`}>
+                            {vs.arrow === '▲' ? '↑' : vs.arrow === '▼' ? '↓' : vs.arrow}
+                          </span>
+                        )}
+                        {m?.pct_change?.value && (
+                          <span className={`vt-pct-badge ${cc}`}>{m.pct_change.value}</span>
+                        )}
+                      </td>,
+                    ]
+                  })
                 })}
               </tr>
             ))}
@@ -137,12 +191,12 @@ export function DataVarianceBlock({ result }) {
         </table>
       </div>
 
-      {rows.length > 15 && (
+      {rows.length > 20 && (
         <button
           className="btn btn-secondary btn-sm"
           onClick={() => setShowAll((v) => !v)}
         >
-          {showAll ? 'Show less ▲' : `Show all ${rows.length} rows ▼`}
+          {showAll ? '▲ Show less' : `▼ Show all ${rows.length} rows`}
         </button>
       )}
     </div>
