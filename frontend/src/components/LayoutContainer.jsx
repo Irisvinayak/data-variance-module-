@@ -18,6 +18,9 @@ import TablePanel         from './TablePanel.jsx'
 import VisualizationPanel from './VisualizationPanel.jsx'
 
 export default function LayoutContainer() {
+  // ─── NLP bar state ───────────────────────────────────────────────────────
+  const [nlpQuery, setNlpQuery] = useState('')
+
   // ─── Wizard state ────────────────────────────────────────────────────────
   const [step,       setStep]       = useState(VARIANCE_STEPS.RETURN_NAME)
   const [returnName, setReturnName] = useState('')
@@ -136,6 +139,19 @@ export default function LayoutContainer() {
     setVizState('normal')
   }
 
+  // ─── NLP handlers ────────────────────────────────────────────────────────
+  const handleNlpSearch = (query) => {
+    // Placeholder: pre-fill the return name field from NLP query text
+    const trimmed = query.trim()
+    if (trimmed) {
+      setReturnName(trimmed)
+    }
+  }
+
+  const handleVoiceInput = () => {
+    // Placeholder for voice input integration
+  }
+
   // ─── Viz toggle (from "Visualize Data" / "Hide Viz" button) ─────────────
   const handleToggleViz = () => {
     if (vizOpen) {
@@ -222,6 +238,10 @@ export default function LayoutContainer() {
         handleSelectCandidate={handleSelectCandidate}
         onVisualize={handleToggleViz}
         vizOpen={vizOpen}
+        nlpQuery={nlpQuery}
+        setNlpQuery={setNlpQuery}
+        handleNlpSearch={handleNlpSearch}
+        handleVoiceInput={handleVoiceInput}
       />
 
       {/* ── Analysis area — appears after first successful compute ───── */}

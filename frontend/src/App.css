@@ -530,3 +530,42 @@ html, body, #root {
 .vt-pct-badge.vt-pos { background: rgba(63,185,80,0.15); color: #3fb950; }
 .vt-pct-badge.vt-neg { background: rgba(248,81,73,0.15); color: #f85149; }
 
+.nlp-mini-bar {
+  margin-left: auto;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  width: 350px; /* adjust as needed */
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.nlp-mini-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: transparent;
+}
+
+.nlp-mini-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nlp-mini-btn:hover {
+  background: #f1f5f9;
+}
+
+.nlp-search {
+  border-left: 1px solid #e5e7eb;
+}
