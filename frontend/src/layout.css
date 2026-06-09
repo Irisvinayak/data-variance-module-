@@ -1,9 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    layout.css — Dashboard-style layout for the Data Variance app.
    CSS variables inherited from App.css (:root block).
+
+   FILE MAP (Ctrl+F the tag to jump to a section):
+   [SHELL]        — .app-main-full, .lc-root app shell & root container
+   [CTRL-BAR]     — ControlBar.jsx  (.ctrl-bar, .ctrl-row, all toolbar elements)
+   [NLP-BAR]      — ControlBar.jsx  (.nlp-mini-bar, .nlp-mini-input, .nlp-mini-btn)
+   [CTRL-LABELS]  — ControlBar.jsx  (.ctrl-label, .ctrl-input, .ctrl-select, etc.)
+   [CTRL-CHIPS]   — ControlBar.jsx  (.ctrl-chip period buttons)
+   [CTRL-ACTIONS] — ControlBar.jsx  (.ctrl-actions, .btn overrides inside ctrl-bar)
+   [CTRL-RETURN]  — ControlBar.jsx  (.ctrl-return-tag, .ctrl-return-name)
+   [CTRL-ERROR]   — ControlBar.jsx  (.ctrl-error-inline)
+   [DISAMBIG]     — ControlBar.jsx › DisambigDropdown  (.disambig-*)
+   [SCORE-BADGE]  — ControlBar.jsx › SCORE_BADGE()  (.ctrl-score-badge, .score-*)
+   [BOTTOM-AREA]  — LayoutContainer  (.lc-bottom, .lc-idle, resize handles)
+   [PANEL-SHELL]  — bottom-panel-shell, PanelHeader (.ph-*), panel body
+   [VIZ-PANEL]    — VisualizationPanel  (.viz-*)
+   [OLD-PANELS]   — legacy top/input/search panel styles (kept for compatibility)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── App shell: full height, no scroll on outer container ──────────────── */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [SHELL] — App shell & root layout container
+   ════════════════════════════════════════════════════════════════════════════ */
 .app-main-full {
   flex: 1;
   min-height: 0;
@@ -12,7 +31,6 @@
   overflow: hidden;
 }
 
-/* ── Root layout container ──────────────────────────────────────────────── */
 .lc-root {
   display: flex;
   flex-direction: column;
@@ -20,14 +38,15 @@
   overflow: hidden;
 }
 
+
 /* ════════════════════════════════════════════════════════════════════════════
-   CONTROL BAR (top compact toolbar — ~10-12% height)
+   [CTRL-BAR] — ControlBar.jsx — outer container & row layout
    ════════════════════════════════════════════════════════════════════════════ */
 .ctrl-bar {
   flex-shrink: 0;
-  padding: 10px 20px 10px;
-  background: #13181f;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #d0d0d0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -42,7 +61,10 @@
   min-height: 34px;
 }
 
-/* ── NLP Query Bar ───────────────────────────────────────────────────────── */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [NLP-BAR] — ControlBar.jsx — NLP mini query bar (top row of ctrl-bar)
+   ════════════════════════════════════════════════════════════════════════════ */
 .nlp-bar {
   width: 100%;
 }
@@ -51,16 +73,16 @@
   display: flex;
   align-items: center;
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
   border-radius: 9px;
   padding: 4px 6px 4px 12px;
   gap: 6px;
   transition: border-color 0.15s;
 }
 .nlp-query-container:focus-within {
-  border-color: var(--accent);
-  background: rgba(88, 166, 255, 0.05);
+  border-color: #888888;
+  background: #ffffff;
 }
 
 .nlp-query-input {
@@ -69,14 +91,14 @@
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text);
+  color: #111111;
   font-size: 0.86rem;
   padding: 6px 0;
   line-height: 1.4;
 }
 .nlp-query-input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.6;
+  color: rgba(0, 0, 0, 0.4);
+  opacity: 1;
 }
 
 .nlp-query-actions {
@@ -94,41 +116,77 @@
   width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: none;
+  border: 1px solid #cccccc;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+  background: #f0f0f0;
+  color: #333333;
+}
+.nlp-voice-btn:hover { background: #e4e4e4; border-color: #aaaaaa; }
+
+.nlp-search-btn { background: #e8e8e8; }
+.nlp-search-btn:hover:not(:disabled) { background: #d8d8d8; border-color: #999999; }
+.nlp-search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── NLP mini bar (compact version used in ControlBar rows) ─────────────── */
+.nlp-mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.nlp-mini-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 7px;
+  color: #111111;
+  font-size: 0.84rem;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.nlp-mini-input:focus {
+  border-color: #777777;
+  background: #ffffff;
+}
+.nlp-mini-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+  opacity: 1;
+}
+
+.nlp-mini-btn {
+  height: 34px;
+  width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border: 1px solid #cccccc;
+  border-radius: 7px;
+  color: #333333;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
   flex-shrink: 0;
 }
-
-.nlp-voice-btn {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted);
-}
-.nlp-voice-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text);
-}
-
-.nlp-search-btn {
-  background: var(--accent);
-  color: #fff;
-}
-.nlp-search-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.nlp-search-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.nlp-mini-btn:hover { background: #e2e2e2; border-color: #aaaaaa; }
+.nlp-mini-btn.nlp-search { background: #e8e8e8; }
+.nlp-mini-btn.nlp-search:hover { background: #d8d8d8; }
 
 @media (max-width: 600px) {
-  .nlp-query-input {
-    font-size: 0.8rem;
-  }
-  .nlp-query-container {
-    padding: 3px 4px 3px 8px;
-  }
+  .nlp-query-input    { font-size: 0.8rem; }
+  .nlp-query-container { padding: 3px 4px 3px 8px; }
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [CTRL-LABELS] — ControlBar.jsx — labels, text inputs, date input, select
+   ════════════════════════════════════════════════════════════════════════════ */
 
 /* Section label (tiny uppercase) */
 .ctrl-label {
@@ -136,27 +194,29 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--text-muted);
+  color: #555555;
   white-space: nowrap;
   flex-shrink: 0;
-  opacity: 0.8;
 }
 
-/* Text inputs in the toolbar */
+/* Return name text input */
 .ctrl-input {
   height: 34px;
   padding: 0 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
   border-radius: 7px;
-  color: var(--text);
+  color: #111111;
   font-size: 0.84rem;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
   min-width: 190px;
 }
-.ctrl-input:focus        { border-color: var(--accent); }
-.ctrl-input::placeholder { color: var(--text-muted); opacity: 0.65; }
+.ctrl-input:focus {
+  border-color: #777777;
+  background: #ffffff;
+}
+.ctrl-input::placeholder { color: rgba(0, 0, 0, 0.38); opacity: 1; }
 .ctrl-input:disabled     { opacity: 0.45; cursor: not-allowed; }
 
 /* Date input — fixed-width monospace */
@@ -172,10 +232,10 @@
 .ctrl-select {
   height: 34px;
   padding: 0 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
   border-radius: 7px;
-  color: var(--text);
+  color: #111111;
   font-size: 0.84rem;
   outline: none;
   cursor: pointer;
@@ -183,46 +243,60 @@
   max-width: 320px;
   transition: border-color 0.15s;
 }
-.ctrl-select:focus  { border-color: var(--accent); }
-.ctrl-select option { background: #1c2128; color: var(--text); }
+.ctrl-select:focus { border-color: #777777; }
+.ctrl-select option { background: #ffffff; color: #111111; }
 
 /* Vertical separator between groups */
 .ctrl-sep {
   width: 1px;
   height: 20px;
-  background: rgba(48, 54, 61, 0.8);
+  background: #d0d0d0;
   flex-shrink: 0;
   margin: 0 2px;
 }
 
-/* Return info tag */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [CTRL-RETURN] — ControlBar.jsx — selected return info tag
+   ════════════════════════════════════════════════════════════════════════════ */
 .ctrl-return-tag {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 4px 11px 4px 9px;
-  background: rgba(88, 166, 255, 0.07);
-  border: 1px solid rgba(88, 166, 255, 0.2);
+  background: #f0f0f0;
+  border: 1px solid #cccccc;
   border-radius: 8px;
   flex-shrink: 0;
 }
 .ctrl-return-name {
   font-size: 0.84rem;
   font-weight: 700;
-  color: var(--accent);
+  color: #111111;
   letter-spacing: 0.01em;
 }
 
-/* Period chips */
-.ctrl-chips   { display: flex; gap: 3px; }
+/* vt-badges inside ctrl-bar */
+.ctrl-return-tag .vt-badge-curr,
+.ctrl-return-tag .vt-badge-prev {
+  background: #e8e8e8;
+  border-color: #cccccc;
+  color: #333333;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [CTRL-CHIPS] — ControlBar.jsx — period selector chip buttons (1 / 2 / 3)
+   ════════════════════════════════════════════════════════════════════════════ */
+.ctrl-chips { display: flex; gap: 3px; }
 
 .ctrl-chip {
   width: 34px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted);
+  border: 1px solid #cccccc;
+  background: #f0f0f0;
+  color: #555555;
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
@@ -231,109 +305,89 @@
   align-items: center;
   justify-content: center;
 }
-.ctrl-chip:hover { background: rgba(255, 255, 255, 0.09); color: var(--text); }
+.ctrl-chip:hover { background: #e2e2e2; color: #111111; border-color: #aaaaaa; }
 .ctrl-chip.ctrl-chip-on {
-  background: rgba(88, 166, 255, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: blue;
+  border-color: blue;
+  color: #ffffff;
 }
 
-/* Action button group */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [CTRL-ACTIONS] — ControlBar.jsx — action buttons & .btn overrides
+   ════════════════════════════════════════════════════════════════════════════ */
 .ctrl-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Override .btn styling when inside .ctrl-bar */
+.ctrl-bar .btn {
+  background: blue;
+  border: 1px solid blue;
+  color: #ffffff;
+}
+.ctrl-bar .btn:hover:not(:disabled) {
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+}
+.ctrl-bar .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.ctrl-bar .btn-secondary {
+  background: #f0f0f0;
+  border: 1px solid #cccccc;
+  color: #444444;
+}
+.ctrl-bar .btn-secondary:hover:not(:disabled) {
+  background: #e2e2e2;
+  border-color: #aaaaaa;
+  color: #111111;
+}
 
 /* "Visualize Data" button — distinct green tone */
 .ctrl-viz-btn {
-  background: rgba(63, 185, 80, 0.12);
-  color: #3fb950;
-  border: 1px solid rgba(63, 185, 80, 0.3);
+  background: rgba(22, 135, 60, 0.08);
+  color: #166534;
+  border: 1px solid rgba(22, 135, 60, 0.3);
 }
 .ctrl-viz-btn:not(:disabled):hover {
-  background: rgba(63, 185, 80, 0.22);
-  border-color: rgba(63, 185, 80, 0.5);
+  background: rgba(22, 135, 60, 0.15);
+  border-color: rgba(22, 135, 60, 0.5);
 }
 .ctrl-viz-btn-on {
-  background: rgba(63, 185, 80, 0.2);
-  color: #3fb950;
-  border: 1px solid rgba(63, 185, 80, 0.5);
+  background: rgba(22, 135, 60, 0.14);
+  color: #166534;
+  border: 1px solid rgba(22, 135, 60, 0.45);
 }
-.ctrl-viz-btn-on:not(:disabled):hover {
-  background: rgba(63, 185, 80, 0.28);
+.ctrl-viz-btn-on:not(:disabled):hover { background: rgba(22, 135, 60, 0.22); }
+
+/* Spinner inside ctrl-bar buttons */
+.ctrl-bar .spinner {
+  border-color: rgba(0, 0, 0, 0.2);
+  border-top-color: #111111;
+}
+.ctrl-bar .btn .spinner,
+.ctrl-bar .btn:not(.btn-secondary) .spinner {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
 }
 
-/* Inline error */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [CTRL-ERROR] — ControlBar.jsx — inline error message
+   ════════════════════════════════════════════════════════════════════════════ */
 .ctrl-error-inline {
   font-size: 0.78rem;
-  color: var(--danger);
+  color: #c0392b;
   white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
+
 /* ════════════════════════════════════════════════════════════════════════════
-   DISAMBIGUATION PICK-LIST
+   [SCORE-BADGE] — ControlBar.jsx › SCORE_BADGE() helper
+   Used in both the disambiguation list and any candidate rows.
    ════════════════════════════════════════════════════════════════════════════ */
-
-.ctrl-disambig-row {
-  flex-direction: column;
-  align-items: flex-start !important;
-  gap: 8px;
-  background: rgba(88, 166, 255, 0.04);
-  border-top: 1px solid rgba(88, 166, 255, 0.15);
-  padding: 10px 20px 12px;
-}
-
-.ctrl-disambig-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-.ctrl-disambig-label strong { color: var(--accent); }
-
-.ctrl-disambig-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: 100%;
-}
-
-.ctrl-disambig-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px 5px 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-  font-size: 0.82rem;
-  color: var(--text);
-  text-align: left;
-}
-.ctrl-disambig-item:hover:not(:disabled) {
-  background: rgba(88, 166, 255, 0.1);
-  border-color: rgba(88, 166, 255, 0.4);
-}
-.ctrl-disambig-no-map {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.ctrl-disambig-name  { font-weight: 600; }
-.ctrl-disambig-meta  { font-size: 0.72rem; color: var(--text-muted); }
-.ctrl-disambig-nomapping {
-  font-size: 0.66rem;
-  background: rgba(248,81,73,0.1);
-  border: 1px solid rgba(248,81,73,0.3);
-  color: #f85149;
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-
-/* Confidence score badges */
 .ctrl-score-badge {
   font-size: 0.62rem;
   font-weight: 700;
@@ -343,13 +397,221 @@
   letter-spacing: 0.05em;
   flex-shrink: 0;
 }
-.score-exact    { background: rgba(63,185,80,0.18);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
-.score-high     { background: rgba(88,166,255,0.18); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
-.score-contains { background: rgba(227,179,65,0.18); color: #e3b341; border: 1px solid rgba(227,179,65,0.3); }
-.score-partial  { background: rgba(139,148,158,0.18); color: #8b949e; border: 1px solid rgba(139,148,158,0.3); }
+.score-exact    { background: rgba(22,135,60,0.12);   color: #166534; border: 1px solid rgba(22,135,60,0.3); }
+.score-high     { background: rgba(30,100,200,0.1);   color: #1a5fa8; border: 1px solid rgba(30,100,200,0.25); }
+.score-contains { background: rgba(160,115,0,0.1);    color: #7d5a00; border: 1px solid rgba(160,115,0,0.25); }
+.score-partial  { background: rgba(0,0,0,0.06);       color: #555555; border: 1px solid rgba(0,0,0,0.15); }
+
 
 /* ════════════════════════════════════════════════════════════════════════════
-   BOTTOM ANALYSIS AREA
+   [DISAMBIG] — ControlBar.jsx › DisambigDropdown component
+   The dropdown that appears when multiple return matches are found.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Legacy flat-list styles (kept for backward compat — now replaced by dropdown) */
+.ctrl-disambig-row {
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 8px;
+  background: #f7f7f7;
+  border-top: 1px solid #e0e0e0;
+  padding: 10px 20px 12px;
+}
+.ctrl-disambig-label {
+  font-size: 0.75rem;
+  color: #555555;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.ctrl-disambig-label strong { color: #111111; }
+
+.ctrl-disambig-list  { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+
+.ctrl-disambig-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 8px;
+  background: #f0f0f0;
+  border: 1px solid #cccccc;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+  font-size: 0.82rem;
+  color: #111111;
+  text-align: left;
+}
+.ctrl-disambig-item:hover:not(:disabled) { background: #e2e2e2; border-color: #999999; }
+.ctrl-disambig-no-map { opacity: 0.45; cursor: not-allowed; }
+
+.ctrl-disambig-name    { font-weight: 600; color: #111111; }
+.ctrl-disambig-meta    { font-size: 0.72rem; color: #666666; }
+.ctrl-disambig-nomapping {
+  font-size: 0.66rem;
+  background: rgba(192,57,43,0.08);
+  border: 1px solid rgba(192,57,43,0.3);
+  color: #a93226;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ── Dropdown wrapper — positioned so the menu escapes the flex row ──────── */
+.disambig-dropdown-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* ── Trigger button ─────────────────────────────────────────────────────── */
+.disambig-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  background: #f0f0f0;
+  border: 1px solid #cccccc;
+  border-radius: 7px;
+  color: #111111;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.disambig-trigger:hover { background: #e2e2e2; border-color: #999999; }
+.disambig-trigger-icon  { font-size: 0.78rem; opacity: 0.7; }
+.disambig-trigger-label { flex: 1; }
+.disambig-trigger-label strong { color: #111111; }
+.disambig-trigger-arrow { font-size: 0.6rem; opacity: 0.5; margin-left: 2px; }
+
+/* ── Dropdown menu panel ────────────────────────────────────────────────── */
+.disambig-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 340px;
+  max-width: 480px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 200;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: disambig-drop-in 0.15s ease forwards;
+}
+@keyframes disambig-drop-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Search / filter row inside menu ────────────────────────────────────── */
+.disambig-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.disambig-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  color: #111111;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.disambig-search-input:focus { border-color: #777777; background: #ffffff; }
+.disambig-search-input::placeholder { color: rgba(0, 0, 0, 0.35); opacity: 1; }
+
+.disambig-cancel-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+.disambig-cancel-btn:hover {
+  background: rgba(192, 57, 43, 0.08);
+  border-color: rgba(192, 57, 43, 0.35);
+  color: #a93226;
+}
+
+/* ── Scrollable candidate list ──────────────────────────────────────────── */
+.disambig-list {
+  overflow-y: auto;
+  max-height: 260px;
+  padding: 4px 0;
+}
+.disambig-list::-webkit-scrollbar       { width: 4px; }
+.disambig-list::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 99px; }
+
+/* ── Individual candidate row ───────────────────────────────────────────── */
+.disambig-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
+  color: #111111;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.disambig-item:hover  { background: rgba(0, 0, 0, 0.05); }
+.disambig-item:active { background: rgba(0, 0, 0, 0.09); }
+
+.disambig-item-name {
+  flex: 1;
+  font-weight: 600;
+  color: #111111;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.disambig-item-meta { font-size: 0.72rem; color: rgba(0,0,0,0.45); white-space: nowrap; }
+.disambig-item-id   { font-size: 0.68rem; font-family: 'Courier New', monospace; color: rgba(0,0,0,0.3); white-space: nowrap; }
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.disambig-empty {
+  padding: 16px 14px;
+  font-size: 0.78rem;
+  color: rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+/* ── Footer count ───────────────────────────────────────────────────────── */
+.disambig-footer {
+  padding: 6px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  font-size: 0.66rem;
+  color: rgba(0, 0, 0, 0.35);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [BOTTOM-AREA] — LayoutContainer — content area below the ControlBar
    ════════════════════════════════════════════════════════════════════════════ */
 .lc-bottom {
   flex: 1;
@@ -367,7 +629,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Pre-compute idle placeholder ─────────────────────────────────────── */
+/* Pre-compute idle placeholder */
 .lc-idle {
   flex: 1;
   display: flex;
@@ -380,12 +642,12 @@
   text-align: center;
   min-height: 200px;
 }
-.lc-idle-icon   { font-size: 2.8rem; opacity: 0.25; }
+.lc-idle-icon    { font-size: 2.8rem; opacity: 0.25; }
 .lc-idle-spinner { width: 32px; height: 32px; border-width: 3px; opacity: 0.6; }
-.lc-idle-title  { font-size: 1rem; font-weight: 600; color: var(--text-muted); }
-.lc-idle-sub    { font-size: 0.82rem; opacity: 0.65; max-width: 340px; line-height: 1.55; }
+.lc-idle-title   { font-size: 1rem; font-weight: 600; color: var(--text-muted); }
+.lc-idle-sub     { font-size: 0.82rem; opacity: 0.65; max-width: 340px; line-height: 1.55; }
 
-/* ── Vertical (column) resize handle between Table and Viz panels ───────── */
+/* Vertical resize handle between Table and Viz panels */
 .lc-vresize-handle {
   flex: 0 0 12px;
   display: flex;
@@ -407,8 +669,32 @@
   height: 80px;
 }
 
+/* Horizontal resize handle */
+.lc-resize-handle {
+  flex: 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  z-index: 10;
+}
+.lc-resize-bar {
+  width: 3px;
+  height: 48px;
+  border-radius: 99px;
+  background: var(--border);
+  transition: background 0.15s, height 0.15s;
+}
+.lc-resize-handle:hover .lc-resize-bar,
+.lc-resize-handle[data-resize-handle-active] .lc-resize-bar {
+  background: var(--accent);
+  height: 72px;
+}
+
+
 /* ════════════════════════════════════════════════════════════════════════════
-   PANEL SHELL (used for Table & Viz panels)
+   [PANEL-SHELL] — bottom-panel-shell + PanelHeader (.ph-*) + panel body
+   Used by TablePanel and VisualizationPanel.
    ════════════════════════════════════════════════════════════════════════════ */
 .bottom-panel-shell {
   height: 100%;
@@ -421,12 +707,10 @@
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
   transition: border-color 0.18s;
 }
-.bottom-panel-shell:focus-within {
-  border-color: rgba(88, 166, 255, 0.3);
-}
+.bottom-panel-shell:focus-within { border-color: rgba(88, 166, 255, 0.3); }
 .panel-shell-collapsed { overflow: hidden; }
 
-/* ── Panel header (sticky top bar of each panel) ───────────────────────── */
+/* PanelHeader root */
 .ph-root {
   display: flex;
   align-items: center;
@@ -451,7 +735,7 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
-.ph-icon        { font-size: 0.95rem; line-height: 1; }
+.ph-icon      { font-size: 0.95rem; line-height: 1; }
 .ph-state-badge {
   font-size: 0.6rem;
   font-weight: 600;
@@ -463,9 +747,8 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.ph-controls    { display: flex; gap: 4px; }
+.ph-controls { display: flex; gap: 4px; }
 
-/* Individual control buttons */
 .ph-btn {
   height: 26px;
   padding: 0 9px;
@@ -484,7 +767,11 @@
   white-space: nowrap;
 }
 .ph-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
-
+.ph-btn.ph-btn-active {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .ph-btn-restore {
   background: rgba(88, 166, 255, 0.1);
   border-color: rgba(88, 166, 255, 0.3);
@@ -497,7 +784,7 @@
   color: var(--accent);
 }
 
-/* ── Scrollable panel body ─────────────────────────────────────────────── */
+/* Scrollable panel body */
 .bottom-panel-body {
   flex: 1;
   min-height: 0;
@@ -505,10 +792,10 @@
   overflow-x: auto;
   padding: 14px;
 }
-.bottom-panel-body::-webkit-scrollbar        { width: 5px; height: 5px; }
-.bottom-panel-body::-webkit-scrollbar-thumb  { background: #444c56; border-radius: 99px; }
+.bottom-panel-body::-webkit-scrollbar       { width: 5px; height: 5px; }
+.bottom-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
 
-/* ── Minimized collapsed strip ─────────────────────────────────────────── */
+/* Minimized collapsed strip */
 .panel-collapsed-body {
   flex: 1;
   display: flex;
@@ -527,7 +814,7 @@
   white-space: nowrap;
 }
 
-/* ── Loading state ─────────────────────────────────────────────────────── */
+/* Loading state */
 .bottom-panel-loading {
   display: flex;
   align-items: center;
@@ -538,8 +825,25 @@
   color: var(--text-muted);
 }
 
+/* Empty states */
+.bottom-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 180px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.bottom-panel-empty-icon  { font-size: 2.4rem; opacity: 0.45; }
+.bottom-panel-empty-title { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+.bottom-panel-empty-sub   { font-size: 0.78rem; color: var(--text-muted); opacity: 0.7; }
+
+
 /* ════════════════════════════════════════════════════════════════════════════
-   VISUALIZATION PLACEHOLDER
+   [VIZ-PANEL] — VisualizationPanel
    ════════════════════════════════════════════════════════════════════════════ */
 .viz-placeholder {
   display: flex;
@@ -556,464 +860,6 @@
 .viz-placeholder-title { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); }
 .viz-placeholder-sub   { font-size: 0.78rem; opacity: 0.6; max-width: 240px; line-height: 1.5; }
 
-
-/* ── App shell override: full-height, no max-width ──────────────────────── */
-.app-main-full {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* ── Root layout container ──────────────────────────────────────────────── */
-.lc-root {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 14px 18px;
-  gap: 12px;
-  box-sizing: border-box;
-}
-
-/* ── TOP ROW (fixed height, two side-by-side panels) ─────────────────────── */
-.lc-top {
-  display: flex;
-  gap: 12px;
-  height: 310px;
-  flex-shrink: 0;
-}
-
-.lc-top-input {
-  flex: 0 0 60%;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.lc-top-search {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* ── BOTTOM ROW (fills remaining height) ────────────────────────────────── */
-.lc-bottom {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* ── Resize handle ──────────────────────────────────────────────────────── */
-.lc-resize-handle {
-  flex: 0 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: col-resize;
-  z-index: 10;
-}
-
-.lc-resize-bar {
-  width: 3px;
-  height: 48px;
-  border-radius: 99px;
-  background: var(--border);
-  transition: background 0.15s, height 0.15s;
-}
-
-.lc-resize-handle:hover .lc-resize-bar,
-.lc-resize-handle[data-resize-handle-active] .lc-resize-bar {
-  background: var(--accent);
-  height: 72px;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   TOP PANEL SHELL (no expand/minimize — used for Input & Search)
-   ════════════════════════════════════════════════════════════════════════════ */
-.top-panel-shell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-}
-
-.top-panel-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.025);
-  flex-shrink: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--text-muted);
-}
-
-.top-panel-icon {
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.top-panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.top-panel-body::-webkit-scrollbar { width: 4px; }
-.top-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
-
-/* ════════════════════════════════════════════════════════════════════════════
-   BOTTOM PANEL SHELL (used for Table & Viz — includes PanelHeader)
-   ════════════════════════════════════════════════════════════════════════════ */
-.bottom-panel-shell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  transition: border-color 0.2s;
-}
-
-.bottom-panel-shell:focus-within {
-  border-color: rgba(88, 166, 255, 0.35);
-}
-
-/* Collapsed/minimized shell */
-.panel-shell-collapsed {
-  overflow: hidden;
-}
-
-/* ── PanelHeader ─────────────────────────────────────────────────────────── */
-.ph-root {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.025);
-  flex-shrink: 0;
-  min-height: 42px;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.ph-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.ph-icon {
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.ph-controls {
-  display: flex;
-  gap: 4px;
-}
-
-.ph-btn {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-  line-height: 1;
-  padding: 0;
-}
-
-.ph-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text);
-}
-
-.ph-btn.ph-btn-active {
-  background: rgba(88, 166, 255, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-/* ── Bottom panel scrollable body ───────────────────────────────────────── */
-.bottom-panel-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: auto;
-  padding: 16px;
-}
-
-.bottom-panel-body::-webkit-scrollbar { width: 5px; height: 5px; }
-.bottom-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
-
-/* ── Collapsed panel "minimized" state body ─────────────────────────────── */
-.panel-collapsed-body {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  padding: 4px 0;
-}
-
-.panel-collapsed-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--text-muted);
-  writing-mode: vertical-rl;
-  white-space: nowrap;
-}
-
-/* ── Empty states ────────────────────────────────────────────────────────── */
-.bottom-panel-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 100%;
-  min-height: 180px;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.bottom-panel-empty-icon {
-  font-size: 2.4rem;
-  opacity: 0.45;
-}
-
-.bottom-panel-empty-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.bottom-panel-empty-sub {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  opacity: 0.7;
-}
-
-/* ── Loading state ───────────────────────────────────────────────────────── */
-.bottom-panel-loading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: center;
-  padding: 40px 0;
-  font-size: 0.84rem;
-  color: var(--text-muted);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   INPUT PANEL specific styles
-   ════════════════════════════════════════════════════════════════════════════ */
-.ip-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 100%;
-  min-height: 140px;
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.ip-empty-icon { font-size: 2rem; opacity: 0.4; }
-
-.ip-empty-text {
-  font-size: 0.82rem;
-  max-width: 220px;
-  line-height: 1.5;
-}
-
-.ip-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ip-return-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px 12px;
-  background: rgba(88, 166, 255, 0.06);
-  border: 1px solid rgba(88, 166, 255, 0.2);
-  border-radius: 8px;
-}
-
-.ip-return-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-.ip-return-name {
-  font-size: 0.83rem;
-  font-weight: 600;
-  color: var(--accent);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ip-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.ip-table-list {
-  max-height: 100px;
-}
-
-.ip-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.ip-success {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 6px;
-  padding: 16px 0;
-}
-
-.ip-success-icon { font-size: 2rem; }
-
-.ip-success-text {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--success);
-}
-
-.ip-success-sub {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   SEARCH PANEL specific styles
-   ════════════════════════════════════════════════════════════════════════════ */
-.sp-result {
-  margin-top: 16px;
-  padding: 12px 14px;
-  background: rgba(63, 185, 80, 0.06);
-  border: 1px solid rgba(63, 185, 80, 0.2);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sp-result-name {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.sp-result-badges {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.sp-result-id {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.sp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 24px;
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.sp-empty-icon { font-size: 1.8rem; opacity: 0.3; }
-
-.sp-empty-text {
-  font-size: 0.78rem;
-  opacity: 0.7;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   VISUALIZATION PANEL placeholder
-   ════════════════════════════════════════════════════════════════════════════ */
-.viz-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  height: 100%;
-  min-height: 200px;
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.viz-placeholder-icon {
-  font-size: 3rem;
-  opacity: 0.3;
-}
-
-.viz-placeholder-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.viz-placeholder-sub {
-  font-size: 0.78rem;
-  opacity: 0.6;
-  max-width: 220px;
-  line-height: 1.5;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   VISUALIZATION PANEL — chart content
-   ════════════════════════════════════════════════════════════════════════════ */
-
 /* Panel body override: flex column, no padding so chart fills full height */
 .viz-panel-body {
   display: flex;
@@ -1022,7 +868,7 @@
   gap: 10px;
 }
 
-/* ── Controls row ─────────────────────────────────────────────────────────── */
+/* Controls row */
 .viz-controls {
   display: flex;
   align-items: center;
@@ -1030,13 +876,7 @@
   flex-wrap: wrap;
   flex-shrink: 0;
 }
-
-.viz-ctrl-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
+.viz-ctrl-group { display: flex; align-items: center; gap: 6px; }
 .viz-ctrl-label {
   font-size: 0.62rem;
   font-weight: 700;
@@ -1063,7 +903,6 @@
 .viz-select option { background: #1c2128; }
 
 .viz-type-btns { display: flex; gap: 3px; }
-
 .viz-type-btn {
   height: 26px;
   padding: 0 10px;
@@ -1083,7 +922,7 @@
   color: var(--accent);
 }
 
-/* ── Viz content wrapper (flex column, fills remaining panel height) ──────── */
+/* Viz content wrapper */
 .viz-content {
   display: flex;
   flex-direction: column;
@@ -1092,17 +931,10 @@
   gap: 8px;
 }
 
-/* ── Chart area ───────────────────────────────────────────────────────────── */
-.viz-chart-wrap {
-  /* Fixed pixel height — recharts ResponsiveContainer cannot reliably resolve
-     percentage heights inside flex/overflow-auto parents. A fixed height is
-     the only fully reliable approach. */
-  height: 340px;
-  flex-shrink: 0;
-  position: relative;
-}
+/* Chart area */
+.viz-chart-wrap { height: 340px; flex-shrink: 0; position: relative; }
 
-/* ── Custom tooltip ───────────────────────────────────────────────────────── */
+/* Custom tooltip */
 .viz-tooltip {
   background: #1c2128;
   border: 1px solid var(--border);
@@ -1112,7 +944,6 @@
   font-size: 0.78rem;
   min-width: 160px;
 }
-
 .viz-tooltip-label {
   font-size: 0.7rem;
   font-weight: 700;
@@ -1123,30 +954,96 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.viz-tooltip-row  { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.viz-tooltip-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.viz-tooltip-name { color: var(--text-muted); flex: 1; font-size: 0.74rem; }
+.viz-tooltip-val  { color: var(--text); font-weight: 600; font-family: 'Courier New', monospace; font-size: 0.76rem; }
 
-.viz-tooltip-row {
+
+/* ════════════════════════════════════════════════════════════════════════════
+   [OLD-PANELS] — Legacy InputPanel / SearchPanel styles (kept for compat)
+   ════════════════════════════════════════════════════════════════════════════ */
+.lc-top {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-}
-
-.viz-tooltip-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  gap: 12px;
+  height: 310px;
   flex-shrink: 0;
 }
+.lc-top-input  { flex: 0 0 60%; min-width: 0; overflow: hidden; }
+.lc-top-search { flex: 1; min-width: 0; overflow: hidden; }
 
-.viz-tooltip-name {
+.top-panel-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+.top-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
   color: var(--text-muted);
-  flex: 1;
-  font-size: 0.74rem;
 }
+.top-panel-icon { font-size: 1rem; line-height: 1; }
+.top-panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+.top-panel-body::-webkit-scrollbar       { width: 4px; }
+.top-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
 
-.viz-tooltip-val {
-  color: var(--text);
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-  font-size: 0.76rem;
+/* InputPanel */
+.ip-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; height: 100%;
+  min-height: 140px; text-align: center; color: var(--text-muted);
 }
+.ip-empty-icon { font-size: 2rem; opacity: 0.4; }
+.ip-empty-text { font-size: 0.82rem; max-width: 220px; line-height: 1.5; }
+.ip-form       { display: flex; flex-direction: column; gap: 12px; }
+.ip-return-info {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; background: rgba(88,166,255,0.06);
+  border: 1px solid rgba(88,166,255,0.2); border-radius: 8px;
+}
+.ip-return-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+}
+.ip-return-name {
+  font-size: 0.83rem; font-weight: 600; color: var(--accent);
+  flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.ip-field     { display: flex; flex-direction: column; gap: 5px; }
+.ip-table-list { max-height: 100px; }
+.ip-actions   { display: flex; gap: 8px; align-items: center; }
+.ip-success   { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 16px 0; }
+.ip-success-icon { font-size: 2rem; }
+.ip-success-text { font-size: 0.9rem; font-weight: 600; color: var(--success); }
+.ip-success-sub  { font-size: 0.78rem; color: var(--text-muted); }
+
+/* SearchPanel */
+.sp-result {
+  margin-top: 16px; padding: 12px 14px;
+  background: rgba(63,185,80,0.06); border: 1px solid rgba(63,185,80,0.2);
+  border-radius: 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.sp-result-name   { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.sp-result-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.sp-result-id     { font-size: 0.72rem; color: var(--text-muted); }
+.sp-empty {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; margin-top: 24px; text-align: center; color: var(--text-muted);
+}
+.sp-empty-icon { font-size: 1.8rem; opacity: 0.3; }
+.sp-empty-text { font-size: 0.78rem; opacity: 0.7; }
