@@ -307,8 +307,8 @@
 }
 .ctrl-chip:hover { background: #e2e2e2; color: #111111; border-color: #aaaaaa; }
 .ctrl-chip.ctrl-chip-on {
-  background: blue;
-  border-color: blue;
+  background: #00008A;
+  border-color: #00008A;
   color: #ffffff;
 }
 
@@ -320,12 +320,12 @@
 
 /* Override .btn styling when inside .ctrl-bar */
 .ctrl-bar .btn {
-  background: blue;
-  border: 1px solid blue;
+  background: #00008A;
+  border: 1px solid #00008A;
   color: #ffffff;
 }
 .ctrl-bar .btn:hover:not(:disabled) {
-  background: #333333;
+  background: #00008B;
   border-color: #333333;
   color: #ffffff;
 }

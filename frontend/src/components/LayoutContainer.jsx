@@ -1,23 +1,40 @@
 /**
  * LayoutContainer — main layout orchestrator.
  *
+ * Authorization flow:
+ *   1. On mount → calls GET /auth/my-returns?loginId=...
+ *      → stores allowedFormIds as a Set (e.g. Set{"2001","2007","4016",...})
+ *
+ *   2. On search → calls GET /variance/find?return_name=...&loginId=...
+ *      → filters the results against allowedFormIds BEFORE showing to user:
+ *          • Single result  → shown only if return_id is in allowedFormIds
+ *          • Candidates list → filtered to only allowed return_ids
+ *          • If nothing passes filter → shows "no access" error
+ *
  * Layout:
- *   TOP    : ControlBar — compact two-row toolbar, always visible (~10-12% height)
+ *   TOP    : ControlBar — compact two-row toolbar, always visible
  *   BOTTOM : Analysis area — hidden until first compute succeeds.
- *            Vertical Group: TablePanel (top) | Separator | VisualizationPanel (bottom).
- *            Viz panel starts collapsed; expands when user clicks "Visualize Data".
  */
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
-import { findReturnTables, computeVariance } from '../api.js'
+import { findReturnTables, computeVariance, getMyReturns } from '../api.js'
 import { VARIANCE_STEPS, dateHintForFreq } from '../types.js'
 
 import ControlBar         from './ControlBar.jsx'
 import TablePanel         from './TablePanel.jsx'
 import VisualizationPanel from './VisualizationPanel.jsx'
 
-export default function LayoutContainer() {
+export default function LayoutContainer({ loginId = '', uid = '' }) {
+
+  // ─── Allowed form IDs for this user ──────────────────────────────────────
+  // Populated once on mount from GET /auth/my-returns
+  // e.g. Set { "2001", "2007", "4016", "6001", ... }
+  const [allowedFormIds,    setAllowedFormIds]    = useState(null)   // null = not loaded yet
+  const [allowedFormNames,  setAllowedFormNames]  = useState(null)   // null = not loaded yet
+  const [authLoading,       setAuthLoading]       = useState(true)
+  const [authError,         setAuthError]         = useState('')
+
   // ─── NLP bar state ───────────────────────────────────────────────────────
   const [nlpQuery, setNlpQuery] = useState('')
 
@@ -25,7 +42,7 @@ export default function LayoutContainer() {
   const [step,       setStep]       = useState(VARIANCE_STEPS.RETURN_NAME)
   const [returnName, setReturnName] = useState('')
   const [returnInfo, setReturnInfo] = useState(null)
-  const [candidates, setCandidates] = useState(null)   // multi-match pick-list
+  const [candidates, setCandidates] = useState(null)
   const [tableName,  setTableName]  = useState('')
   const [dateStr,    setDateStr]    = useState('')
   const [periods,    setPeriods]    = useState(1)
@@ -37,9 +54,9 @@ export default function LayoutContainer() {
   const tablePanelRef = useRef(null)
   const vizPanelRef   = useRef(null)
   const [savedTablePct, setSavedTablePct] = useState(70)
-  const [tableState,    setTableState]    = useState('normal') // normal | expanded | minimized
-  const [vizState,      setVizState]      = useState('normal') // normal | expanded | minimized
-  const [vizOpen,       setVizOpen]       = useState(false)   // viz panel visible?
+  const [tableState,    setTableState]    = useState('normal')
+  const [vizState,      setVizState]      = useState('normal')
+  const [vizOpen,       setVizOpen]       = useState(false)
 
   // ─── Derived ─────────────────────────────────────────────────────────────
   const tables = (returnInfo?.tables || []).filter(
@@ -47,19 +64,104 @@ export default function LayoutContainer() {
   )
   const dateHint = returnInfo ? dateHintForFreq(returnInfo.report_freq) : { example: '', hint: '' }
 
+  // ─── Step 1: Fetch allowed form IDs on mount ─────────────────────────────
+  useEffect(() => {
+    if (!loginId) {
+      setAuthLoading(false)
+      setAuthError('No loginId found. Contact your administrator.')
+      return
+    }
+
+    setAuthLoading(true)
+    getMyReturns(loginId)
+      .then((data) => {
+        // data.allowed_forms = ["2001", "2007", "4016", ...]
+        setAllowedFormIds(new Set(data.allowed_forms || []))
+        setAuthLoading(false)
+      })
+      .catch((err) => {
+        setAuthError(err.message || 'Failed to load user permissions.')
+        setAuthLoading(false)
+      })
+  }, [loginId])
+
+  // ─── Filter helper — check if a return_id is allowed ─────────────────────
+  const isAllowed = (returnId) => {
+    if (!allowedFormIds) return false
+    return allowedFormIds.has(String(returnId))
+  }
+
+  // ─── Step 2: Filter search results against allowedFormIds ─────────────────
+  const filterByAccess = (info) => {
+    // Case A: single result
+    if (info.return_id) {
+      if (!isAllowed(info.return_id)) {
+        throw new Error(
+          `You do not have access to return "${info.return_name}". ` +
+          `Contact your administrator to request access.`
+        )
+      }
+      return info   // allowed — pass through as-is
+    }
+
+    // Case B: candidates list — filter to only allowed returns
+    if (info.candidates) {
+      const allowed = info.candidates.filter(c => isAllowed(c.return_id))
+
+      if (allowed.length === 0) {
+        throw new Error(
+          `No accessible returns found matching "${returnName}". ` +
+          `Contact your administrator to request access.`
+        )
+      }
+
+      // If only one candidate left after filter, auto-select it
+      if (allowed.length === 1) {
+        return { ...info, candidates: allowed, _autoSelect: true }
+      }
+
+      return { ...info, candidates: allowed }
+    }
+
+    return info
+  }
+
   // ─── API handlers ────────────────────────────────────────────────────────
+
   const handleFindReturn = async () => {
     const name = returnName.trim()
     if (!name) return
+
+    // Block search until allowed forms are loaded
+    if (authLoading) {
+      setError('Loading user permissions, please wait...')
+      return
+    }
+    if (authError) {
+      setError(authError)
+      return
+    }
+
     setLoading(true)
     setError('')
     setCandidates(null)
+
     try {
-      const info = await findReturnTables(name)
+      const raw  = await findReturnTables(name, loginId)
+      const info = filterByAccess(raw)         // ← filter here
+
       if (info.candidates) {
-        // Multiple plausible matches — show pick-list
-        setCandidates(info.candidates)
-        setStep(VARIANCE_STEPS.DISAMBIGUATE)
+        // If only 1 allowed candidate, auto-select instead of showing pick-list
+        if (info._autoSelect) {
+          const only = info.candidates[0]
+          const full = await findReturnTables(only.return_name, loginId)
+          setReturnInfo(full)
+          setTableName(full.tables?.[0]?.table_name ?? '')
+          setStep(VARIANCE_STEPS.TABLE)
+        } else {
+          setCandidates(info.candidates)
+          setStep(VARIANCE_STEPS.DISAMBIGUATE)
+        }
       } else {
         setReturnInfo(info)
         setTableName(info.tables?.[0]?.table_name ?? '')
@@ -72,19 +174,16 @@ export default function LayoutContainer() {
     }
   }
 
-  // Called when user picks one item from the disambiguation list
   const handleSelectCandidate = async (candidate) => {
     setLoading(true)
     setError('')
     setCandidates(null)
     try {
-      // Re-query by exact return_id to get full info + tables
-      const info = await findReturnTables(candidate.return_name)
+      const info = await findReturnTables(candidate.return_name, loginId)
       if (info.candidates) {
-        // Still ambiguous (shouldn’t happen with exact name) — just pick first usable
-        const best = info.candidates.find(c => c.has_mapping)
-        if (!best) throw new Error('No table mapping available for this return.')
-        const retry = await findReturnTables(best.return_name)
+        const best = info.candidates.find(c => c.has_mapping && isAllowed(c.return_id))
+        if (!best) throw new Error('No accessible table mapping available for this return.')
+        const retry = await findReturnTables(best.return_name, loginId)
         setReturnInfo(retry)
         setTableName(retry.tables?.[0]?.table_name ?? '')
       } else {
@@ -110,10 +209,9 @@ export default function LayoutContainer() {
         table_name:         tableName,
         reporting_date:     dateStr.trim(),
         reporting_period:   periods,
-      })
+      }, loginId)
       setResult(res)
       setStep(VARIANCE_STEPS.RESULT)
-      // Reset panel states; auto-open viz panel alongside table
       setTableState('normal')
       setVizState('normal')
       setVizOpen(true)
@@ -141,18 +239,13 @@ export default function LayoutContainer() {
 
   // ─── NLP handlers ────────────────────────────────────────────────────────
   const handleNlpSearch = (query) => {
-    // Placeholder: pre-fill the return name field from NLP query text
     const trimmed = query.trim()
-    if (trimmed) {
-      setReturnName(trimmed)
-    }
+    if (trimmed) setReturnName(trimmed)
   }
 
-  const handleVoiceInput = () => {
-    // Placeholder for voice input integration
-  }
+  const handleVoiceInput = () => {}
 
-  // ─── Viz toggle (from "Visualize Data" / "Hide Viz" button) ─────────────
+  // ─── Viz toggle ──────────────────────────────────────────────────────────
   const handleToggleViz = () => {
     if (vizOpen) {
       vizPanelRef.current?.collapse()
@@ -165,14 +258,13 @@ export default function LayoutContainer() {
     }
   }
 
-  // ─── Table panel expand / minimize ──────────────────────────────────────
+  // ─── Panel resize handlers ────────────────────────────────────────────────
   const getTablePct = () => tablePanelRef.current?.getSize()?.asPercentage ?? 70
 
   const handleTableExpand = () => {
     if (tableState === 'expanded') {
       tablePanelRef.current?.resize(savedTablePct)
       setTableState('normal')
-      setVizState(vizOpen ? 'normal' : 'normal')
     } else {
       setSavedTablePct(getTablePct())
       tablePanelRef.current?.resize(92)
@@ -192,7 +284,6 @@ export default function LayoutContainer() {
     }
   }
 
-  // ─── Viz panel expand / minimize ────────────────────────────────────────
   const handleVizExpand = () => {
     if (vizState === 'expanded') {
       tablePanelRef.current?.resize(savedTablePct)
@@ -218,6 +309,29 @@ export default function LayoutContainer() {
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
+
+  // While loading permissions show a spinner
+  if (authLoading) {
+    return (
+      <div className="lc-idle">
+        <span className="spinner lc-idle-spinner" />
+        <div className="lc-idle-title">Loading permissions…</div>
+        <div className="lc-idle-sub">Checking your access rights</div>
+      </div>
+    )
+  }
+
+  // If auth completely failed (no loginId, user not found)
+  if (authError && !allowedFormIds) {
+    return (
+      <div className="lc-idle">
+        <div className="lc-idle-icon">🔒</div>
+        <div className="lc-idle-title">Access Error</div>
+        <div className="lc-idle-sub">{authError}</div>
+      </div>
+    )
+  }
+
   return (
     <div className="lc-root">
 
@@ -244,7 +358,7 @@ export default function LayoutContainer() {
         handleVoiceInput={handleVoiceInput}
       />
 
-      {/* ── Analysis area — appears after first successful compute ───── */}
+      {/* ── Analysis area ────────────────────────────────────────────── */}
       {result && (
         <div className="lc-bottom lc-bottom-enter">
           <Group
@@ -252,7 +366,6 @@ export default function LayoutContainer() {
             style={{ height: '100%' }}
             defaultLayout={[55, 45]}
           >
-            {/* Table panel — left */}
             <Panel
               panelRef={tablePanelRef}
               defaultSize={55}
@@ -260,11 +373,8 @@ export default function LayoutContainer() {
               collapsible
               collapsedSize={4}
               onResize={(size) => {
-                if (size?.asPercentage <= 4 && tableState !== 'minimized') {
-                  setTableState('minimized')
-                } else if (size?.asPercentage > 4 && tableState === 'minimized') {
-                  setTableState('normal')
-                }
+                if (size?.asPercentage <= 4 && tableState !== 'minimized') setTableState('minimized')
+                else if (size?.asPercentage > 4 && tableState === 'minimized') setTableState('normal')
               }}
               style={{ overflow: 'hidden' }}
             >
@@ -278,12 +388,10 @@ export default function LayoutContainer() {
               />
             </Panel>
 
-            {/* Vertical resize handle */}
             <Separator className="lc-vresize-handle">
               <div className="lc-vresize-bar" />
             </Separator>
 
-            {/* Viz panel — right, starts collapsed */}
             <Panel
               panelRef={vizPanelRef}
               defaultSize={45}
@@ -333,7 +441,7 @@ export default function LayoutContainer() {
           <div className="lc-idle-sub">Querying Oracle and building the comparison table</div>
         </div>
       )}
+
     </div>
   )
 }
-

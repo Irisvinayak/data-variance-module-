@@ -24,9 +24,8 @@ DB_MAX_ROWS : int = int(os.getenv("DV_DB_MAX_ROWS", "5000"))
 # Root directory of the Repo5.5 installation. All XML/instance paths below
 # are resolved relative to this. Override with DV_BASE_PATH in your .env.
 BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo\Repo5.5 3\Repo5.5")
-# BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo(new)")
 
-# ── XML file paths ─────────────────────────────────────────────────────────────
+# ── Variance XML file paths ────────────────────────────────────────────────────
 RETURNS_XML_PATH: str = os.getenv(
     "DV_RETURNS_XML_PATH",
     os.path.join(BASE_PATH, r"Database\Returns.xml"),
@@ -37,36 +36,52 @@ IS_SP_TABLE_DATA_ENABLED: bool = os.getenv(
     "false",
 ).strip().lower() in {"1", "true", "yes", "on"}
 
-# Schema that owns the _DP (data-preparation) tables.
-# When IS_SP_TABLE_DATA_ENABLED=true, resolved _DP table names are prefixed
-# with this schema so Oracle can locate them (e.g. CRILC.TABLE_NAME_DP).
-# Leave blank to use no prefix (tables must be accessible without schema).
 DP_TABLE_SCHEMA: str = os.getenv("DV_DP_SCHEMA", "CRILC").strip()
 
-# Path to the NonXBRL returns catalogue (mirrors .NET NonXBRLReturns.xml).
 NON_XBRL_RETURNS_XML_PATH: str = os.getenv(
     "DV_NON_XBRL_RETURNS_XML_PATH",
     os.path.join(BASE_PATH, r"Database\NonXBRLReturns.xml"),
 )
 
-# Base directory that contains per-return table mapping XML files.
-# Structure: {TABLE_MAPPING_BASE_DIR}\{return_id}\{TblPath}
 TABLE_MAPPING_BASE_DIR: str = os.getenv(
     "DV_TABLE_MAPPING_BASE_DIR",
     os.path.join(BASE_PATH, "Database"),
 )
 
-# Base directory for instance XML files.
 INSTANCE_BASE_DIR: str = os.getenv(
     "DV_INSTANCE_BASE_DIR",
     os.path.join(BASE_PATH, "Instance"),
 )
 
-# ── Server settings ─────────────────────────────────────────────────────────────
+# ── Auth XML file paths ────────────────────────────────────────────────────────
+# Used by auth_service.py to resolve:
+#   loginId → DepartmentId   (XML_User.xml)
+#   DeptId  → Forms/NXForms  (XML_Dept.xml)
+#   RoleId  → CreateInstance (XML_RoleAccess.xml)
+#
+# These files live in the same Database folder as Returns.xml.
+# Override with DV_XML_USER_PATH / DV_XML_DEPT_PATH / DV_XML_ROLE_ACCESS_PATH
+# in your .env if they are in a different location.
+
+XML_USER_PATH: str = os.getenv(
+    "DV_XML_USER_PATH",
+    os.path.join(BASE_PATH, r"Database\XML_User.xml"),
+)
+
+XML_DEPT_PATH: str = os.getenv(
+    "DV_XML_DEPT_PATH",
+    os.path.join(BASE_PATH, r"Database\XML_Dept.xml"),
+)
+
+XML_ROLE_ACCESS_PATH: str = os.getenv(
+    "DV_XML_ROLE_ACCESS_PATH",
+    os.path.join(BASE_PATH, r"Database\XML_RoleAccess.xml"),
+)
+
+# ── Server settings ────────────────────────────────────────────────────────────
 SERVER_HOST : str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
 SERVER_PORT : int = int(os.getenv("DV_SERVER_PORT", "8002"))
 
-# Comma-separated list of allowed CORS origins.
 CORS_ORIGINS : list[str] = [
     o.strip()
     for o in os.getenv("DV_CORS_ORIGINS", "http://localhost:5173,http://localhost:3001").split(",")
