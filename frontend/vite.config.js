@@ -10,17 +10,17 @@ export default defineConfig({
 
     proxy: {
       // Any request starting with /variance or /auth is forwarded to FastAPI
-      // on port 8002. Vite adds the correct host header automatically.
+      // on port 8000. Vite adds the correct host header automatically.
       '/variance': {
-        target:      'http://localhost:8002',
+        target:      'http://localhost:8000',
         changeOrigin: true,
       },
       '/auth': {
-        target:      'http://localhost:8002',
+        target:      'http://localhost:8000',
         changeOrigin: true,
       },
       '/health': {
-        target:      'http://localhost:8002',
+        target:      'http://localhost:8000',
         changeOrigin: true,
       },
     },

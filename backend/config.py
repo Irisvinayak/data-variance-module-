@@ -80,7 +80,7 @@ XML_ROLE_ACCESS_PATH: str = os.getenv(
 
 # ── Server settings ────────────────────────────────────────────────────────────
 SERVER_HOST : str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
-SERVER_PORT : int = int(os.getenv("DV_SERVER_PORT", "8002"))
+SERVER_PORT : int = int(os.getenv("DV_SERVER_PORT", "8000"))
 
 CORS_ORIGINS : list[str] = [
     o.strip()
