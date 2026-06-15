@@ -1,112 +1,153 @@
-# auth_deps.py — FastAPI dependency injectors for authorization.
-#
-# How it plugs into routes:
-#
-#   Step 1 — require_login(loginId query param)
-#             Validates the user exists in XML_User.xml.
-#             Returns the clean login_id string on success.
-#             Raises 401 if loginId is missing.
-#             Raises 403 if the user is not found in XML_User.xml.
-#
-#   Step 2 — require_return_access(login_id, return_id)
-#             Checks the return_id is in the user's Forms/NXForms list.
-#             Raises 403 with a clear message if not.
-#             Call this inline inside route handlers after require_login resolves.
-#
-# Example usage in main.py:
-#
-#   from .auth_deps import require_login, require_return_access
-#
-#   @app.get("/variance/find")
-#   async def variance_find(
-#       return_name: str,
-#       login_id: str = Depends(require_login),
-#   ): ...
-#
-#   @app.post("/variance/compute")
-#   async def variance_compute(
-#       payload: VarianceComputeRequest,
-#       login_id: str = Depends(require_login),
-#   ):
-#       require_return_access(login_id, payload.return_id)
-#       ...
-
 from __future__ import annotations
 
 import logging
+import os
+import time
 
-from fastapi import Depends, HTTPException, Query, status
-
-from .auth_service import get_allowed_form_ids, is_return_allowed
+from .config import XML_DEPT_PATH, XML_USER_PATH, XML_ROLE_ACCESS_PATH
+from .xml_loader import load_xml_tree
 
 logger = logging.getLogger(__name__)
 
+_USER_LOGIN_ATTR = os.getenv("XML_USER_LOGIN_ATTR", "LoginId")
+_USER_DEPT_ATTR  = os.getenv("XML_USER_DEPT_ATTR",  "DepartmentId")
+_USER_ROLE_ATTR  = os.getenv("XML_USER_ROLE_ATTR",  "RoleId")
+_DEPT_ID_ATTR    = os.getenv("XML_DEPT_ID_ATTR",    "DeptId")
+_DEPT_FORMS_ATTR = os.getenv("XML_DEPT_FORMS_ATTR", "Forms")
+_DEPT_NX_ATTR    = os.getenv("XML_DEPT_NX_ATTR",    "NXForms")
 
-def require_login(
-    loginId: str = Query(
-        default="",
-        description="Login ID passed by the .NET host application via query param.",
-    )
-) -> str:
-    """FastAPI Dependency — validates loginId query param and confirms user exists.
+_AUTH_TTL = float(os.getenv("AUTH_TTL_SEC", "3600"))
+_forms_cache  = {}
+_create_cache = {}
 
-    The .NET app passes this as ?loginId=iris810 in the iframe URL.
-    FastAPI automatically injects it from the query string.
 
-    Raises
-    ------
-    401  loginId param is missing or blank.
-    403  loginId not found in XML_User.xml.
-
-    Returns
-    -------
-    str  The validated, stripped login_id on success.
-    """
-    clean = loginId.strip()
+def get_allowed_form_ids(login_id: str):
+    clean = login_id.strip()
     if not clean:
-        logger.warning("[AUTH_DEP] Request rejected — loginId query param is missing/blank")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="loginId query parameter is required. "
-                   "The .NET host must pass ?loginId=<your_login> in the URL.",
-        )
-
-    allowed = get_allowed_form_ids(clean)
-
-    if allowed is None:
-        # User not in XML_User.xml
-        logger.warning("[AUTH_DEP] REJECTED — login_id=%r not found in XML_User.xml", clean)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"User '{clean}' is not authorised to use this application.",
-        )
-
-    logger.debug(
-        "[AUTH_DEP] login_id=%r authenticated | %d form(s) in allowed set",
-        clean, len(allowed),
+        logger.warning("[AUTH] get_allowed_form_ids called with empty login_id")
+        return None
+    entry = _forms_cache.get(clean)
+    if entry and (time.monotonic() - entry[1]) < _AUTH_TTL:
+        return entry[0]
+    result = _resolve_allowed_forms(clean)
+    _forms_cache[clean] = (result, time.monotonic())
+    logger.info(
+        "[AUTH] resolved | login_id=%r | result=%s", clean,
+        f"{len(result)} form(s)" if result is not None else "USER NOT FOUND",
     )
-    return clean
+    return result
 
 
-def require_return_access(login_id: str, return_id: str) -> None:
-    """Raise HTTP 403 if the user does not have access to return_id.
-
-    Call this inline inside a route handler after require_login resolves:
-
-        require_return_access(login_id, payload.return_id)
-
-    Raises
-    ------
-    403  return_id is not in the user's Forms or NXForms list.
-    """
-    if not is_return_allowed(login_id, return_id):
+def is_return_allowed(login_id: str, return_id: str) -> bool:
+    allowed = get_allowed_form_ids(login_id)
+    if allowed is None:
+        logger.warning("[AUTH] DENIED (user not found) | login_id=%r | return_id=%r", login_id, return_id)
+        return False
+    permitted = str(return_id).strip() in allowed
+    if not permitted:
         logger.warning(
-            "[AUTH_DEP] ACCESS DENIED | login_id=%r | return_id=%r", login_id, return_id
+            "[AUTH] DENIED (not in allowed set) | login_id=%r | return_id=%r | allowed_sample=%s",
+            login_id, return_id, sorted(allowed)[:15],
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"User '{login_id}' does not have access to return '{return_id}'. "
-                "Contact your administrator to update your department's access list."
-            ),
-        )
+    else:
+        logger.debug("[AUTH] ALLOWED | login_id=%r | return_id=%r", login_id, return_id)
+    return permitted
+
+
+def invalidate(login_id: str) -> None:
+    key = login_id.strip()
+    _forms_cache.pop(key, None)
+    logger.debug("[AUTH] cache invalidated | login_id=%r", key)
+
+
+def _resolve_allowed_forms(login_id: str):
+    user_root = load_xml_tree(XML_USER_PATH, "XML_User.xml")
+    if user_root is None:
+        logger.error("[AUTH] Cannot load XML_User.xml (path=%s) — denying all access", XML_USER_PATH)
+        return None
+
+    login_lower = login_id.lower()
+    dept_id = None
+    for el in user_root.findall("Row"):
+        if el.attrib.get(_USER_LOGIN_ATTR, "").strip().lower() == login_lower:
+            dept_id = el.attrib.get(_USER_DEPT_ATTR, "").strip()
+            logger.debug("[AUTH] XML_User.xml match | login_id=%r | dept_id=%r", login_id, dept_id)
+            break
+
+    if dept_id is None:
+        logger.warning("[AUTH] login_id=%r not found in XML_User.xml", login_id)
+        return None
+
+    dept_root = load_xml_tree(XML_DEPT_PATH, "XML_Dept.xml")
+    if dept_root is None:
+        logger.error("[AUTH] Cannot load XML_Dept.xml (path=%s)", XML_DEPT_PATH)
+        return None
+
+    for el in dept_root.findall("Row"):
+        if el.attrib.get(_DEPT_ID_ATTR, "").strip() == dept_id:
+            forms_raw = el.attrib.get(_DEPT_FORMS_ATTR, "")
+            nx_raw    = el.attrib.get(_DEPT_NX_ATTR, "")
+            xbrl_ids  = {f.strip() for f in forms_raw.split("|") if f.strip()}
+            nx_ids    = {f.strip() for f in nx_raw.split("|")    if f.strip()}
+            all_ids   = xbrl_ids | nx_ids
+            logger.info(
+                "[AUTH] dept resolved | login_id=%r | dept_id=%r | xbrl=%d | nx=%d | total=%d",
+                login_id, dept_id, len(xbrl_ids), len(nx_ids), len(all_ids),
+            )
+            return all_ids
+
+    logger.warning("[AUTH] DeptId=%r not found in XML_Dept.xml | login_id=%r", dept_id, login_id)
+    return set()
+
+
+def get_user_role_id(login_id: str):
+    user_root = load_xml_tree(XML_USER_PATH, "XML_User.xml")
+    if user_root is None:
+        logger.error("[AUTH_ROLE] Cannot load XML_User.xml (path=%s)", XML_USER_PATH)
+        return None
+    login_lower = login_id.strip().lower()
+    for el in user_root.findall("Row"):
+        if el.attrib.get(_USER_LOGIN_ATTR, "").strip().lower() == login_lower:
+            role_id = el.attrib.get(_USER_ROLE_ATTR, "").strip()
+            return role_id if role_id else None
+    logger.warning("[AUTH_ROLE] login_id=%r not found in XML_User.xml", login_id)
+    return None
+
+
+def load_role_access_xml():
+    return load_xml_tree(XML_ROLE_ACCESS_PATH, "XML_RoleAccess.xml")
+
+
+def validate_create_instance_access(role_id: str) -> bool:
+    root = load_role_access_xml()
+    if root is None:
+        logger.error("[AUTH_ROLE] Cannot load XML_RoleAccess.xml — denying CreateInstance | role_id=%r", role_id)
+        return False
+    for el in root.findall("Row"):
+        if (
+            el.attrib.get("RoleId", "").strip() == role_id
+            and el.attrib.get("OptionId", "").strip() == "CreateInstance"
+        ):
+            allowed = el.attrib.get("HasNew", "false").strip().lower() == "true"
+            logger.info("[AUTH_ROLE] role_id=%r CreateInstance allowed=%s", role_id, allowed)
+            return allowed
+    logger.warning("[AUTH_ROLE] No CreateInstance row found for role_id=%r", role_id)
+    return False
+
+
+def can_generate_instance(login_id: str) -> bool:
+    clean = login_id.strip()
+    if not clean:
+        return False
+    entry = _create_cache.get(clean)
+    if entry and (time.monotonic() - entry[1]) < _AUTH_TTL:
+        return entry[0]
+    role_id = get_user_role_id(clean)
+    result  = validate_create_instance_access(role_id) if role_id else False
+    _create_cache[clean] = (result, time.monotonic())
+    logger.info("[AUTH_ROLE] login_id=%r role_id=%r can_generate_instance=%s", clean, role_id, result)
+    return result
+
+
+def invalidate_role_cache(login_id: str) -> None:
+    _create_cache.pop(login_id.strip(), None)
