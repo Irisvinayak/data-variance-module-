@@ -25,6 +25,22 @@ DB_MAX_ROWS : int = int(os.getenv("DV_DB_MAX_ROWS", "5000"))
 # are resolved relative to this. Override with DV_BASE_PATH in your .env.
 BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo\Repo5.5 3\Repo5.5")
 
+# ── Tenant XML ─────────────────────────────────────────────────────────────────
+# Global tenant registry — lives directly under BASE_PATH.
+# Per-tenant files (user.xml, department.xml) are resolved at runtime from:
+#   BASE_PATH / <TenantId> / Database / user.xml
+#   BASE_PATH / <TenantId> / Database / department.xml
+XML_TENANT_PATH: str = os.getenv(
+    "DV_XML_TENANT_PATH",
+    os.path.join(BASE_PATH, "XML_Tenant.xml"),
+)
+
+# ── Role-access XML (global — shared across all tenants) ──────────────────────
+XML_ROLE_ACCESS_PATH: str = os.getenv(
+    "DV_XML_ROLE_ACCESS_PATH",
+    os.path.join(BASE_PATH, r"Database\XML_RoleAccess.xml"),
+)
+
 # ── Variance XML file paths ────────────────────────────────────────────────────
 RETURNS_XML_PATH: str = os.getenv(
     "DV_RETURNS_XML_PATH",
@@ -51,31 +67,6 @@ TABLE_MAPPING_BASE_DIR: str = os.getenv(
 INSTANCE_BASE_DIR: str = os.getenv(
     "DV_INSTANCE_BASE_DIR",
     os.path.join(BASE_PATH, "Instance"),
-)
-
-# ── Auth XML file paths ────────────────────────────────────────────────────────
-# Used by auth_service.py to resolve:
-#   loginId → DepartmentId   (XML_User.xml)
-#   DeptId  → Forms/NXForms  (XML_Dept.xml)
-#   RoleId  → CreateInstance (XML_RoleAccess.xml)
-#
-# These files live in the same Database folder as Returns.xml.
-# Override with DV_XML_USER_PATH / DV_XML_DEPT_PATH / DV_XML_ROLE_ACCESS_PATH
-# in your .env if they are in a different location.
-
-XML_USER_PATH: str = os.getenv(
-    "DV_XML_USER_PATH",
-    os.path.join(BASE_PATH, r"Database\XML_User.xml"),
-)
-
-XML_DEPT_PATH: str = os.getenv(
-    "DV_XML_DEPT_PATH",
-    os.path.join(BASE_PATH, r"Database\XML_Dept.xml"),
-)
-
-XML_ROLE_ACCESS_PATH: str = os.getenv(
-    "DV_XML_ROLE_ACCESS_PATH",
-    os.path.join(BASE_PATH, r"Database\XML_RoleAccess.xml"),
 )
 
 # ── Server settings ────────────────────────────────────────────────────────────

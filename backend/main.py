@@ -48,49 +48,26 @@ async def health():
 @app.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_find(
     return_name: str,
-    login_id: str = Depends(require_login),     # ← validates loginId param & user exists
+    credentials: tuple = Depends(require_login),   # → (login_id, tenant_id)
 ) -> dict:
     """Find a return by name.
 
-    Requires ?loginId= query param. User must exist in XML_User.xml.
+    Requires ?loginId= and ?tenantId= query params.
+    User must exist in the tenant's user.xml.
 
     Returns one of:
       • Normal result  — return_id, tables, etc.  (exact / unique match)
       • Candidates     — {candidates: [...]}       (multiple matches)
       • 404            — {detail: "..."}           (nothing found)
-
-    Note: search results are NOT filtered by the user's allowed forms here.
-    The access check happens at /variance/compute time, giving a clear 403.
-    If you want to hide inaccessible returns from search results, see the
-    commented-out block below.
     """
+    login_id, tenant_id = credentials
+
     result = service.find_return_and_tables(return_name)
     if result.get("error"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=result["error"],
         )
-
-    # ── Optional: filter search results to user's allowed returns only ─────────
-    # Uncomment if you want the search list itself to be access-controlled.
-    #
-    # from .auth_service import get_allowed_form_ids
-    # allowed = get_allowed_form_ids(login_id) or set()
-    # if "candidates" in result:
-    #     result["candidates"] = [
-    #         c for c in result["candidates"]
-    #         if str(c.get("return_id", "")) in allowed
-    #     ]
-    #     if not result["candidates"]:
-    #         raise HTTPException(
-    #             status_code=status.HTTP_403_FORBIDDEN,
-    #             detail=f"No accessible returns found matching '{return_name}'.",
-    #         )
-    # elif result.get("return_id") and str(result["return_id"]) not in allowed:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail=f"You do not have access to return '{result.get('return_name')}'.",
-    #     )
 
     return result
 
@@ -99,20 +76,23 @@ async def variance_find(
 @app.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_compute(
     payload: VarianceComputeRequest,
-    login_id: str = Depends(require_login),     # ← step 1: user must exist in XML_User.xml
+    credentials: tuple = Depends(require_login),   # → (login_id, tenant_id)
 ) -> dict:
     """Compute variance for the given return / table / date / periods.
 
     Auth flow:
-      1. require_login  — confirms loginId param is present and user exists
-      2. require_return_access — confirms user's dept has this return in Forms/NXForms
+      1. require_login         — confirms loginId + tenantId params, user exists in tenant's user.xml
+      2. require_return_access — confirms user's department has this return in ReturnId/NXReturnId
     """
+    login_id, tenant_id = credentials
+
     # ── Step 2: check this specific return is in the user's allowed set ────────
-    require_return_access(login_id, payload.return_id)
+    require_return_access(login_id, tenant_id, payload.return_id)
 
     logger.info(
-        "[main] POST /variance/compute | login_id=%s | return_id=%s | table=%s | date=%s | periods=%s",
-        login_id, payload.return_id, payload.table_name,
+        "[main] POST /variance/compute | tenant_id=%s | login_id=%s | return_id=%s | "
+        "table=%s | date=%s | periods=%s",
+        tenant_id, login_id, payload.return_id, payload.table_name,
         payload.reporting_date, payload.reporting_period,
     )
 
@@ -127,8 +107,9 @@ async def variance_compute(
             connection_string=None,
         )
         logger.info(
-            "[main] compute_variance SUCCESS | login_id=%s | return_id=%s | table=%s",
-            login_id, payload.return_id, payload.table_name,
+            "[main] compute_variance SUCCESS | tenant_id=%s | login_id=%s | "
+            "return_id=%s | table=%s",
+            tenant_id, login_id, payload.return_id, payload.table_name,
         )
     except FileNotFoundError as exc:
         logger.error("[main] 404 FileNotFoundError | %s", exc)
@@ -151,17 +132,20 @@ async def variance_compute(
 
 # ── GET /auth/my-returns ───────────────────────────────────────────────────────
 @app.get("/auth/my-returns", status_code=status.HTTP_200_OK, tags=["Auth"])
-async def my_returns(login_id: str = Depends(require_login)) -> dict:
+async def my_returns(credentials: tuple = Depends(require_login)) -> dict:
     """Return the list of return IDs the current user is allowed to access.
 
     Useful for debugging access issues.
     Remove or restrict to internal IPs in production.
 
-    Example: GET /auth/my-returns?loginId=iris810
+    Example: GET /auth/my-returns?loginId=vaibhav@irisindia.net&tenantId=1001
     """
+    login_id, tenant_id = credentials
+
     from .auth_service import get_allowed_form_ids
-    allowed = get_allowed_form_ids(login_id) or set()
+    allowed = get_allowed_form_ids(login_id, tenant_id) or set()
     return {
+        "tenant_id":     tenant_id,
         "login_id":      login_id,
         "allowed_count": len(allowed),
         "allowed_forms": sorted(allowed),
