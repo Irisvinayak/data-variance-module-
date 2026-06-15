@@ -23,8 +23,8 @@ DB_MAX_ROWS : int = int(os.getenv("DV_DB_MAX_ROWS", "5000"))
 # ── Base path ──────────────────────────────────────────────────────────────────
 # Root directory of the Repo5.5 installation. All XML/instance paths below
 # are resolved relative to this. Override with DV_BASE_PATH in your .env.
-BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo\Repo5.5 3\Repo5.5")
-
+BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo6")
+    
 # ── Tenant XML ─────────────────────────────────────────────────────────────────
 # Global tenant registry — lives directly under BASE_PATH.
 # Per-tenant files (user.xml, department.xml) are resolved at runtime from:

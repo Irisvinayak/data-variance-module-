@@ -2,11 +2,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './App.css'
-import { ThemeProvider } from "./context/ThemeContext";
+import { bootstrapAuthFromUrl } from './api.js'
+
+// ── MUST be first — seeds sessionStorage from ?_at and ?_lid URL params ──
+bootstrapAuthFromUrl()
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-    // <ThemeProvider>
-    //     <App />
-    // </ThemeProvider>
-    <App />
-);
+  <App />
+)

@@ -21,8 +21,8 @@ import { Panel, Group, Separator } from 'react-resizable-panels'
 import { findReturnTables, computeVariance, getMyReturns } from '../api.js'
 import { VARIANCE_STEPS, dateHintForFreq } from '../types.js'
 
-import ControlBar         from './ControlBar.jsx'
-import TablePanel         from './TablePanel.jsx'
+import ControlBar from './ControlBar.jsx'
+import TablePanel from './TablePanel.jsx'
 import VisualizationPanel from './VisualizationPanel.jsx'
 
 export default function LayoutContainer({ loginId = '', uid = '' }) {
@@ -30,33 +30,33 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   // ─── Allowed form IDs for this user ──────────────────────────────────────
   // Populated once on mount from GET /auth/my-returns
   // e.g. Set { "2001", "2007", "4016", "6001", ... }
-  const [allowedFormIds,    setAllowedFormIds]    = useState(null)   // null = not loaded yet
-  const [allowedFormNames,  setAllowedFormNames]  = useState(null)   // null = not loaded yet
-  const [authLoading,       setAuthLoading]       = useState(true)
-  const [authError,         setAuthError]         = useState('')
+  const [allowedFormIds, setAllowedFormIds] = useState(null)   // null = not loaded yet
+  const [allowedFormNames, setAllowedFormNames] = useState(null)   // null = not loaded yet
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
 
   // ─── NLP bar state ───────────────────────────────────────────────────────
   const [nlpQuery, setNlpQuery] = useState('')
 
   // ─── Wizard state ────────────────────────────────────────────────────────
-  const [step,       setStep]       = useState(VARIANCE_STEPS.RETURN_NAME)
+  const [step, setStep] = useState(VARIANCE_STEPS.RETURN_NAME)
   const [returnName, setReturnName] = useState('')
   const [returnInfo, setReturnInfo] = useState(null)
   const [candidates, setCandidates] = useState(null)
-  const [tableName,  setTableName]  = useState('')
-  const [dateStr,    setDateStr]    = useState('')
-  const [periods,    setPeriods]    = useState(1)
-  const [result,     setResult]     = useState(null)
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState('')
+  const [tableName, setTableName] = useState('')
+  const [dateStr, setDateStr] = useState('')
+  const [periods, setPeriods] = useState(1)
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   // ─── Panel state ─────────────────────────────────────────────────────────
   const tablePanelRef = useRef(null)
-  const vizPanelRef   = useRef(null)
+  const vizPanelRef = useRef(null)
   const [savedTablePct, setSavedTablePct] = useState(70)
-  const [tableState,    setTableState]    = useState('normal')
-  const [vizState,      setVizState]      = useState('normal')
-  const [vizOpen,       setVizOpen]       = useState(false)
+  const [tableState, setTableState] = useState('normal')
+  const [vizState, setVizState] = useState('normal')
+  const [vizOpen, setVizOpen] = useState(false)
 
   // ─── Derived ─────────────────────────────────────────────────────────────
   const tables = (returnInfo?.tables || []).filter(
@@ -147,7 +147,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setCandidates(null)
 
     try {
-      const raw  = await findReturnTables(name, loginId)
+      const raw = await findReturnTables(name, loginId)
       const info = filterByAccess(raw)         // ← filter here
 
       if (info.candidates) {
@@ -204,11 +204,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setError('')
     try {
       const res = await computeVariance({
-        return_id:          returnInfo.return_id,
+        return_id: returnInfo.return_id,
         table_mapping_path: returnInfo.table_mapping_path,
-        table_name:         tableName,
-        reporting_date:     dateStr.trim(),
-        reporting_period:   periods,
+        table_name: tableName,
+        reporting_date: dateStr.trim(),
+        reporting_period: periods,
       }, loginId)
       setResult(res)
       setStep(VARIANCE_STEPS.RESULT)
@@ -243,7 +243,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     if (trimmed) setReturnName(trimmed)
   }
 
-  const handleVoiceInput = () => {}
+  const handleVoiceInput = () => { }
 
   // ─── Viz toggle ──────────────────────────────────────────────────────────
   const handleToggleViz = () => {
@@ -308,6 +308,25 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     }
   }
 
+  // In LayoutContainer.jsx — replace the useEffect (around line 60)
+  useEffect(() => {
+    setAuthLoading(true)
+    getMyReturns()           // ← no args — reads loginId from sessionStorage via getAuthParams()
+      .then((data) => {
+        if (!data.login_id) {
+          setAuthError('No loginId found. Contact your administrator.')
+          setAuthLoading(false)
+          return
+        }
+        setAllowedFormIds(new Set(data.allowed_forms || []))
+        setAuthLoading(false)
+      })
+      .catch((err) => {
+        setAuthError(err.message || 'Failed to load user permissions.')
+        setAuthLoading(false)
+      })
+  }, [])   // ← no dependency on loginId prop
+
   // ─── Render ──────────────────────────────────────────────────────────────
 
   // While loading permissions show a spinner
@@ -338,13 +357,13 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
       {/* ── Compact control toolbar ─────────────────────────────────── */}
       <ControlBar
         step={step}
-        returnName={returnName}   setReturnName={setReturnName}
-        returnInfo={returnInfo}   tables={tables}
-        tableName={tableName}     setTableName={setTableName}
-        dateStr={dateStr}         setDateStr={setDateStr}
+        returnName={returnName} setReturnName={setReturnName}
+        returnInfo={returnInfo} tables={tables}
+        tableName={tableName} setTableName={setTableName}
+        dateStr={dateStr} setDateStr={setDateStr}
         dateHint={dateHint}
-        periods={periods}         setPeriods={setPeriods}
-        loading={loading}         error={error}
+        periods={periods} setPeriods={setPeriods}
+        loading={loading} error={error}
         candidates={candidates}
         handleFindReturn={handleFindReturn}
         handleCompute={handleCompute}
