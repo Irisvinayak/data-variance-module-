@@ -137,9 +137,11 @@ def _resolve_allowed_forms(login_id: str, tenant_id: str):
 
     login_lower = login_id.lower()
     dept_id = None
+    matched_user_attrs = None
     for el in user_root.findall("Row"):
         if el.attrib.get(_USER_LOGIN_ATTR, "").strip().lower() == login_lower:
             dept_id = el.attrib.get(_USER_DEPT_ATTR, "").strip()
+            matched_user_attrs = el.attrib
             logger.debug(
                 "[AUTH] user.xml match | tenant_id=%r | login_id=%r | dept_id=%r",
                 tenant_id, login_id, dept_id,
@@ -147,10 +149,23 @@ def _resolve_allowed_forms(login_id: str, tenant_id: str):
             break
 
     if dept_id is None:
+        all_logins = [
+            el.attrib.get(_USER_LOGIN_ATTR, "") for el in user_root.findall("Row")
+        ]
         logger.warning(
-            "[AUTH] login_id=%r not found in user.xml | tenant_id=%r", login_id, tenant_id
+            "[AUTH] login_id=%r not found in user.xml | tenant_id=%r | "
+            "available_logins=%s",
+            login_id, tenant_id, all_logins,
         )
         return None
+
+    if not dept_id:
+        logger.warning(
+            "[AUTH] login_id=%r has empty/missing %s in user.xml | tenant_id=%r | "
+            "user_row_attrs=%s",
+            login_id, _USER_DEPT_ATTR, tenant_id, matched_user_attrs,
+        )
+        return set()
 
     dept_path = _tenant_xml_path(tenant_id, "department.xml")
     if dept_path is None:
@@ -177,9 +192,18 @@ def _resolve_allowed_forms(login_id: str, tenant_id: str):
             )
             return all_ids
 
+    # No matching department row found — log every available DeptId so the
+    # mismatch (e.g. user.xml DepartmentId="103" vs department.xml Id="100")
+    # is immediately visible without manual file inspection.
+    available_dept_ids = [
+        el.attrib.get(_DEPT_ID_ATTR, "") for el in dept_root.findall("Row")
+    ]
     logger.warning(
-        "[AUTH] DeptId=%r not found in department.xml | tenant_id=%r | login_id=%r",
-        dept_id, tenant_id, login_id,
+        "[AUTH] DeptId=%r (from user.xml DepartmentId attribute) not found in "
+        "department.xml | tenant_id=%r | login_id=%r | "
+        "available_department_ids=%s | dept_id_attr_name=%r | user_dept_attr_name=%r",
+        dept_id, tenant_id, login_id, available_dept_ids,
+        _DEPT_ID_ATTR, _USER_DEPT_ATTR,
     )
     return set()
 

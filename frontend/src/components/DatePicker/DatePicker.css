@@ -1,0 +1,261 @@
+/* =============================================================================
+   DatePicker.css  —  custom calendar component
+   Designed for a dark-panel data app.
+   Add to your main stylesheet or import in DatePicker.jsx.
+
+   Fix: added .dp-dropdown--right for right-edge viewport overflow prevention
+   ============================================================================= */
+
+/* ── Wrapper ──────────────────────────────────────────────────────────────── */
+.dp-wrap {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Trigger button ───────────────────────────────────────────────────────── */
+.dp-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: #1e2330;
+  border: 1px solid #2e3650;
+  border-radius: 6px;
+  color: #8892aa;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dp-trigger:hover:not(.dp-trigger--disabled) {
+  border-color: #4a6fa5;
+  background: #232840;
+}
+.dp-trigger--set {
+  color: #e2e8f4;
+}
+.dp-trigger--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dp-cal-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.dp-trigger-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dp-chevron {
+  font-size: 12px;
+  color: #5a6a8a;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.dp-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ── Dropdown panel ───────────────────────────────────────────────────────── */
+.dp-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  width: 264px;
+  background: #161b2e;
+  border: 1px solid #2e3a5c;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  padding: 12px;
+  animation: dp-fadein 0.14s ease;
+}
+
+/* FIX #5: right-align dropdown when trigger is near the right edge */
+.dp-dropdown--right {
+  left: auto;
+  right: 0;
+}
+
+@keyframes dp-fadein {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Month / year nav row ─────────────────────────────────────────────────── */
+.dp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.dp-nav-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #1e2640;
+  color: #a0aec0;
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.dp-nav-btn:hover {
+  background: #2a3560;
+  color: #e2e8f4;
+}
+.dp-nav-center {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dp-month-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c8d4f0;
+  letter-spacing: 0.03em;
+}
+.dp-year-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7ba4e8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.dp-year-btn:hover {
+  background: #1e2a4a;
+}
+.dp-year-input {
+  width: 54px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7ba4e8;
+  background: #1a2240;
+  border: 1px solid #3a4e80;
+  border-radius: 4px;
+  padding: 2px 5px;
+  outline: none;
+  text-align: center;
+}
+.dp-year-input:focus {
+  border-color: #5a82cc;
+}
+
+/* ── Day-of-week header ───────────────────────────────────────────────────── */
+.dp-dow-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+.dp-dow {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #4a5a80;
+  padding: 2px 0 4px;
+  text-transform: uppercase;
+}
+
+/* ── Date grid ────────────────────────────────────────────────────────────── */
+.dp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.dp-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #b0bcd8;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-variant-numeric: tabular-nums;
+}
+.dp-cell:hover:not(.dp-cell--selected):not(.dp-cell--out) {
+  background: #1e2d50;
+  color: #e2e8f4;
+}
+.dp-cell--out {
+  color: #2e3a58;
+  cursor: default;
+  pointer-events: none; /* prevent clicks on out-of-month cells via CSS too */
+}
+.dp-cell--today {
+  color: #7ba4e8;
+  font-weight: 700;
+  position: relative;
+}
+.dp-cell--today::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #7ba4e8;
+}
+.dp-cell--selected {
+  background: #2f4f9c;
+  color: #e8f0ff;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px #4a72cc inset;
+}
+.dp-cell--selected:hover {
+  background: #3a5cb0;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.dp-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #1e2a44;
+  gap: 6px;
+}
+.dp-today-btn,
+.dp-clear-btn {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.dp-today-btn {
+  background: #1a2640;
+  color: #7ba4e8;
+}
+.dp-today-btn:hover {
+  background: #1e3060;
+  color: #a8c4f8;
+}
+.dp-clear-btn {
+  background: #2a1e2e;
+  color: #c87a9a;
+}
+.dp-clear-btn:hover {
+  background: #3a1e30;
+  color: #f09ab8;
+}

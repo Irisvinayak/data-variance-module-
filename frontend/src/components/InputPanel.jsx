@@ -1,7 +1,12 @@
 /**
- * InputPanel — top-left panel. Configures the variance query (table, date, periods, compute).
+ * InputPanel — top-left panel. Configures the variance query.
+ * Uses the custom <DatePicker> instead of <input type="date">.
+ *
+ * Fix: surfaces a clear message when tables is empty so users understand
+ * why the Compute button is disabled, instead of silent button disabling.
  */
 import { VARIANCE_STEPS, freqLabel } from '../types.js'
+import DatePicker from './DatePicker/DatePicker.jsx'
 
 export default function InputPanel({
   step, setStep,
@@ -11,7 +16,8 @@ export default function InputPanel({
   loading, error,
   handleCompute, handleReset,
 }) {
-  const canCompute = !!(returnInfo && tableName && dateStr.trim() && !loading)
+  const noTables  = returnInfo && Array.isArray(tables) && tables.length === 0
+  const canCompute = !!(returnInfo && tableName && dateStr.trim() && !loading && !noTables)
 
   return (
     <div className="top-panel-shell">
@@ -31,7 +37,7 @@ export default function InputPanel({
           </div>
         )}
 
-        {/* Query configuration — all fields visible once return is found */}
+        {/* Query configuration */}
         {returnInfo && step !== VARIANCE_STEPS.RESULT && (
           <div className="ip-form">
             {/* Return info line */}
@@ -44,31 +50,36 @@ export default function InputPanel({
             {/* Table */}
             <div className="ip-field">
               <div className="field-label">Table</div>
-              <div className="table-list ip-table-list">
-                {tables.map((t) => (
-                  <div
-                    key={t.table_name}
-                    className={`table-item${tableName === t.table_name ? ' selected' : ''}`}
-                    onClick={() => setTableName(t.table_name)}
-                  >
-                    {t.table_name}
-                  </div>
-                ))}
-              </div>
+              {noTables ? (
+                /* FIX: explicit empty-state message instead of silent disabled button */
+                <div className="error-box" style={{ marginTop: 4 }}>
+                  No tables are available for this return.
+                </div>
+              ) : (
+                <div className="table-list ip-table-list">
+                  {tables.map((t) => (
+                    <div
+                      key={t.table_name}
+                      className={`table-item${tableName === t.table_name ? ' selected' : ''}`}
+                      onClick={() => setTableName(t.table_name)}
+                    >
+                      {t.table_name}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Date */}
+            {/* Date — custom calendar picker */}
             <div className="ip-field">
               <div className="field-label">Reporting Date</div>
               <div className="field-hint">
-                Format: DD-MMM-YYYY &nbsp;·&nbsp; e.g. <strong>{dateHint.example}</strong>
+                e.g. <strong>{dateHint.example}</strong>
               </div>
-              <input
-                className="text-input"
+              <DatePicker
                 value={dateStr}
-                onChange={(e) => setDateStr(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && canCompute && handleCompute()}
-                placeholder={dateHint.example || 'DD-MMM-YYYY'}
+                onChange={setDateStr}
+                disabled={loading}
               />
             </div>
 
