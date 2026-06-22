@@ -59,6 +59,7 @@ async def variance_compute(
             execute_query_fn=execute_query,
             connection_string=None,
             tenant_id=tenant_id,
+            comparison_mode=payload.comparison_mode,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState } from 'react'
 import flatpickr from 'flatpickr'
 import 'flatpickr/dist/flatpickr.min.css'
-import { VARIANCE_STEPS, freqLabel } from '../types.js'
+import { VARIANCE_STEPS, COMPARISON_MODES, freqLabel } from '../types.js'
 
 const SCORE_BADGE = (score) => {
   if (score >= 100) return { label: 'Exact', cls: 'score-exact' }
@@ -194,6 +194,8 @@ export default function ControlBar({
   dateHint,
   periods,
   setPeriods,
+  comparisonMode,
+  setComparisonMode,
   loading,
   error,
   candidates,
@@ -359,6 +361,29 @@ export default function ControlBar({
               </button>
             ))}
           </div>
+
+          {periods > 1 && (
+            <>
+              <div className="ctrl-sep" aria-hidden="true" />
+              <span className="ctrl-label">Compare</span>
+              <div className="ctrl-chips-compare">
+                <button
+                  className={'ctrl-chip-compare ctrl-chip' + (comparisonMode === COMPARISON_MODES.VS_CURRENT ? ' ctrl-chip-on' : '')}
+                  onClick={() => setComparisonMode(COMPARISON_MODES.VS_CURRENT)}
+                  title="Compare every previous period directly against the current period"
+                >
+                  vs Current
+                </button>
+                <button
+                  className={'ctrl-chip-compare ctrl-chip' + (comparisonMode === COMPARISON_MODES.SEQUENTIAL ? ' ctrl-chip-on' : '')}
+                  onClick={() => setComparisonMode(COMPARISON_MODES.SEQUENTIAL)}
+                  title="Compare each period to the one immediately before it (chained)"
+                >
+                  Seq
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="ctrl-sep" aria-hidden="true" />
 

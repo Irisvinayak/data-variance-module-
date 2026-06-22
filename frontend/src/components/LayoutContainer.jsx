@@ -19,7 +19,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
 import { findReturnTables, computeVariance, getMyReturns } from '../api.js'
-import { VARIANCE_STEPS, dateHintForFreq } from '../types.js'
+import { VARIANCE_STEPS, COMPARISON_MODES, dateHintForFreq } from '../types.js'
 
 import ControlBar from './ControlBar.jsx'
 import TablePanel from './TablePanel.jsx'
@@ -46,6 +46,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const [tableName, setTableName] = useState('')
   const [dateStr, setDateStr] = useState('')
   const [periods, setPeriods] = useState(1)
+  const [comparisonMode, setComparisonMode] = useState(COMPARISON_MODES.VS_CURRENT)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -209,6 +210,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         table_name: tableName,
         reporting_date: dateStr.trim(),
         reporting_period: periods,
+        comparison_mode: comparisonMode,
       }, loginId)
       setResult(res)
       setStep(VARIANCE_STEPS.RESULT)
@@ -229,6 +231,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setTableName('')
     setDateStr('')
     setPeriods(1)
+    setComparisonMode(COMPARISON_MODES.VS_CURRENT)
     setResult(null)
     setError('')
     setCandidates(null)
@@ -363,6 +366,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         dateStr={dateStr} setDateStr={setDateStr}
         dateHint={dateHint}
         periods={periods} setPeriods={setPeriods}
+        comparisonMode={comparisonMode} setComparisonMode={setComparisonMode}
         loading={loading} error={error}
         candidates={candidates}
         handleFindReturn={handleFindReturn}

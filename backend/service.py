@@ -146,6 +146,7 @@ def find_return_and_tables(return_input: str, tenant_id: str = "") -> Dict[str, 
             "filter_col":           el.attrib.get("FilterColumn"),
             "primary_column":       el.attrib.get("PrimaryColumn"),
             "comp_filter_col_name": el.attrib.get("CompFilterColName"),
+            "display_label_col":    el.attrib.get("DisplayLabelColumn") or None,
             **el.attrib,
         })
 
@@ -201,6 +202,7 @@ def compute_variance(
     connection_string: Optional[str] = None,
     selected_columns: Optional[List[str]] = None,
     tenant_id: str = "",
+    comparison_mode: str = "vs_current",
 ) -> Dict[str, Any]:
     logger.info("[service] compute_variance | return_id=%s | tenant_id=%r", return_id, tenant_id)
 
@@ -252,4 +254,5 @@ def compute_variance(
         connection_string=connection_string,
         reporting_period=reporting_period,
         selected_columns=selected_columns,
+        comparison_mode=comparison_mode,
     )
