@@ -3,7 +3,7 @@
  *
  * HOW ROUTING WORKS:
  *   Dev  : Vite proxy in vite.config.js forwards /variance/* and /auth/*
- *          to http://localhost:8002 automatically.
+ *          to http://localhost:8000 automatically.
  *          BASE_URL must be '' (empty) so requests go to same origin.
  *
  *   Prod : Set VITE_API_BASE_URL=http://your-backend-server:8002 in .env
@@ -13,8 +13,8 @@
  */
 
 // Leave empty in dev — Vite proxy handles forwarding to FastAPI.
-// Set VITE_API_BASE_URL=http://localhost:8002 only if NOT using Vite proxy.
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+// Set VITE_API_BASE_URL=/Datavariance/api for reverse-proxy deployments.
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 // ── GET /auth/my-returns?loginId=... ──────────────────────────────────────────
 // Fetches the list of return IDs the user is allowed to access.

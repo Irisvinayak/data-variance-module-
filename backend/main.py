@@ -9,7 +9,7 @@ import logging
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import SERVER_HOST, SERVER_PORT, CORS_ORIGINS
+from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS
 from .models import VarianceComputeRequest
 from . import service
 from .db import execute_query
@@ -27,6 +27,7 @@ app = FastAPI(
     title="Data Variance API",
     version="1.0.0",
     description="Standalone Data Variance analysis — no chatbot dependency.",
+    root_path=API_BASE_PATH or "",
 )
 
 app.add_middleware(

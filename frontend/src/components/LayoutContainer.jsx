@@ -67,8 +67,9 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   // ─── Step 1: Fetch allowed form IDs on mount ─────────────────────────────
   useEffect(() => {
     if (!loginId) {
+      setAllowedFormIds(new Set())
       setAuthLoading(false)
-      setAuthError('No loginId found. Contact your administrator.')
+      setAuthError('')
       return
     }
 
@@ -78,17 +79,21 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         // data.allowed_forms = ["2001", "2007", "4016", ...]
         setAllowedFormIds(new Set(data.allowed_forms || []))
         setAuthLoading(false)
+        setAuthError('')
       })
       .catch((err) => {
-        setAuthError(err.message || 'Failed to load user permissions.')
+        // If the backend auth layer is disabled, allow the app to proceed without access filtering.
+        setAllowedFormIds(new Set())
         setAuthLoading(false)
+        setAuthError('')
+        console.warn('Auth permissions unavailable, continuing without access filtering:', err.message)
       })
   }, [loginId])
 
   // ─── Filter helper — check if a return_id is allowed ─────────────────────
   const isAllowed = (returnId) => {
-    if (!allowedFormIds) return false
-    return allowedFormIds.has(String(returnId))
+    if (!allowedFormIds) return true
+    return allowedFormIds.size === 0 || allowedFormIds.has(String(returnId))
   }
 
   // ─── Step 2: Filter search results against allowedFormIds ─────────────────
@@ -132,13 +137,9 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     const name = returnName.trim()
     if (!name) return
 
-    // Block search until allowed forms are loaded
+    // Continue even if auth metadata is unavailable; the backend toggle may be off.
     if (authLoading) {
       setError('Loading user permissions, please wait...')
-      return
-    }
-    if (authError) {
-      setError(authError)
       return
     }
 

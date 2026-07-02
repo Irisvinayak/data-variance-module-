@@ -78,10 +78,22 @@ XML_ROLE_ACCESS_PATH: str = os.getenv(
     os.path.join(BASE_PATH, r"Database\XML_RoleAccess.xml"),
 )
 
+# ── API base path ────────────────────────────────────────────────────────────
+# Set DV_API_BASE_PATH=/Datavariance/api when the app is served behind a reverse proxy.
+API_BASE_PATH: str = os.getenv("DV_API_BASE_PATH", "").strip()
+
 # ── Server settings ────────────────────────────────────────────────────────────
 SERVER_HOST : str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
 SERVER_PORT : int = int(os.getenv("DV_SERVER_PORT", "8000"))
 
+# ── Authentication toggle ───────────────────────────────────────────────────
+# Set DV_AUTH_ENABLED=true to require loginId/auth checks.
+# Set DV_AUTH_ENABLED=false to bypass auth for local/dev testing.
+AUTH_ENABLED: bool = os.getenv("DV_AUTH_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+# ── CORS origins ─────────────────────────────────────────────────────────────
+# Browser origins allowed to access this API. Configure with DV_CORS_ORIGINS in
+# the root .env file. For local dev this typically includes the Vite app origin.
 CORS_ORIGINS : list[str] = [
     o.strip()
     for o in os.getenv("DV_CORS_ORIGINS", "http://localhost:5173,http://localhost:3001").split(",")

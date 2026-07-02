@@ -2,6 +2,17 @@
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.test
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/.env.development
+frontend/.env.production
+frontend/.env.test
+!.env.example
+!.frontend/.env.example
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

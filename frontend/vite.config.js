@@ -1,28 +1,39 @@
-import { defineConfig } from 'vite'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-  server: {
-    port: 3001,   // React dev server — this is what .NET opens in the iframe
+export default defineConfig(({ mode }) => {
+  const envDir = __dirname
+  const env = loadEnv(mode, envDir, '')
 
-    proxy: {
-      // Any request starting with /variance or /auth is forwarded to FastAPI
-      // on port 8000. Vite adds the correct host header automatically.
-      '/variance': {
-        target:      'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/auth': {
-        target:      'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target:      'http://localhost:8000',
-        changeOrigin: true,
+  const appBasePath = (env.VITE_BASE_PATH || './').trim() || './'
+  const proxyTarget = (env.VITE_PROXY_TARGET || 'http://localhost:8000').trim()
+  const devPort = Number(env.VITE_PORT || 3001)
+
+  return {
+    envDir,
+    plugins: [react()],
+    base: appBasePath,
+
+    server: {
+      port: devPort,
+      proxy: {
+        '/variance': {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
+        '/auth': {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
+        '/health': {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  }
 })
