@@ -289,6 +289,7 @@
    [CTRL-CHIPS] — ControlBar.jsx — period selector chip buttons (1 / 2 / 3)
    ════════════════════════════════════════════════════════════════════════════ */
 .ctrl-chips { display: flex; gap: 3px; }
+.ctrl-chips-compare { display: flex; gap: 8px; }
 
 .ctrl-chip {
   width: 34px;
@@ -305,6 +306,23 @@
   align-items: center;
   justify-content: center;
 }
+
+.ctrl-chip-compare {
+  width: 44px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #cccccc;
+  background: #f0f0f0;
+  color: #555555;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .ctrl-chip:hover { background: #e2e2e2; color: #111111; border-color: #aaaaaa; }
 .ctrl-chip.ctrl-chip-on {
   background: #00008A;
@@ -889,7 +907,7 @@
 .viz-select {
   height: 28px;
   padding: 0 8px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(244, 244, 244, 0.05);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -936,7 +954,7 @@
 
 /* Custom tooltip */
 .viz-tooltip {
-  background: #1c2128;
+  background: #e6e9ed;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;

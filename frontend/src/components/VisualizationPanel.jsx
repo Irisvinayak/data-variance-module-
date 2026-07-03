@@ -50,30 +50,38 @@ export default function VisualizationPanel({ result, vizState, vizOpen, onExpand
   const rows               = result?.rows ?? []
   const comparison_periods = result?.comparison_periods ?? []
   const reporting_date     = result?.reporting_date ?? 'Current'
+  const comparison_mode    = result?.comparison_mode ?? 'vs_current'
 
   const activeCol = selectedCol ?? columns[0] ?? null
 
   const chartData = useMemo(() => {
     if (!activeCol || !rows.length) return []
     return rows.slice(0, rowLimit).map((row) => {
-      const entry = { name: row.identifier || '—', Current: null }
+      const entry = { name: row.display_label || row.identifier || '—' }
       const currRaw = row.current?.[activeCol]
-      entry['Current'] = currRaw != null ? Number(currRaw) : null
+      entry[reporting_date] = currRaw != null ? Number(currRaw) : null
       comparison_periods.forEach((p, i) => {
-        const key = `previous_${i + 1}`
-        const raw = row.previous?.[key]?.[activeCol]?.value
-        entry[`Prev ${i + 1}`] = raw != null ? Number(raw) : null
+        let raw = null
+        if (comparison_mode === 'sequential') {
+          // sequential: link_1 = oldest→next, link_N = prev→current
+          // comparison_periods are oldest-first, link_1 covers oldest date
+          raw = row[`link_${i + 1}`]?.metrics?.[activeCol]?.value
+        } else {
+          const key = `previous_${i + 1}`
+          raw = row.previous?.[key]?.[activeCol]?.value
+        }
+        entry[p] = raw != null ? Number(raw) : null
       })
       return entry
     })
-  }, [activeCol, rows, comparison_periods, rowLimit])
+  }, [activeCol, rows, comparison_periods, comparison_mode, rowLimit])
 
   const isExpanded  = vizState === 'expanded'
   const isMinimized = vizState === 'minimized' || !vizOpen
 
   const seriesKeys = [
-    ...comparison_periods.map((_, i) => `Prev ${i + 1}`),
-    'Current',
+    ...comparison_periods,
+    reporting_date,
   ]
   const seriesColors = [
     ...comparison_periods.map((_, i) => PREV_COLORS[i] ?? PREV_COLORS[0]),

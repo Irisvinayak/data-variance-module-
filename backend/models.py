@@ -12,3 +12,4 @@ class VarianceComputeRequest(BaseModel):
     table_name:         str
     reporting_date:     str
     reporting_period:   int = 1
+    comparison_mode:    str = "vs_current"

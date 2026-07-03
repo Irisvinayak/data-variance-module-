@@ -1,6 +1,3 @@
-# service.py — Orchestration layer for the standalone Data Variance application.
-# Zero dependencies on the chatbot backend — all imports are local or stdlib.
-
 from __future__ import annotations
 
 import logging
@@ -13,6 +10,8 @@ from .config import (
     RETURNS_XML_PATH,
     IS_SP_TABLE_DATA_ENABLED,
     DP_TABLE_SCHEMA,
+    get_tenant_table_mapping_base_dir,
+    get_tenant_returns_xml_path,
 )
 from .xml_loader import load_xml_tree
 from .report_lookup import (
@@ -24,180 +23,44 @@ from .calculate_variance import calculate_variance
 logger = logging.getLogger(__name__)
 
 
-def _resolve_report_table_name(
-    return_id: str,
-    table_name: str,
-    is_non_xbrl: bool = False,
-) -> str:
-    """
-    Mirror of the .NET table-name resolution block:
-
-        bool isExcel = GetIsExcelByReturnCode(returnCode, isNonXbrl);
-        string reportName = tableName;
-        if (isSpTableDataEnabled && !isExcel)
-            reportName = tableName + "_DP";
-    """
-    is_excel = get_is_excel_by_return_code(return_id, is_non_xbrl=is_non_xbrl)
-
-    report_name = table_name
-    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
-        report_name = f"{table_name}_DP"
-
-    logger.info("[table_resolution] ReturnCode=%s", return_id)
-    logger.info("[table_resolution] IsExcel=%s", is_excel)
-    logger.info("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
-    logger.info("[table_resolution] OriginalTable=%s", table_name)
-    logger.info("[table_resolution] FinalReportName=%s", report_name)
-
-    return report_name
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Diagnostic helper — logs Oracle table state when 0 rows are returned
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _run_table_diagnostics(
-    table_name: str,
-    filter_col: str,
-    execute_query_fn: Callable,
-) -> None:
-    sep = "=" * 70
-
-    # Step 1: row count
-    try:
-        sql = f"SELECT COUNT(*) AS CNT FROM {table_name}"
-        cols, rows, err = execute_query_fn(sql)
-        if err:
-            logger.error("[DIAG] Step1 ERROR: %s", err)
-        else:
-            cnt = rows[0][0] if rows else "N/A"
-            logger.error("[DIAG] Step1 — table=%s total_rows=%s", table_name, cnt)
-    except Exception as exc:
-        logger.error("[DIAG] Step1 EXCEPTION: %s", exc)
-
-    # Step 2: distinct date values
-    try:
-        sql = (
-            f"SELECT DISTINCT {filter_col} FROM {table_name} "
-            f"ORDER BY {filter_col} DESC FETCH FIRST 10 ROWS ONLY"
-        )
-        cols, rows, err = execute_query_fn(sql)
-        if err:
-            sql = (
-                f"SELECT DISTINCT {filter_col} FROM "
-                f"(SELECT {filter_col} FROM {table_name} ORDER BY {filter_col} DESC) "
-                f"WHERE ROWNUM <= 10"
-            )
-            cols, rows, err2 = execute_query_fn(sql)
-        if rows:
-            logger.error("[DIAG] Step2 — distinct %s values: %s",
-                         filter_col, [str(r[0]) for r in rows])
-        else:
-            logger.error("[DIAG] Step2 — no distinct date values found")
-    except Exception as exc:
-        logger.error("[DIAG] Step2 EXCEPTION: %s", exc)
-
-    logger.error("[DIAG] %s diagnostics complete.", sep)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Table-mapping loader
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _load_table_mapping(return_id: str, tbl_path: str):
-    # ── Startup diagnostics ───────────────────────────────────────────────────
-    logger.info("[service] _load_table_mapping called")
-    logger.info("[service]   return_id          = %r", return_id)
-    logger.info("[service]   tbl_path           = %r", tbl_path)
-    logger.info("[service]   TABLE_MAPPING_BASE_DIR = %r", TABLE_MAPPING_BASE_DIR)
-    logger.info("[service]   INSTANCE_BASE_DIR      = %r", INSTANCE_BASE_DIR)
-    logger.info("[service]   RETURNS_XML_PATH        = %r", RETURNS_XML_PATH)
-
-    return_dir_from_config = os.path.normpath(
-        os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id))
+def _load_table_mapping(return_id: str, tbl_path: str, tenant_id: str = ""):
+    # Resolve base dirs — use tenant-specific if available
+    mapping_base = (
+        get_tenant_table_mapping_base_dir(tenant_id)
+        if tenant_id
+        else TABLE_MAPPING_BASE_DIR
     )
-    logger.info(
-        "[service]   return_dir (TABLE_MAPPING_BASE_DIR/return_id) = %r  isdir=%s",
-        return_dir_from_config,
-        os.path.isdir(return_dir_from_config),
+    returns_xml = (
+        get_tenant_returns_xml_path(tenant_id)
+        if tenant_id
+        else RETURNS_XML_PATH
     )
+
+    logger.info("[service] _load_table_mapping | return_id=%r | tenant_id=%r | tbl_path=%r", return_id, tenant_id, tbl_path)
+    logger.info("[service] mapping_base=%r", mapping_base)
+
+    return_dir = os.path.normpath(os.path.join(mapping_base, str(return_id)))
+    logger.info("[service] return_dir=%r  isdir=%s", return_dir, os.path.isdir(return_dir))
 
     candidates: List[str] = []
 
-    # ── Candidate 1: absolute tbl_path as-is ─────────────────────────────────
     if tbl_path and os.path.isabs(tbl_path):
         candidates.append(tbl_path)
-        logger.info("[service] tbl_path is absolute — added as first candidate")
 
-    # ── Candidates 2-5: tbl_path relative to known base directories ──────────
     if tbl_path:
-        candidates.append(os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path))
-        candidates.append(os.path.join(TABLE_MAPPING_BASE_DIR, tbl_path))
+        candidates.append(os.path.join(mapping_base, str(return_id), tbl_path))
+        candidates.append(os.path.join(mapping_base, tbl_path))
         candidates.append(os.path.join(INSTANCE_BASE_DIR, str(return_id), tbl_path))
+        if returns_xml:
+            candidates.append(os.path.join(os.path.dirname(returns_xml), str(return_id), tbl_path))
 
-        if RETURNS_XML_PATH:
-            candidates.append(
-                os.path.join(os.path.dirname(RETURNS_XML_PATH), str(return_id), tbl_path)
-            )
+    for fixed_name in ("TableMapping.xml", "TabelMapping.xml", "tablemapping.xml", "Tablemapping.xml", "TABLEMAPPING.XML"):
+        candidates.append(os.path.join(mapping_base, str(return_id), fixed_name))
 
-    # ── Candidates 6+: well-known fixed filenames in the return folder ────────
-    # These are always tried regardless of whether TblPath is set in Returns.xml,
-    # so returns with a missing/empty TblPath can still be resolved via the
-    # directory scan below.
-    for fixed_name in (
-        "TableMapping.xml",
-        "TabelMapping.xml",   # legacy typo variant kept for back-compat
-        "tablemapping.xml",
-        "Tablemapping.xml",
-        "TABLEMAPPING.XML",
-    ):
-        candidates.append(
-            os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), fixed_name)
-        )
-
-    # ── Directory scan ────────────────────────────────────────────────────────
-    # Collect every directory that might be the return's root folder.
-    # We derive them from multiple sources so that spaces / trailing separators
-    # in TABLE_MAPPING_BASE_DIR can't silently break os.path.isdir.
-    scan_dirs: List[str] = []
-
-    # Source A: straight join of config dir + return_id
-    scan_dirs.append(return_dir_from_config)
-
-    if tbl_path:
-        # Source B: walk UP from the deepest tbl_path-based candidate until we
-        #           find a folder whose basename == str(return_id).
-        #           This is immune to trailing-separator / double-sep issues.
-        deep_candidate = os.path.normpath(
-            os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path)
-        )
-        probe = os.path.dirname(deep_candidate)
-        for _ in range(15):                       # safety cap
-            if os.path.basename(probe) == str(return_id):
-                scan_dirs.append(probe)
-                break
-            parent = os.path.dirname(probe)
-            if parent == probe:                   # reached filesystem root
-                break
-            probe = parent
-
-        # Source C: same walk from INSTANCE_BASE_DIR path
-        deep_instance = os.path.normpath(
-            os.path.join(INSTANCE_BASE_DIR, str(return_id), tbl_path)
-        )
-        probe = os.path.dirname(deep_instance)
-        for _ in range(15):
-            if os.path.basename(probe) == str(return_id):
-                scan_dirs.append(probe)
-                break
-            parent = os.path.dirname(probe)
-            if parent == probe:
-                break
-            probe = parent
-
-    # Deduplicate scan dirs
+    # Directory scan
+    scan_dirs = [return_dir]
     seen_dirs: set = set()
-    unique_scan_dirs: List[str] = []
+    unique_scan_dirs = []
     for d in scan_dirs:
         nd = os.path.normpath(d)
         if nd not in seen_dirs:
@@ -205,75 +68,41 @@ def _load_table_mapping(return_id: str, tbl_path: str):
             unique_scan_dirs.append(nd)
 
     for scan_dir in unique_scan_dirs:
-        logger.info(
-            "[service] Dir-scan: checking dir=%r  isdir=%s",
-            scan_dir, os.path.isdir(scan_dir),
-        )
         if not os.path.isdir(scan_dir):
             continue
         try:
-            found_files = os.listdir(scan_dir)
-            logger.info(
-                "[service] Dir-scan: listed %d file(s) in %r", len(found_files), scan_dir
-            )
-            for fname in found_files:
+            for fname in os.listdir(scan_dir):
                 if "mapping" in fname.lower() and fname.lower().endswith(".xml"):
-                    full = os.path.join(scan_dir, fname)
-                    candidates.append(full)
-                    logger.info("[service] Dir-scan hit: %r", full)
+                    candidates.append(os.path.join(scan_dir, fname))
         except OSError as exc:
-            logger.warning("[service] Dir-scan OSError for dir=%r: %s", scan_dir, exc)
+            logger.warning("[service] Dir-scan OSError dir=%r: %s", scan_dir, exc)
 
-    # ── Deduplicate candidates (preserve insertion order) ─────────────────────
+    # Deduplicate and probe
     seen_paths: set = set()
-    deduped: List[str] = []
     for c in candidates:
         if not c:
             continue
         norm = os.path.normpath(c)
-        if norm not in seen_paths:
-            seen_paths.add(norm)
-            deduped.append(norm)
-
-    logger.info("[service] Total unique candidates to probe: %d", len(deduped))
-
-    # ── Probe each candidate ──────────────────────────────────────────────────
-    for norm in deduped:
-        exists = os.path.exists(norm)
-        logger.info("[service] Checking mapping path=%s  exists=%s", norm, exists)
-        if exists:
+        if norm in seen_paths:
+            continue
+        seen_paths.add(norm)
+        if os.path.exists(norm):
             logger.info("[service] Found mapping=%s", norm)
             root = load_xml_tree(norm, label=f"Table mapping for return {return_id}")
             return root, norm
 
-    # ── Nothing found — fall back to the canonical path (will log an error) ───
     fallback = os.path.normpath(
-        os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path or "TableMapping.xml")
+        os.path.join(mapping_base, str(return_id), tbl_path or "TableMapping.xml")
     )
-    logger.error(
-        "[service] Mapping file not found after checking %d candidate(s). "
-        "Using fallback=%s",
-        len(deduped), fallback,
-    )
+    logger.error("[service] Mapping not found — fallback=%s", fallback)
     root = load_xml_tree(fallback, label=f"Table mapping for return {return_id}")
     return root, fallback
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Public API
-# ─────────────────────────────────────────────────────────────────────────────
+def find_return_and_tables(return_input: str, tenant_id: str = "") -> Dict[str, Any]:
+    logger.info("[service] find_return_and_tables | input=%r | tenant_id=%r", return_input, tenant_id)
 
-def find_return_and_tables(return_input: str) -> Dict[str, Any]:
-    """Find a return by name and list available tables from its mapping XML.
-
-    Response variants:
-      • Exact / unique high-confidence match  → normal result dict
-      • Multiple plausible matches            → {"candidates": [...]}
-      • Nothing found                         → {"error": "..."}
-    """
-    logger.info("[service] Finding return=%s", return_input)
-
-    scored = search_returns_scored(return_input)
+    scored = search_returns_scored(return_input, tenant_id=tenant_id)
     if not scored:
         return {"error": f"Return '{return_input}' not found."}
 
@@ -290,58 +119,34 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
             if rid in unique_ids:
                 continue
             unique_ids.add(rid)
-
             tbl_path = (item["return"].get("TblPath") or "").strip()
-
-            # ── FIX: has_mapping is always True here. ─────────────────────────
-            # The old check `bool(tbl_path)` was disabling returns whose
-            # TblPath attribute was empty/missing in Returns.xml, even when
-            # a mapping file physically exists on disk (e.g. TableMapping.xml
-            # in the return's folder). The actual file resolution is handled
-            # by _load_table_mapping() which tries 10+ fallback paths and a
-            # full directory scan — so we let that run when the user selects
-            # the candidate instead of blocking it up front.
             candidates.append({
                 "score":       item["score"],
                 "return_id":   rid,
                 "return_name": item["return"].get("Name", ""),
                 "report_freq": item["return"].get("RepFreq", ""),
                 "tbl_path":    tbl_path,
-                "has_mapping": True,  # resolved by _load_table_mapping on select
+                "has_mapping": True,
             })
-
-        logger.info(
-            "[service] Ambiguous query=%r → %d candidates (top_score=%d)",
-            return_input, len(candidates), top_score,
-        )
         return {"candidates": candidates, "query": return_input}
     else:
         r = scored[0]["return"]
 
     return_id = r.get("Id")
     tbl_path  = (r.get("TblPath") or "").strip()
-
-    # tbl_path may be empty — _load_table_mapping handles that via fixed-name
-    # fallbacks and directory scan, so we no longer hard-stop here.
-    root, resolved_path = _load_table_mapping(return_id, tbl_path)
+    root, resolved_path = _load_table_mapping(return_id, tbl_path, tenant_id=tenant_id)
 
     if root is None:
-        return {
-            "error": (
-                f"Return '{r.get('Name', return_input)}' (Id={return_id}): "
-                f"table mapping file not found. "
-                f"Checked TblPath={tbl_path!r} and standard fallback locations "
-                f"under {TABLE_MAPPING_BASE_DIR}."
-            )
-        }
+        return {"error": f"Return '{r.get('Name', return_input)}' table mapping not found."}
 
     tables = []
     for el in root.findall("Row"):
         tables.append({
-            "table_name":            el.attrib.get("TableName"),
-            "filter_col":            el.attrib.get("FilterColumn"),
-            "primary_column":        el.attrib.get("PrimaryColumn"),
-            "comp_filter_col_name":  el.attrib.get("CompFilterColName"),
+            "table_name":           el.attrib.get("TableName"),
+            "filter_col":           el.attrib.get("FilterColumn"),
+            "primary_column":       el.attrib.get("PrimaryColumn"),
+            "comp_filter_col_name": el.attrib.get("CompFilterColName"),
+            "display_label_col":    el.attrib.get("DisplayLabelColumn") or None,
             **el.attrib,
         })
 
@@ -355,26 +160,18 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
     }
 
 
-def _get_table_metadata(
-    return_id: str,
-    tbl_path: str,
-    table_name: str,
-) -> Dict[str, Any]:
-    root, _ = _load_table_mapping(return_id, tbl_path)
-
+def _get_table_metadata(return_id: str, tbl_path: str, table_name: str, tenant_id: str = "") -> Dict[str, Any]:
+    root, _ = _load_table_mapping(return_id, tbl_path, tenant_id=tenant_id)
     if root is None:
         raise FileNotFoundError("Table mapping not found")
 
     tname_up = table_name.strip().upper()
-
     for el in root.findall("Row"):
-        xml_name = (el.attrib.get("TableName") or "").strip().upper()
-        if xml_name == tname_up:
-            comp       = el.attrib.get("CompFilterColName", "")
-            comp_cols  = [c.strip().upper() for c in comp.split("|") if c.strip()]
-            filter_col = (el.attrib.get("FilterColumn") or "").strip().upper()
+        if (el.attrib.get("TableName") or "").strip().upper() == tname_up:
+            comp      = el.attrib.get("CompFilterColName", "")
+            comp_cols = [c.strip().upper() for c in comp.split("|") if c.strip()]
             return {
-                "filter_col":            filter_col,
+                "filter_col":            (el.attrib.get("FilterColumn") or "").strip().upper(),
                 "comp_filter_col_names": comp_cols,
                 "report_freq":           None,
                 "is_single":             el.attrib.get("IsSingle", "false").lower() == "true",
@@ -384,9 +181,15 @@ def _get_table_metadata(
             }
 
     available = [el.attrib.get("TableName", "") for el in root.findall("Row")]
-    raise KeyError(
-        f"Table '{table_name}' not found in mapping. Available: {available}"
-    )
+    raise KeyError(f"Table '{table_name}' not found in mapping. Available: {available}")
+
+
+def _run_table_diagnostics(table_name: str, filter_col: str, execute_query_fn: Callable) -> None:
+    try:
+        _, rows, err = execute_query_fn(f"SELECT COUNT(*) AS CNT FROM {table_name}")
+        logger.error("[DIAG] table=%s total_rows=%s err=%s", table_name, rows[0][0] if rows else "N/A", err)
+    except Exception as exc:
+        logger.error("[DIAG] count query failed: %s", exc)
 
 
 def compute_variance(
@@ -398,43 +201,28 @@ def compute_variance(
     execute_query_fn: Callable,
     connection_string: Optional[str] = None,
     selected_columns: Optional[List[str]] = None,
+    tenant_id: str = "",
+    comparison_mode: str = "vs_current",
 ) -> Dict[str, Any]:
-    """Orchestrate full variance computation for one table."""
-    logger.info("[service] compute_variance started")
+    logger.info("[service] compute_variance | return_id=%s | tenant_id=%r", return_id, tenant_id)
 
-    parsed      = _parse_returns()
+    parsed      = _parse_returns(tenant_id)
     return_meta = next((r for r in parsed if r.get("Id") == str(return_id)), None)
-    report_freq = (
-        (return_meta.get("RepFreq") or "").strip().upper()
-        if return_meta
-        else ""
-    ) or "M"
-
-    logger.info(
-        "[service] return_id=%s | freq=%s | table=%s | date=%s | periods=%s",
-        return_id, report_freq, table_name, reporting_date, reporting_period,
-    )
+    report_freq = ((return_meta.get("RepFreq") or "").strip().upper() if return_meta else "") or "M"
 
     is_excel = (
         str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
         if return_meta
-        else get_is_excel_by_return_code(return_id)
+        else get_is_excel_by_return_code(return_id, tenant_id=tenant_id)
     )
+
     report_name = table_name
     if IS_SP_TABLE_DATA_ENABLED and not is_excel:
         dp_name     = f"{table_name}_DP"
         report_name = f"{DP_TABLE_SCHEMA}.{dp_name}" if DP_TABLE_SCHEMA else dp_name
     resolved_table_name = report_name
 
-    logger.info("[table_resolution] ReturnCode=%s", return_id)
-    logger.info("[table_resolution] IsExcel=%s", is_excel)
-    logger.info("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
-    logger.info("[table_resolution] ReturnFoundInXml=%s", return_meta is not None)
-    logger.info("[table_resolution] OriginalTable=%s", table_name)
-    logger.info("[table_resolution] FinalReportName=%s", resolved_table_name)
-
-    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name)
-
+    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name, tenant_id=tenant_id)
     metadata = {
         "filter_col":            table_meta["filter_col"],
         "comp_filter_col_names": table_meta["comp_filter_col_names"],
@@ -449,42 +237,13 @@ def compute_variance(
         return metadata
 
     def execute_query_adapter(query, conn_str=None):
-        logger.info("[service] Executing Oracle query:\n%s", query)
         cols, rows, err = execute_query_fn(query)
-
         if err:
-            logger.error(
-                "[service] QUERY FAILED\n"
-                "  return_id        = %s\n"
-                "  original_table   = %s\n"
-                "  resolved_table   = %s\n"
-                "  reporting_date   = %s\n"
-                "  reporting_period = %s\n"
-                "  is_excel         = %s\n"
-                "  sp_table_enabled = %s\n"
-                "  error            = %s",
-                return_id, table_name, resolved_table_name,
-                reporting_date, reporting_period,
-                is_excel, IS_SP_TABLE_DATA_ENABLED, err,
-            )
-            raise RuntimeError(
-                f"{err} | table_queried={resolved_table_name} "
-                f"| original_table={table_name}"
-            )
-
+            raise RuntimeError(f"{err} | table={resolved_table_name}")
         if not rows:
-            logger.error("[service] Zero rows — firing diagnostics")
-            _run_table_diagnostics(
-                table_name=resolved_table_name,
-                filter_col=metadata["filter_col"],
-                execute_query_fn=execute_query_fn,
-            )
-
+            _run_table_diagnostics(resolved_table_name, metadata["filter_col"], execute_query_fn)
         cols_up = [c.upper() for c in cols]
-        return [
-            {cols_up[i]: rows[ri][i] for i in range(len(cols_up))}
-            for ri in range(len(rows))
-        ]
+        return [{cols_up[i]: rows[ri][i] for i in range(len(cols_up))} for ri in range(len(rows))]
 
     return calculate_variance(
         return_code=return_id,
@@ -495,4 +254,5 @@ def compute_variance(
         connection_string=connection_string,
         reporting_period=reporting_period,
         selected_columns=selected_columns,
+        comparison_mode=comparison_mode,
     )
