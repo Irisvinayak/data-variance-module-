@@ -70,7 +70,7 @@ function getAuthParams() {
   const token   = sessionStorage.getItem('_at') ?? ''
   const payload = decodeJwtPayload(token)
 
-  const loginId  = payload?.LoginId  ?? sessionStorage.getItem('_lid') ?? ''
+  const loginId  = payload?.LoginId  ?? sessionStorage.getItem('_lid') ?? 'vaibhav@irisindia.net'
   const tenantId = payload?.TenantId ?? ''
 
   // 🔍 DEBUG

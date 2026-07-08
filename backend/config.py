@@ -13,7 +13,42 @@ DB_PASSWORD : str  = os.getenv("DV_DB_PASSWORD", "southindianbank1123")
 DB_MAX_ROWS : int  = int(os.getenv("DV_DB_MAX_ROWS", "5000"))
 
 # ── Base path ──────────────────────────────────────────────────────────────────
-BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo6")
+
+def _resolve_base_path(explicit_path: str | None) -> str:
+    candidates: list[str] = []
+    if explicit_path:
+        candidates.append(explicit_path)
+
+    candidates.extend(
+        [
+            r"D:\Repo6\1001",
+            r"D:\Repo6\1000",
+            r"D:\Repo6\1002",
+            r"D:\project_work\iDEAL Banking 6.0 - Alpha\Repo6\1001",
+            r"D:\Repo\Repo5.5 3\Repo5.5",
+            r"D:\Repo\Repo5.5 3\Repo5.5\1001",
+        ]
+    )
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if os.path.isdir(candidate):
+            for subdir in ("Database", "DataBase"):
+                if os.path.exists(os.path.join(candidate, subdir, "Return.xml")):
+                    return candidate
+
+    for candidate in candidates:
+        if not candidate or not os.path.isdir(candidate):
+            continue
+        for root, _, files in os.walk(candidate):
+            if "Return.xml" in files:
+                return os.path.dirname(root)
+
+    return explicit_path or r"D:\Repo6"
+
+
+BASE_PATH: str = _resolve_base_path(os.getenv("DV_BASE_PATH"))
 
 # ── Global XML paths (not tenant-specific) ─────────────────────────────────────
 XML_TENANT_PATH: str = os.getenv(
@@ -61,9 +96,32 @@ XML_DEPT_PATH: str = os.getenv(
 API_BASE_PATH: str = os.getenv("DV_API_BASE_PATH", "").strip()
 
 # ── Application mode ───────────────────────────────────────────────────────────
-# Set DV_APP_VERSION=5.5 for legacy .NET MVC mode.
-# Set DV_APP_VERSION=6.0 for tenant-aware React + .NET API mode.
-APP_VERSION: str = os.getenv("DV_APP_VERSION", "6.0").strip()
+# Set VERSION to 5.5 for legacy non-tenant mode or 6.0 for tenant-aware
+# React + .NET API mode. The app also accepts DV_APP_VERSION as a fallback alias.
+
+def _normalize_app_version(raw_value: str | None) -> str:
+    value = (raw_value or "").strip()
+    if not value:
+        return "6.0"
+    if value.startswith("5"):
+        return "5.5"
+    if value.startswith("6"):
+        return "6.0"
+    return value
+
+
+APP_VERSION: str = _normalize_app_version(
+    os.getenv("VERSION") or os.getenv("DV_APP_VERSION") or os.getenv("APP_VERSION")
+)
+
+
+def is_legacy_mode(version: str | None = None) -> bool:
+    resolved = _normalize_app_version(version or APP_VERSION)
+    return resolved.startswith("5")
+
+
+def is_tenant_aware_mode(version: str | None = None) -> bool:
+    return not is_legacy_mode(version)
 
 # ── Server settings ────────────────────────────────────────────────────────────
 SERVER_HOST : str = os.getenv("DV_SERVER_HOST", "0.0.0.0")

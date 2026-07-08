@@ -4,7 +4,7 @@ import logging
 import os
 import time
 
-from .config import BASE_PATH, XML_TENANT_PATH, XML_ROLE_ACCESS_PATH
+from .config import BASE_PATH, XML_TENANT_PATH, XML_ROLE_ACCESS_PATH, is_legacy_mode, APP_VERSION
 from .xml_loader import load_xml_tree
 
 logger = logging.getLogger(__name__)
@@ -27,11 +27,19 @@ _create_cache : dict = {}
 
 def _get_tenant_db_dir(tenant_id: str) -> str | None:
     """
-    Look up tenant_id in XML_Tenant.xml and return the path to its
-    Database folder:  BASE_PATH / <TenantId> / Database
+    Resolve the database folder for auth XML files.
 
-    Returns None if the tenant is not found or its Status != 'true'.
+    In 5.5 mode there is no tenant concept, so we fall back to the base repo
+    folder and use its Database directory directly when tenant_id is blank.
     """
+    if is_legacy_mode(APP_VERSION) and not tenant_id.strip():
+        legacy_db_dir = os.path.join(BASE_PATH, "Database")
+        if os.path.isdir(legacy_db_dir):
+            logger.debug("[AUTH] legacy mode using repo db_dir=%r", legacy_db_dir)
+            return legacy_db_dir
+        logger.warning("[AUTH] legacy mode db_dir not found at %r", legacy_db_dir)
+        return None
+
     root = load_xml_tree(XML_TENANT_PATH, "XML_Tenant.xml")
     if root is None:
         logger.error("[AUTH] Cannot load XML_Tenant.xml (path=%s)", XML_TENANT_PATH)
@@ -70,10 +78,19 @@ def get_allowed_form_ids(login_id: str, tenant_id: str):
     """
     clean = login_id.strip()
     t_id  = tenant_id.strip()
-    if not clean or not t_id:
+    if not clean:
         logger.warning(
             "[AUTH] get_allowed_form_ids called with empty login_id=%r or tenant_id=%r",
             clean, t_id,
+        )
+        return None
+
+    if not t_id and is_legacy_mode(APP_VERSION):
+        t_id = ""
+    elif not t_id:
+        logger.warning(
+            "[AUTH] get_allowed_form_ids called with empty tenant_id=%r for non-legacy mode",
+            t_id,
         )
         return None
 

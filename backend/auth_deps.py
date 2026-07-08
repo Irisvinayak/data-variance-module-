@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from fastapi import HTTPException, Query, status
 from .auth_service import get_allowed_form_ids, is_return_allowed
-from .config import APP_VERSION, AUTH_ENABLED
+from .config import APP_VERSION, AUTH_ENABLED, is_legacy_mode
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ def require_login(
 ) -> tuple[str, str]:
     clean_login = loginId.strip()
     clean_tenant = tenantId.strip()
-    legacy_mode = APP_VERSION.startswith("5")
+    legacy_mode = is_legacy_mode(APP_VERSION)
 
     if not AUTH_ENABLED:
         logger.warning(
@@ -42,6 +42,18 @@ def require_login(
             "[AUTH_DEP] legacy auth mode=%s | login_id=%r | tenant_id=%r",
             APP_VERSION, clean_login, clean_tenant,
         )
+        # In 5.5 mode there is no tenant, but auth is still enforced by validating
+        # the login against the repository data. If no matching user is found, deny access.
+        allowed = get_allowed_form_ids(clean_login, clean_tenant or "")
+        if allowed is None:
+            logger.warning(
+                "[AUTH_DEP] REJECTED (legacy) — login_id=%r not found in repo auth data",
+                clean_login,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"User '{clean_login}' is not authorised to use this application.",
+            )
         return clean_login, clean_tenant
 
     allowed = get_allowed_form_ids(clean_login, clean_tenant)
@@ -63,7 +75,7 @@ def require_login(
 
 
 def require_return_access(login_id: str, tenant_id: str, return_id: str) -> None:
-    legacy_mode = APP_VERSION.startswith("5")
+    legacy_mode = is_legacy_mode(APP_VERSION)
 
     if not AUTH_ENABLED:
         logger.warning(
@@ -77,6 +89,12 @@ def require_return_access(login_id: str, tenant_id: str, return_id: str) -> None
             "[AUTH_DEP] legacy return access mode=%s | login_id=%r | tenant_id=%r | return_id=%r",
             APP_VERSION, login_id, tenant_id, return_id,
         )
+        # Keep legacy mode authenticated but do not require tenant-based access checks.
+        if not login_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="loginId is required for legacy access.",
+            )
         return
 
     if not is_return_allowed(login_id, tenant_id, return_id):

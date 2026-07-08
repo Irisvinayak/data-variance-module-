@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS, AUTH_ENABLED
+from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS, AUTH_ENABLED, APP_VERSION, is_legacy_mode
 from .models import VarianceComputeRequest
 from . import service
 from .db import execute_query
@@ -29,7 +29,7 @@ app.add_middleware(
 
 @app.get("/health", tags=["Meta"])
 async def health():
-    return {"status": "ok", "auth_enabled": AUTH_ENABLED}
+    return {"status": "ok", "auth_enabled": AUTH_ENABLED, "app_version": APP_VERSION}
 
 
 @app.get("/variance/find", status_code=200, tags=["Variance"])
@@ -38,7 +38,8 @@ async def variance_find(
     credentials: tuple = Depends(require_login),
 ) -> dict:
     login_id, tenant_id = credentials
-    result = service.find_return_and_tables(return_name, tenant_id=tenant_id)
+    effective_tenant_id = "" if is_legacy_mode(APP_VERSION) else tenant_id
+    result = service.find_return_and_tables(return_name, tenant_id=effective_tenant_id)
     if result.get("error"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result["error"])
     return result
@@ -50,7 +51,8 @@ async def variance_compute(
     credentials: tuple = Depends(require_login),
 ) -> dict:
     login_id, tenant_id = credentials
-    require_return_access(login_id, tenant_id, payload.return_id)
+    effective_tenant_id = "" if is_legacy_mode(APP_VERSION) else tenant_id
+    require_return_access(login_id, effective_tenant_id, payload.return_id)
 
     logger.info(
         "[main] POST /variance/compute | tenant_id=%s | login_id=%s | return_id=%s | table=%s",
@@ -65,7 +67,7 @@ async def variance_compute(
             reporting_period=payload.reporting_period,
             execute_query_fn=execute_query,
             connection_string=None,
-            tenant_id=tenant_id,
+            tenant_id=effective_tenant_id,
             comparison_mode=payload.comparison_mode,
         )
     except FileNotFoundError as exc:
@@ -82,10 +84,11 @@ async def variance_compute(
 @app.get("/auth/my-returns", status_code=200, tags=["Auth"])
 async def my_returns(credentials: tuple = Depends(require_login)) -> dict:
     login_id, tenant_id = credentials
+    effective_tenant_id = "" if is_legacy_mode(APP_VERSION) else tenant_id
     from .auth_service import get_allowed_form_ids
-    allowed = get_allowed_form_ids(login_id, tenant_id) or set()
+    allowed = get_allowed_form_ids(login_id, effective_tenant_id) or set()
     return {
-        "tenant_id":     tenant_id,
+        "tenant_id":     effective_tenant_id,
         "login_id":      login_id,
         "allowed_count": len(allowed),
         "allowed_forms": sorted(allowed),

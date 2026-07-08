@@ -25,7 +25,7 @@ export default function App() {
     const token   = sessionStorage.getItem('_at') ?? ''
     const payload = decodeJwtPayload(token)
 
-    const lid = payload?.LoginId  ?? sessionStorage.getItem('_lid') ?? ''
+    const lid = payload?.LoginId  ?? sessionStorage.getItem('_lid') ?? 'vaibhav@irisindia.net'
     const tid = payload?.TenantId ?? ''
 
     console.log('[App] loginId resolved:', lid || 'EMPTY ❌')
