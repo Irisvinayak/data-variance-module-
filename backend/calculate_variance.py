@@ -36,7 +36,7 @@ def get_previous_dates(
     periods: int,
 ) -> List[datetime]:
 
-    logger.info(
+    logger.debug(
         "[variance] Calculating previous dates | current=%s | freq=%s | periods=%s",
         current_date, report_freq, periods,
     )
@@ -212,7 +212,7 @@ def build_query(
         f"SELECT {cols} FROM {table_name} "
         f"WHERE ({date_sql}){rc_filter}{freq_filter}"
     )
-    logger.info("[variance] Generated Query:\n%s", query)
+    logger.debug("[variance] Generated Query:\n%s", query)
     return query
 
 
@@ -289,12 +289,17 @@ def calculate_variance(
     try:
         rdate = datetime.strptime(reporting_date.upper(), "%d-%b-%Y")
     except Exception as exc:
+        logger.warning("[variance] Invalid reporting date format | table=%s | value=%r | %s", table_name, reporting_date, exc)
         return {"error": f"Invalid reporting date format: {exc}"}
 
     metadata    = get_table_metadata_fn(return_code, table_name, is_non_xbrl)
     report_freq = metadata.get("report_freq", "M")
 
     if not validate_reporting_date(rdate, report_freq):
+        logger.warning(
+            "[variance] Reporting date fails frequency validation | table=%s | date=%s | freq=%s",
+            table_name, reporting_date, report_freq,
+        )
         return {"error": "Invalid Reporting Date According To Frequency."}
 
     prev_dates = get_previous_dates(rdate, report_freq, reporting_period)
@@ -309,9 +314,11 @@ def calculate_variance(
         else:
             all_rows = execute_query_fn(query)
     except Exception as exc:
+        logger.error("[variance] Query execution failed | table=%s | %s", table_name, exc)
         return {"error": str(exc)}
 
     if not all_rows:
+        logger.warning("[variance] No rows returned at all | table=%s | date=%s", table_name, reporting_date)
         return {"error": f"No data found for {table_name} on {reporting_date}"}
 
     all_rows = [_normalize_row_keys(r) for r in all_rows]
@@ -321,6 +328,10 @@ def calculate_variance(
 
     if not current_rows:
         distinct_dates = sorted({str(r.get(fc)) for r in all_rows})
+        logger.warning(
+            "[variance] No rows for the requested current date | table=%s | requested=%s | available=%s",
+            table_name, reporting_date, distinct_dates,
+        )
         return {
             "error": (
                 f"No data found for {table_name} on {reporting_date}. "
@@ -361,6 +372,11 @@ def calculate_variance(
         if not auto_id:
             auto_id = [k for k in all_rows[0].keys() if k.upper() != fc]
         if not auto_id:
+            logger.error(
+                "[row_match] Cannot build row identifier for table '%s' — "
+                "CompFilterColName empty and no non-numeric fallback columns exist.",
+                table_name,
+            )
             return {"error": (
                 f"Cannot build row identifier for table '{table_name}': "
                 "CompFilterColName is empty in the table-mapping XML and no "
@@ -429,7 +445,7 @@ def calculate_variance(
         for period_key, pdata in prev_row_sets.items():
             matched = pdata["lookup"].get(identifier)
             if not matched:
-                logger.warning(
+                logger.debug(
                     "[row_match] No previous row found | Identifier=%s | period=%s",
                     identifier, period_key,
                 )
@@ -440,7 +456,7 @@ def calculate_variance(
                 col_up = col.upper()
                 prev_v = matched.get(col_up)
                 curr_v = curr_row.get(col_up)
-                logger.info(
+                logger.debug(
                     "[row_match] Identifier=%s | Col=%s | Current=%s | Previous=%s",
                     identifier, col, curr_v, prev_v,
                 )

@@ -43,11 +43,11 @@ def _resolve_report_table_name(
     if IS_SP_TABLE_DATA_ENABLED and not is_excel:
         report_name = f"{table_name}_DP"
 
-    logger.info("[table_resolution] ReturnCode=%s", return_id)
-    logger.info("[table_resolution] IsExcel=%s", is_excel)
-    logger.info("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
-    logger.info("[table_resolution] OriginalTable=%s", table_name)
-    logger.info("[table_resolution] FinalReportName=%s", report_name)
+    logger.debug("[table_resolution] ReturnCode=%s", return_id)
+    logger.debug("[table_resolution] IsExcel=%s", is_excel)
+    logger.debug("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
+    logger.debug("[table_resolution] OriginalTable=%s", table_name)
+    logger.debug("[table_resolution] FinalReportName=%s", report_name)
 
     return report_name
 
@@ -105,18 +105,19 @@ def _run_table_diagnostics(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load_table_mapping(return_id: str, tbl_path: str):
-    # ── Startup diagnostics ───────────────────────────────────────────────────
-    logger.info("[service] _load_table_mapping called")
-    logger.info("[service]   return_id          = %r", return_id)
-    logger.info("[service]   tbl_path           = %r", tbl_path)
-    logger.info("[service]   TABLE_MAPPING_BASE_DIR = %r", TABLE_MAPPING_BASE_DIR)
-    logger.info("[service]   INSTANCE_BASE_DIR      = %r", INSTANCE_BASE_DIR)
-    logger.info("[service]   RETURNS_XML_PATH        = %r", RETURNS_XML_PATH)
+    # ── Startup diagnostics (verbose — only useful when actively debugging a
+    # missing table-mapping file, not on every normal call) ───────────────────
+    logger.debug("[service] _load_table_mapping called")
+    logger.debug("[service]   return_id          = %r", return_id)
+    logger.debug("[service]   tbl_path           = %r", tbl_path)
+    logger.debug("[service]   TABLE_MAPPING_BASE_DIR = %r", TABLE_MAPPING_BASE_DIR)
+    logger.debug("[service]   INSTANCE_BASE_DIR      = %r", INSTANCE_BASE_DIR)
+    logger.debug("[service]   RETURNS_XML_PATH        = %r", RETURNS_XML_PATH)
 
     return_dir_from_config = os.path.normpath(
         os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id))
     )
-    logger.info(
+    logger.debug(
         "[service]   return_dir (TABLE_MAPPING_BASE_DIR/return_id) = %r  isdir=%s",
         return_dir_from_config,
         os.path.isdir(return_dir_from_config),
@@ -127,7 +128,7 @@ def _load_table_mapping(return_id: str, tbl_path: str):
     # ── Candidate 1: absolute tbl_path as-is ─────────────────────────────────
     if tbl_path and os.path.isabs(tbl_path):
         candidates.append(tbl_path)
-        logger.info("[service] tbl_path is absolute — added as first candidate")
+        logger.debug("[service] tbl_path is absolute — added as first candidate")
 
     # ── Candidates 2-5: tbl_path relative to known base directories ──────────
     if tbl_path:
@@ -205,7 +206,7 @@ def _load_table_mapping(return_id: str, tbl_path: str):
             unique_scan_dirs.append(nd)
 
     for scan_dir in unique_scan_dirs:
-        logger.info(
+        logger.debug(
             "[service] Dir-scan: checking dir=%r  isdir=%s",
             scan_dir, os.path.isdir(scan_dir),
         )
@@ -213,14 +214,14 @@ def _load_table_mapping(return_id: str, tbl_path: str):
             continue
         try:
             found_files = os.listdir(scan_dir)
-            logger.info(
+            logger.debug(
                 "[service] Dir-scan: listed %d file(s) in %r", len(found_files), scan_dir
             )
             for fname in found_files:
                 if "mapping" in fname.lower() and fname.lower().endswith(".xml"):
                     full = os.path.join(scan_dir, fname)
                     candidates.append(full)
-                    logger.info("[service] Dir-scan hit: %r", full)
+                    logger.debug("[service] Dir-scan hit: %r", full)
         except OSError as exc:
             logger.warning("[service] Dir-scan OSError for dir=%r: %s", scan_dir, exc)
 
@@ -235,14 +236,14 @@ def _load_table_mapping(return_id: str, tbl_path: str):
             seen_paths.add(norm)
             deduped.append(norm)
 
-    logger.info("[service] Total unique candidates to probe: %d", len(deduped))
+    logger.debug("[service] Total unique candidates to probe: %d", len(deduped))
 
     # ── Probe each candidate ──────────────────────────────────────────────────
     for norm in deduped:
         exists = os.path.exists(norm)
-        logger.info("[service] Checking mapping path=%s  exists=%s", norm, exists)
+        logger.debug("[service] Checking mapping path=%s  exists=%s", norm, exists)
         if exists:
-            logger.info("[service] Found mapping=%s", norm)
+            logger.debug("[service] Found mapping=%s", norm)
             root = load_xml_tree(norm, label=f"Table mapping for return {return_id}")
             return root, norm
 
@@ -426,12 +427,12 @@ def compute_variance(
         report_name = f"{DP_TABLE_SCHEMA}.{dp_name}" if DP_TABLE_SCHEMA else dp_name
     resolved_table_name = report_name
 
-    logger.info("[table_resolution] ReturnCode=%s", return_id)
-    logger.info("[table_resolution] IsExcel=%s", is_excel)
-    logger.info("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
-    logger.info("[table_resolution] ReturnFoundInXml=%s", return_meta is not None)
-    logger.info("[table_resolution] OriginalTable=%s", table_name)
-    logger.info("[table_resolution] FinalReportName=%s", resolved_table_name)
+    logger.debug("[table_resolution] ReturnCode=%s", return_id)
+    logger.debug("[table_resolution] IsExcel=%s", is_excel)
+    logger.debug("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
+    logger.debug("[table_resolution] ReturnFoundInXml=%s", return_meta is not None)
+    logger.debug("[table_resolution] OriginalTable=%s", table_name)
+    logger.debug("[table_resolution] FinalReportName=%s", resolved_table_name)
 
     table_meta = _get_table_metadata(return_id, return_tbl_path, table_name)
 
@@ -449,7 +450,7 @@ def compute_variance(
         return metadata
 
     def execute_query_adapter(query, conn_str=None):
-        logger.info("[service] Executing Oracle query:\n%s", query)
+        logger.debug("[service] Executing Oracle query:\n%s", query)
         cols, rows, err = execute_query_fn(query)
 
         if err:

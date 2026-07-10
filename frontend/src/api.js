@@ -58,3 +58,27 @@ export async function computeVariance(payload, loginId = '') {
   }
   return res.json()
 }
+
+// ── POST /variance/nlresolve?loginId=... ─────────────────────────────────────
+// One-shot: resolves a free-text query (e.g. "total loan") to a known return/
+// table/column set via the backend's embedding + LLM layer, resolves any
+// date/period intent in the query (or defaults to the latest submission),
+// and computes the variance — response is shaped exactly like
+// /variance/compute's (table_name, reporting_date, comparison_periods,
+// columns, display_columns, rows) plus return_id/return_name/report_freq/
+// table_mapping_path. See LayoutContainer's handleNlpSearch.
+export async function resolveNlQuery(query, loginId = '') {
+  const res = await fetch(
+    `${BASE_URL}/variance/nlresolve?loginId=${encodeURIComponent(loginId)}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ query }),
+    }
+  )
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `NL resolve error (${res.status})`)
+  }
+  return res.json()
+}

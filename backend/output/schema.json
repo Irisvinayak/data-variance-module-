@@ -1,0 +1,958 @@
+[
+  {
+    "table_name": "CIMS_RAQ_M_GEN_INFO",
+    "table_description": "General Information - Return name, return code, reporting institution, bank code, address, reporting period, frequency, audit/validation status, bank category and tool/version details.",
+    "return_name": "CIMS_RAQ(Annual)",
+    "template_sheet_no": 1,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_M_SIGN_INFO",
+    "table_description": "Authorised Signatory - Name, designation, mobile no., landline no., e-mail id, place and date of the authorised signatory.",
+    "return_name": "CIMS_RAQ(Annual)",
+    "template_sheet_no": 2,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_GEN_INFO",
+    "table_description": "General Information (Quarterly Return) - Return name, return code, reporting institution, bank code, address, reporting period, frequency, audit/validation status, bank category and tool/version details.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 1,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SIGNATORY",
+    "table_description": "Authorised Signatory (Quarterly Return) - Name, designation, mobile no., landline no., e-mail id, place and date of the authorised signatory.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 2,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC1_PART_A_DOM",
+    "table_description": "Section 1: Portfolio Analysis (By delinquency in Interest Payment). Part A - Loans and Advances - including bill credit - Domestic Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 3,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "PERIOD_DELINQUENCY", "column_description": "Period of Delinquency" },
+      { "column_name": "TERM_LOAN", "column_description": "Term Loans" },
+      { "column_name": "CASH_CR_OVERDRAFT_DEMAND_LOAN", "column_description": "Cash Credits, Overdrafts and Demand Loans" },
+      { "column_name": "BILLS_PURCHASE_DISCOUNT", "column_description": "Bills Purchased and Discounted" },
+      { "column_name": "LOAN_ADVANCE_BANK", "column_description": "Loans and Advances to Banks" },
+      { "column_name": "TOTAL_LOAN_ASSETS", "column_description": "Total Loan Assets" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC1_PART_B_DOM",
+    "table_description": "Section 1: Portfolio Analysis (By delinquency in Interest Payment). Part B - Other Interest Bearing Assets (OIBA) - Domestic Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 4,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "PERIOD_DELINQUENCY", "column_description": "Period of Delinquency" },
+      { "column_name": "COMMERCIAL_PAPER", "column_description": "Commercial Paper" },
+      { "column_name": "NOTE_BONDS_CORPORATE", "column_description": "Notes and Bonds of Corporates" },
+      { "column_name": "INTER_BANK_ASSETS", "column_description": "Inter-bank Assets" },
+      { "column_name": "LEASE_EASE_RECEIVABLE", "column_description": "Lease Receivables" },
+      { "column_name": "OTHERS", "column_description": "Others" },
+      { "column_name": "TOTAL_OIBA", "column_description": "Total OIBA" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER",
+    "table_description": "Section 1: Portfolio Analysis (By delinquency in Interest Payment). Part B footnote - Government paper excluded from OIBA Part B 'Current' row, broken up into Treasury Bills, GOI Securities (Bonds) and State Govt. securities, with total.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 5,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC1_PART_C_O",
+    "table_description": "Section 1: Portfolio Analysis (By delinquency in Interest Payment). Part C - Loans and Advances - including bill credit - Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 6,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "PERIOD_DELINQUENCY", "column_description": "Period of Delinquency" },
+      { "column_name": "TERM_LOAN", "column_description": "Term Loans" },
+      { "column_name": "CASH_CR_OVERDRAFT_DEMAND_LOAN", "column_description": "Cash Credits, Overdrafts and Demand Loans" },
+      { "column_name": "BILLS_PURCHASE_DISCOUNT", "column_description": "Bills Purchased and Discounted" },
+      { "column_name": "LOAN_ADVANCE_BANK", "column_description": "Loans and Advances to Banks" },
+      { "column_name": "TOTAL_LOAN_ASSETS", "column_description": "Total Loan Assets" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC1_PART_D_O",
+    "table_description": "Section 1: Portfolio Analysis (By delinquency in Interest Payment). Part D - Other Interest Bearing Assets (OIBA) - Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 7,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "PERIOD_DELINQUENCY", "column_description": "Period of Delinquency" },
+      { "column_name": "COMMERCIAL_PAPER", "column_description": "Commercial Paper" },
+      { "column_name": "NOTE_BONDS_CORPORATE", "column_description": "Notes and Bonds of Corporates" },
+      { "column_name": "INTER_BANK_ASSETS", "column_description": "Inter-bank Assets" },
+      { "column_name": "OTHERS", "column_description": "Others" },
+      { "column_name": "TOTAL_OIBA", "column_description": "Total OIBA" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC1_LAST_DATE_PORT",
+    "table_description": "Section 1: Portfolio Analysis (By delinquency in Interest Payment). Reference metadata holding the last date of portfolio review (YYYY-MM-DD) for Section 1.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 8,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC2_PART_A",
+    "table_description": "Section 2: Classification of Risk Assets (By degree of risk and value impairment). Part A - Loans & Advances (including Bill Credit), covering both Domestic and Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 9,
+    "isactive": 1,
+    "scale": "Amount in Rs Lakh",
+    "columns": [
+      { "column_name": "RISK_CATEGORY", "column_description": "Risk Category" },
+      { "column_name": "OUTSTANDING_AMT_DOM", "column_description": "Outstanding Amount (Domestic Operations)" },
+      { "column_name": "PER_TO_TOTAL_DOM", "column_description": "% to Total (Domestic Operations)" },
+      { "column_name": "PROVISION_MADE_LOSSES_DOM", "column_description": "Provision made for possible losses (Domestic Operations)" },
+      { "column_name": "OUTSTANDING_AMT_O", "column_description": "Outstanding Amount (Overseas Operations)" },
+      { "column_name": "PER_TO_TOTAL_O", "column_description": "% to Total (Overseas Operations)" },
+      { "column_name": "PROVISION_MADE_LOSSES_O", "column_description": "Provision made for possible losses (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC2_PART_A_NPA",
+    "table_description": "Section 2: Classification of Risk Assets (By degree of risk and value impairment). Part A NPA breakup - Netting Items for NPAs and Net NPAs, Domestic and Overseas Operations outstanding amounts.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 10,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "RISK_CATEGORY", "column_description": "Risk Category" },
+      { "column_name": "OUTSTANDING_AMT_DOM", "column_description": "Outstanding Amount (Domestic Operations)" },
+      { "column_name": "OUTSTANDING_AMT_O", "column_description": "Outstanding Amount (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC2_LAST_DATE_PORT",
+    "table_description": "Section 2: Classification of Risk Assets (By degree of risk and value impairment). Reference metadata holding the date of last portfolio review/classification and date of last provisioning review (YYYY-MM-DD) for Section 2 Part A.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 11,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC2_PART_A_MEMO",
+    "table_description": "Section 2: Classification of Risk Assets (By degree of risk and value impairment). Part A Memorandum items - loans/advances to Government or carrying Government guarantee which are non-performing, and interest not recognised thereon, for Domestic and Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 12,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "MEMORANDUM_ITEM", "column_description": "Memorandum Item" },
+      { "column_name": "OUTSTANDING_AMT_DOM", "column_description": "Outstanding Amount (Domestic Operations)" },
+      { "column_name": "OUTSTANDING_AMT_O", "column_description": "Outstanding Amount (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC2_PART_B",
+    "table_description": "Section 2: Classification of Risk Assets (By degree of risk and value impairment). Part B - Movement in Provisions for NPAs in Loans/Advances (April to Date), Domestic, Overseas and Global.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 13,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "MOVEMENT_PROVISION_NPA", "column_description": "Movement of Provision for NPA" },
+      { "column_name": "DOMESTIC", "column_description": "Domestic" },
+      { "column_name": "OVERSEAS", "column_description": "Overseas" },
+      { "column_name": "GLOBAL", "column_description": "Global" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC2_PART_C",
+    "table_description": "Section 2: Classification of Risk Assets (By degree of risk and value impairment). Part C - Other Risk Assets and Exposures (on-balance sheet items 1-5 and off-balance sheet items 6-8), Domestic and Overseas Operations, classified by Standard/Sub-Standard/Doubtful/Loss.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 14,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "ITEM", "column_description": "Item" },
+      { "column_name": "STANDARD_DOM", "column_description": "Standard (Domestic Operations)" },
+      { "column_name": "SUBSTANDARD_DOM", "column_description": "Sub-Standard (Domestic Operations)" },
+      { "column_name": "DOUBTFUL_DOM", "column_description": "Doubtful (Domestic Operations)" },
+      { "column_name": "LOSS_DOM", "column_description": "Loss (Domestic Operations)" },
+      { "column_name": "TOTAL_DOM", "column_description": "Total (Domestic Operations)" },
+      { "column_name": "STANDARD_O", "column_description": "Standard (Overseas Operations)" },
+      { "column_name": "SUBSTANDARD_O", "column_description": "Sub-Standard (Overseas Operations)" },
+      { "column_name": "DOUBTFUL_O", "column_description": "Doubtful (Overseas Operations)" },
+      { "column_name": "LOSS_O", "column_description": "Loss (Overseas Operations)" },
+      { "column_name": "TOTAL_O", "column_description": "Total (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC3_PART_A",
+    "table_description": "Section 3: Restructuring of Advances. Part A - Restructuring of Advances by Category (Standard, Sub-standard, Doubtful, Loss), reporting number of borrowers, amount and sacrifice on diminution, for Domestic and Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 15,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "CATEGORY", "column_description": "Restructured Loans and Advances Retained as (Category)" },
+      { "column_name": "DESCRIPTION", "column_description": "Item (Number of borrowers / Amount / Sacrifice on diminution)" },
+      { "column_name": "ACC_RES_DOM", "column_description": "Accounts Restructured (April to Date) - Domestic Operations" },
+      { "column_name": "ACC_RES_CDR_DOM", "column_description": "of which through CDR - Accounts Restructured (April to Date), Domestic Operations" },
+      { "column_name": "OUT_ACC_RES_DOM", "column_description": "Accounts Restructured till end of the Quarter (Outstanding at end of the quarter) - Domestic Operations" },
+      { "column_name": "OUT_ACC_RES_CDR_DOM", "column_description": "of which through CDR - Accounts Restructured till end of the Quarter, Domestic Operations" },
+      { "column_name": "ACC_SLIP_DOM", "column_description": "Restructured Accounts Slipped to NPAs (April to Date) - Domestic Operations" },
+      { "column_name": "OUT_ACC_SLIP_DOM", "column_description": "Restructured Accounts Slipped to NPAs till end of the Quarter (Outstanding at end of the quarter) - Domestic Operations" },
+      { "column_name": "ACC_RES_OS", "column_description": "Accounts Restructured (April to Date) - Overseas Operations" },
+      { "column_name": "ACC_RES_CDR_OS", "column_description": "of which through CDR - Accounts Restructured (April to Date), Overseas Operations" },
+      { "column_name": "OUT_ACC_RES_OS", "column_description": "Accounts Restructured till end of the Quarter (Outstanding at end of the quarter) - Overseas Operations" },
+      { "column_name": "OUT_ACC_RES_CDR_OS", "column_description": "of which through CDR - Accounts Restructured till end of the Quarter, Overseas Operations" },
+      { "column_name": "ACC_SLIP_OS", "column_description": "Restructured Accounts Slipped to NPAs (April to Date) - Overseas Operations" },
+      { "column_name": "OUT_ACC_SLIP_OS", "column_description": "Restructured Accounts Slipped to NPAs till end of the Quarter (Outstanding at end of the quarter) - Overseas Operations" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC3_PART_B",
+    "table_description": "Section 3: Restructuring of Advances. Part B - movement of restructured standard loans and advances (Domestic, Overseas and Global).",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 16,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "MOVEMENT_RESTRUCTURE_STD_LA", "column_description": "Movement of Restructured Standard Loans and Advances" },
+      { "column_name": "DOMESTIC", "column_description": "Domestic" },
+      { "column_name": "OVERSEAS", "column_description": "Overseas" },
+      { "column_name": "GLOBAL", "column_description": "Global" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPE_ID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC4_PART_A",
+    "table_description": "Section 4: Change in Asset Quality Profile and Recoveries of NPAs. Part A - Movement in Loans and Advances during the period (April to Date), Domestic and Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 17,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "MOVEMENT_FROM", "column_description": "Movement from" },
+      { "column_name": "STANDARD_DOM", "column_description": "Standard (Domestic Operations)" },
+      { "column_name": "SUBSTANDARD_DOM", "column_description": "Sub-standard (Domestic Operations)" },
+      { "column_name": "DOUBTFUL_DOM", "column_description": "Doubtful (Domestic Operations)" },
+      { "column_name": "LOSS_DOM", "column_description": "Loss (Domestic Operations)" },
+      { "column_name": "TOTAL_DOM", "column_description": "Total (Domestic Operations)" },
+      { "column_name": "STANDARD_O", "column_description": "Standard (Overseas Operations)" },
+      { "column_name": "SUBSTANDARD_O", "column_description": "Sub-standard (Overseas Operations)" },
+      { "column_name": "DOUBTFUL_O", "column_description": "Doubtful (Overseas Operations)" },
+      { "column_name": "LOSS_O", "column_description": "Loss (Overseas Operations)" },
+      { "column_name": "TOTAL_O", "column_description": "Total (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC4_PART_B",
+    "table_description": "Section 4: Change in Asset Quality Profile and Recoveries of NPAs. Part B - Change in NPAs Profile during the Period (April to Date), by asset classification (Sub-Standard, Doubtful, Loss), Domestic and Overseas Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 18,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "MOVEMENT_FROM", "column_description": "Items" },
+      { "column_name": "SUBSTANDARD_DOM", "column_description": "Sub-Standard (Domestic Operations)" },
+      { "column_name": "DOUBTFUL_DOM", "column_description": "Doubtful (Domestic Operations)" },
+      { "column_name": "LOSS_DOM", "column_description": "Loss (Domestic Operations)" },
+      { "column_name": "TOTAL_DOM", "column_description": "Total (Domestic Operations)" },
+      { "column_name": "SUBSTANDARD_O", "column_description": "Sub-Standard (Overseas Operations)" },
+      { "column_name": "DOUBTFUL_O", "column_description": "Doubtful (Overseas Operations)" },
+      { "column_name": "LOSS_O", "column_description": "Loss (Overseas Operations)" },
+      { "column_name": "TOTAL_O", "column_description": "Total (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC4_PART_C",
+    "table_description": "Section 4: Change in Asset Quality Profile and Recoveries of NPAs. Part C - Movement in Technical/Prudential Write-offs/Advances under Collection Account during the Period (April to Date), Domestic, Overseas and Global.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 19,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "DOMESTIC", "column_description": "Domestic" },
+      { "column_name": "OVERSEAS", "column_description": "Overseas" },
+      { "column_name": "GLODAL", "column_description": "Global" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC4_PART_D",
+    "table_description": "Section 4: Change in Asset Quality Profile and Recoveries of NPAs. Part D - Recoveries of NPAs through SARFAESI, DRT and Lok Adalat (Position as at end of the Quarter) - Domestic Operations, reporting number of cases and amount.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 20,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "NO_OF_CASE", "column_description": "No. of Cases" },
+      { "column_name": "AMOUNT", "column_description": "Amount" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC5_TOP_CR",
+    "table_description": "Section 5: Top Defaulters (Global Operations). Top Impaired Credits - detail of each defaulter including PAN, name, date of sanction, risk classification and exposure/provision amounts.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 21,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "SR_NO", "column_description": "Sr No" },
+      { "column_name": "PAN_DEFAULTER", "column_description": "PAN Number Of Defaulter" },
+      { "column_name": "NAME_DEFAULTER", "column_description": "Name Of Defaulter" },
+      { "column_name": "DATE_SANCTION", "column_description": "Date Of Sanction (YYYY-MM-DD)" },
+      { "column_name": "RISK_CLASSIFICATION", "column_description": "Risk Classification" },
+      { "column_name": "FUND_CR_EXP", "column_description": "Funded Credit Exposure" },
+      { "column_name": "NONFUND_CR_EXP", "column_description": "Non-Funded Credit Exposure" },
+      { "column_name": "TOTAL_CR_EXP", "column_description": "Total Credit Exposure" },
+      { "column_name": "LOSS_PRO_HELD", "column_description": "Loss Provisions held" },
+      { "column_name": "INTR_ARREARS", "column_description": "Interest in Arrears" },
+      { "column_name": "TOTAL_INV_EXP_IF", "column_description": "Total Investment Exposure, if any" },
+      { "column_name": "TOTAL_EXP", "column_description": "Total Exposure" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC5_TOP_CR_TL",
+    "table_description": "Section 5: Top Defaulters (Global Operations). Top Impaired Credits - Total row aggregating exposure and provision amounts across all reported defaulters.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 22,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "FUND_CR_EXP", "column_description": "Funded Credit Exposure" },
+      { "column_name": "NONFUND_CR_EXP", "column_description": "Non-Funded Credit Exposure" },
+      { "column_name": "TOTAL_CR_EXP", "column_description": "Total Credit Exposure" },
+      { "column_name": "LOSS_PRO_HELD", "column_description": "Loss Provisions held" },
+      { "column_name": "INTR_ARREARS", "column_description": "Interest in Arrears" },
+      { "column_name": "TOTAL_INV_EXP_IF", "column_description": "Total Investment Exposure, if any" },
+      { "column_name": "TOTAL_EXP", "column_description": "Total Exposure" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC6_PART_A",
+    "table_description": "Section 6: Investment Quality. Part A - Quality of Investment Portfolio (Domestic / Overseas / Global Operation), Book Value and Market Value by investment category.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 23,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "CATEGORY_INVESTMENT_DOM_OPR", "column_description": "Category of Investment (Domestic Operation)" },
+      { "column_name": "HELD_MATURITY_BV", "column_description": "Book Value Held to Maturity" },
+      { "column_name": "AVAIL_FR_SALE_BV", "column_description": "Book Value Available for Sale" },
+      { "column_name": "HELD_FR_TRADING_BV", "column_description": "Book Value Held for Trading" },
+      { "column_name": "TOTAL_BV", "column_description": "Book Value Total" },
+      { "column_name": "HELD_MATURITY_MV", "column_description": "Market Value Held to Maturity" },
+      { "column_name": "AVAIL_FR_SALE_MV", "column_description": "Market Value Available for Sale" },
+      { "column_name": "HELD_FR_TRADING_MV", "column_description": "Market Value Held for Trading" },
+      { "column_name": "TOTAL_MV", "column_description": "Market Value Total" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC6_PART_B",
+    "table_description": "Section 6: Investment Quality. Part B - Shifting of Investments during the period (Domestic), reporting amount and total provisions on account of shifting, for current quarter and current year (April to date).",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 24,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "ITEM", "column_description": "Item (category of shift, e.g. HTM to AFS)" },
+      { "column_name": "AMT_CR_QTR", "column_description": "Amount - Current Quarter" },
+      { "column_name": "AMT_CR_YR", "column_description": "Amount - Current Year (from April to date)" },
+      { "column_name": "TOTAL_CR_QTR", "column_description": "Total Provisions on Account of Shifting of Investments - Current Quarter" },
+      { "column_name": "TOTAL_CR_YR", "column_description": "Total Provisions on Account of Shifting of Investments - Current Year (from April to date)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC6_PART_C",
+    "table_description": "Section 6: Non-SLR Securities. Part C - Other Details of Non-SLR Securities/Investments (Domestic Operations), by category and item, with rating-wise, category-wise and private-placement holdings, total NPA and total provision held.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 25,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "CATEGORY", "column_description": "Category of Securities" },
+      { "column_name": "ITEM", "column_description": "Item" },
+      { "column_name": "TL_HLD_RATE", "column_description": "Rating-Wise Details of Total Holdings - Rated" },
+      { "column_name": "TL_HLD_UNRATE", "column_description": "Rating-Wise Details of Total Holdings - Unrated" },
+      { "column_name": "TL_HLD_BRWR", "column_description": "Category-Wise Details of Total Holdings - Borrowers" },
+      { "column_name": "TL_HLD_NONBRWR", "column_description": "Category-Wise Details of Total Holdings - Non-Borrowers" },
+      { "column_name": "AATPP_RATE", "column_description": "Amount Acquired Through Private Placement - Rated" },
+      { "column_name": "AATPP_UNRATE", "column_description": "Amount Acquired Through Private Placement - Unrated" },
+      { "column_name": "TOTAL_NPA", "column_description": "Total NPA" },
+      { "column_name": "TOTAL_PRO_HELD", "column_description": "Total Provision Held" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC6_PART_C_2",
+    "table_description": "Section 6: Non-SLR Securities. Part C supplementary items - Investments in non-SLR securities as at end of previous March, investments excluded from monitoring of prudential limits, and investments in unlisted non-SLR securities as % of non-SLR investments.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 26,
+    "isactive": 1,
+    "scale": "",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC6_PART_D",
+    "table_description": "Section 6: Non-SLR Securities. Part D - Movement in Provisions for NPIs (April to Date), Domestic, Overseas and Global.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 27,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "DOMESTIC", "column_description": "Domestic" },
+      { "column_name": "OVERSEAS", "column_description": "Overseas" },
+      { "column_name": "GLOBAL", "column_description": "Global" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC7_EXP_CR",
+    "table_description": "Section 7: Export Credit. Total disbursements during the quarter and balance outstanding at end of the quarter, split by pre-shipment and post-shipment credit types.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 28,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DISBURSH_PRE_RUP_CR", "column_description": "Disbursement during the quarter - Pre Shipment Rupee Credit" },
+      { "column_name": "DISBURSH_PRE_PCFC", "column_description": "Disbursement during the quarter - Pre Shipment PCFC" },
+      { "column_name": "DISBURSH_PRE_TOTAL", "column_description": "Disbursement during the quarter - Pre Shipment Total" },
+      { "column_name": "DISBURSH_POST_RUP_CR", "column_description": "Disbursement during the quarter - Post Shipment Rupee Credit" },
+      { "column_name": "DISBURSH_POST_EBR", "column_description": "Disbursement during the quarter - Post Shipment EBR" },
+      { "column_name": "DISBURSH_POST_DEFER_PAYMENT", "column_description": "Disbursement during the quarter - Post Shipment Deferred Payment" },
+      { "column_name": "DISBURSH_POST_OTR_GOVT_PAYMENT", "column_description": "Disbursement during the quarter - Post Shipment Other Govt. Payments" },
+      { "column_name": "DISBURSH_POST_TOTAL", "column_description": "Disbursement during the quarter - Post Shipment Total" },
+      { "column_name": "DISBURSH_TOTAL", "column_description": "Disbursement during the quarter - Total" },
+      { "column_name": "BAL_OUT_PRE_RUP_CR", "column_description": "Balance outstanding at end of the quarter - Pre Shipment Rupee Credit" },
+      { "column_name": "BAL_OUT_PRE_PCFC", "column_description": "Balance outstanding at end of the quarter - Pre Shipment PCFC" },
+      { "column_name": "BAL_OUT_PRE_TOTAL", "column_description": "Balance outstanding at end of the quarter - Pre Shipment Total" },
+      { "column_name": "BAL_OUT_POST_RUP_CR", "column_description": "Balance outstanding at end of the quarter - Post Shipment Rupee Credit" },
+      { "column_name": "BAL_OUT_POST_EBR", "column_description": "Balance outstanding at end of the quarter - Post Shipment EBR" },
+      { "column_name": "BAL_OUT_POST_DEFER_PAYMENT", "column_description": "Balance outstanding at end of the quarter - Post Shipment Deferred Payment" },
+      { "column_name": "BAL_OUT_POST_OTR_GOVT_PAYMENT", "column_description": "Balance outstanding at end of the quarter - Post Shipment Other Govt. Payments" },
+      { "column_name": "BAL_OUT_POST_TOTAL", "column_description": "Balance outstanding at end of the quarter - Post Shipment Total" },
+      { "column_name": "BAL_OUT_TOTAL", "column_description": "Balance outstanding at end of the quarter - Total" },
+      { "column_name": "NO_GOLD_CARD_ISSUED", "column_description": "No. of Gold Cards issued" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC8_SEC_CREDIT",
+    "table_description": "Section 8: Sectoral Credit. Part A - Quality of Loan Assets - Sectoral Analysis, covering credit exposure (funded, non-funded, investment), NPA movement, write-offs and restructuring by sector, Domestic and Overseas/Global Operations.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 29,
+    "isactive": 1,
+    "scale": "Amount in Rs Lakh",
+    "columns": [
+      { "column_name": "ITEM", "column_description": "Item" },
+      { "column_name": "TL_F_CR_EXP", "column_description": "Total Funded Credit Exposure" },
+      { "column_name": "TL_NF_CR_EXP", "column_description": "Total Non-funded Credit Exposure" },
+      { "column_name": "TL_F_AND_NF_CR__EXP", "column_description": "Total Credit Exposure (Funded and Non-Funded)" },
+      { "column_name": "TL_INV_EXP", "column_description": "Total Investment Exposure" },
+      { "column_name": "TL_EXP", "column_description": "Total Exposure" },
+      { "column_name": "FUN_ADV_OUT", "column_description": "Funded Advances Outstanding" },
+      { "column_name": "OF_WCH_SEC_FUN_ADV_OUT", "column_description": "Of which Secured Funded Advances Outstanding" },
+      { "column_name": "NFFUN_ADV_OUT", "column_description": "Non-Funded Outstanding" },
+      { "column_name": "STD_FUN_ADV", "column_description": "Standard Advances at beginning of the year" },
+      { "column_name": "GROSS_NPA_BEG", "column_description": "Gross NPAs at beginning of the Year" },
+      { "column_name": "NEW_ACC_NPA_STD", "column_description": "New Accretion to NPAs from Standard Advances during (April to Date)" },
+      { "column_name": "UPGRADATION", "column_description": "Up-gradation (April to Date)" },
+      { "column_name": "ACTUAL_RECOVERIES", "column_description": "Actual Recoveries (April to Date)" },
+      { "column_name": "WRITE_OFFS", "column_description": "Write-offs (April to Date)" },
+      { "column_name": "REDUCTION", "column_description": "Reduction (-) / Addition due to RBI Instructions and/or any other Reason" },
+      { "column_name": "GROSS_NPA_END", "column_description": "Gross NPAs at end of the period" },
+      { "column_name": "SMA_0", "column_description": "SMA-0 Advances" },
+      { "column_name": "SMA_1", "column_description": "SMA-1 Advances" },
+      { "column_name": "SMA_2", "column_description": "SMA-2 Advances" },
+      { "column_name": "SUBSTANDARD_ADV", "column_description": "Substandard Advances" },
+      { "column_name": "DOUBT_ADVANCES", "column_description": "Doubtful Advances" },
+      { "column_name": "LOSS_ADVANCES", "column_description": "Loss Advances" },
+      { "column_name": "TOT_LOSS_PRO_HELD", "column_description": "Total Loss Provisions held" },
+      { "column_name": "CUM_WRITE_OFFS", "column_description": "Cumulative Write-offs" },
+      { "column_name": "TECH_PRUD_WRITE_OFFS", "column_description": "Of Cumulative Write-offs: Technical/Prudential Write-offs/amounts in AUC A/C Outstanding in the Books of Bank" },
+      { "column_name": "RESTRUCTURED_STAND_ADV", "column_description": "Restructured Standard Advances - Outstanding" },
+      { "column_name": "TL_TERM_LOANS_SANCT", "column_description": "Total Term Loans Sanctioned till date in the FY (April to Date)" },
+      { "column_name": "TL_TERM_LOANS_DISBUR", "column_description": "Total Term Loans Disbursed till date in the FY (April to Date)" },
+      { "column_name": "TL_BILLS_PURCHASED", "column_description": "Total Bills Purchased/Discounted till date in the FY (April to Date)" },
+      { "column_name": "NET_LOANS_DISBURSED", "column_description": "Net loans disbursed to CC/OD/Demand Loans Accounts till date in the FY (April to Date)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPEID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC8_SEC_CREDIT_1",
+    "table_description": "Section 8: Sectoral Credit. Part A summary items - Priority Sector Lending (PSL) shortfall investments, Adjusted Net Bank Credit (ANBC), PSLC Certificate Sold/Bought and Priority Sector Lending as % of ANBC.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 30,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC8_IND_BRKUP",
+    "table_description": "Section 8: Sectoral Credit. Part B - Industry Breakup (Domestic Operations) - credit exposure, NPA movement, write-offs and restructuring by industry.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 31,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "INDUSTRY_NAME", "column_description": "Industry Name" },
+      { "column_name": "TL_F_CR_EXP", "column_description": "Total Funded Credit Exposure" },
+      { "column_name": "TL_NF_CR_EXP", "column_description": "Total Non-funded Credit Exposure" },
+      { "column_name": "TL_F_AND_NF_CR__EXP", "column_description": "Total Credit Exposure (Funded and Non-Funded)" },
+      { "column_name": "TL_INV_EXP", "column_description": "Total Investment Exposure" },
+      { "column_name": "TL_EXP", "column_description": "Total Exposure" },
+      { "column_name": "FUN_ADV_OUT", "column_description": "Funded Advances Outstanding" },
+      { "column_name": "OF_WCH_SEC_FUN_ADV_OUT", "column_description": "Of which Secured Funded Advances Outstanding" },
+      { "column_name": "NFFUN_ADV_OUT", "column_description": "Non-Funded Advances Outstanding" },
+      { "column_name": "STD_FUN_ADV", "column_description": "Standard (Funded) Advances at beginning of the year" },
+      { "column_name": "GROSS_NPA_BEG", "column_description": "Gross NPAs at beginning of the Year" },
+      { "column_name": "NEW_ACC_NPA_STD", "column_description": "New Accretion to NPAs from Standard Advances during (April to Date)" },
+      { "column_name": "UPGRADATION", "column_description": "Up-gradation (April to Date)" },
+      { "column_name": "ACTUAL_RECOVERIES", "column_description": "Actual Recoveries (April to Date)" },
+      { "column_name": "WRITE_OFFS", "column_description": "Write-offs (April to Date)" },
+      { "column_name": "REDUCTION", "column_description": "Reduction (-) / Addition due to RBI Instructions and/or any other Reason" },
+      { "column_name": "GROSS_NPA_END", "column_description": "Gross NPAs at end of the period" },
+      { "column_name": "SMA_0", "column_description": "SMA-0 Advances" },
+      { "column_name": "SMA_1", "column_description": "SMA-1 Advances" },
+      { "column_name": "SMA_2", "column_description": "SMA-2 Advances" },
+      { "column_name": "SUBSTANDARD_ADV", "column_description": "Substandard Advances" },
+      { "column_name": "DOUBT_ADVANCES", "column_description": "Doubtful Advances" },
+      { "column_name": "LOSS_ADVANCES", "column_description": "Loss Advances" },
+      { "column_name": "TOT_LOSS_PRO_HELD", "column_description": "Total Loss Provisions held" },
+      { "column_name": "CUM_WRITE_OFFS", "column_description": "Cumulative Write-offs" },
+      { "column_name": "TECH_PRUD_WRITE_OFFS", "column_description": "Of Cumulative Write-offs: Technical/Prudential Write-offs/amounts in AUC A/C Outstanding in the Books of Bank" },
+      { "column_name": "RESTRUCTURED_STAND_ADV", "column_description": "Restructured Standard Advances - Outstanding" },
+      { "column_name": "TL_TERM_LOANS_SANCT", "column_description": "Total Term Loans Sanctioned till date in the FY (April to Date)" },
+      { "column_name": "TL_TERM_LOANS_DISBUR", "column_description": "Total Term Loans Disbursed till date in the FY (April to Date)" },
+      { "column_name": "TL_BILLS_PURCHASED", "column_description": "Total Bills Purchased/Discounted till date in the FY (April to Date)" },
+      { "column_name": "NET_LOANS_DISBURSED", "column_description": "Net loans disbursed to CC/OD/Demand Loans Accounts till date in the FY (April to Date)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPEID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC8_INFRA_BRKUP",
+    "table_description": "Section 8: Sectoral Credit. Part C - Infrastructure Breakup (Domestic Operations) - credit exposure, NPA movement, write-offs and restructuring by infrastructure sub-sector.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 32,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "INDUSTRY_NAME", "column_description": "Industry Name" },
+      { "column_name": "TL_F_CR_EXP", "column_description": "Total Funded Credit Exposure" },
+      { "column_name": "TL_NF_CR_EXP", "column_description": "Total Non-funded Credit Exposure" },
+      { "column_name": "TL_F_AND_NF_CR__EXP", "column_description": "Total Credit Exposure (Funded and Non-Funded)" },
+      { "column_name": "TL_INV_EXP", "column_description": "Total Investment Exposure" },
+      { "column_name": "TL_EXP", "column_description": "Total Exposure" },
+      { "column_name": "FUN_ADV_OUT", "column_description": "Funded Advances Outstanding" },
+      { "column_name": "OF_WCH_SEC_FUN_ADV_OUT", "column_description": "Of which Secured Funded Advances Outstanding" },
+      { "column_name": "NFFUN_ADV_OUT", "column_description": "Non-Funded Advances Outstanding" },
+      { "column_name": "STD_FUN_ADV", "column_description": "Standard (Funded) Advances at beginning of the year" },
+      { "column_name": "GROSS_NPA_BEG", "column_description": "Gross NPAs (Funded) at beginning of the Year" },
+      { "column_name": "NEW_ACC_NPA_STD", "column_description": "New Accretion to NPAs from Standard Advances during (April to Date)" },
+      { "column_name": "UPGRADATION", "column_description": "Up-gradation (April to Date)" },
+      { "column_name": "ACTUAL_RECOVERIES", "column_description": "Actual Recoveries (April to Date)" },
+      { "column_name": "WRITE_OFFS", "column_description": "Write-offs (April to Date)" },
+      { "column_name": "REDUCTION", "column_description": "Reduction (-) / Addition due to RBI Instructions and/or any other Reason" },
+      { "column_name": "GROSS_NPA_END", "column_description": "Gross NPAs at end of the period" },
+      { "column_name": "SMA_0", "column_description": "SMA-0 Advances" },
+      { "column_name": "SMA_1", "column_description": "SMA-1 Advances" },
+      { "column_name": "SMA_2", "column_description": "SMA-2 Advances" },
+      { "column_name": "SUBSTANDARD_ADV", "column_description": "Substandard Advances" },
+      { "column_name": "DOUBT_ADVANCES", "column_description": "Doubtful Advances" },
+      { "column_name": "LOSS_ADVANCES", "column_description": "Loss Advances" },
+      { "column_name": "TOT_LOSS_PRO_HELD", "column_description": "Total Loss Provisions held" },
+      { "column_name": "CUM_WRITE_OFFS", "column_description": "Cumulative Write-offs" },
+      { "column_name": "TECH_PRUD_WRITE_OFFS", "column_description": "Of Cumulative Write-offs: Technical/Prudential Write-offs/amounts in AUC A/C Outstanding in the Books of Bank" },
+      { "column_name": "RESTRUCTURED_STAND_ADV", "column_description": "Restructured Standard Advances - Outstanding" },
+      { "column_name": "TL_TERM_LOANS_SANCT", "column_description": "Total Term Loans Sanctioned till date in the FY (April to Date)" },
+      { "column_name": "TL_TERM_LOANS_DISBUR", "column_description": "Total Term Loans Disbursed till date in the FY (April to Date)" },
+      { "column_name": "TL_BILLS_PURCHASED", "column_description": "Total Bills Purchased/Discounted till date in the FY (April to Date)" },
+      { "column_name": "NET_LOANS_DISBURSED", "column_description": "Net loans disbursed to CC/OD/Demand Loans Accounts till date in the FY (April to Date)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPEID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC9_SENSEC_PARTA",
+    "table_description": "Section 9: Sensitive Sector. Part A - Exposures to Capital Market (fund-based, non-fund-based and investments), Domestic and Overseas Operations, with exposure, gross amount outstanding and amount impaired.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 33,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "EXPOSURE_DOM", "column_description": "Exposure (Domestic Operation)" },
+      { "column_name": "GROSS_AMT_OS_DOM", "column_description": "Gross Amount Outstanding (Domestic Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operation)" },
+      { "column_name": "EXPOSURE_OVE", "column_description": "Exposure (Overseas Operation)" },
+      { "column_name": "GROSS_AMT_OS_OVE", "column_description": "Gross Amount Outstanding (Overseas Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operation)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPE_ID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC9_SENSEC_PARTB",
+    "table_description": "Section 9: Sensitive Sector. Part B - Exposure to Real Estate Sector (Total Credit and Total Investment, Direct and Indirect), Domestic and Overseas Operations, with total exposure, amount outstanding funded, restructured standard, impaired, and slippage from total standard.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 34,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "TOT_EXPO_DOM", "column_description": "Total Exposure (Domestic Operations)" },
+      { "column_name": "AMT_OS_FUNDED_DOM", "column_description": "Amount Outstanding - Funded (Domestic Operations)" },
+      { "column_name": "RESTRU_STD_DOM", "column_description": "of which Restructured Standard (Domestic Operations)" },
+      { "column_name": "IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operations)" },
+      { "column_name": "SLIPPAGE_DOM", "column_description": "Slippage from Total Standard during April to Date (Domestic Operations)" },
+      { "column_name": "TOT_EXPO_OVE", "column_description": "Total Exposure (Overseas Operations)" },
+      { "column_name": "AMT_OS_FUNDED_OVE", "column_description": "Amount Outstanding - Funded (Overseas Operations)" },
+      { "column_name": "RESTRU_STD_OVE", "column_description": "of which Restructured Standard (Overseas Operations)" },
+      { "column_name": "IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operations)" },
+      { "column_name": "SLIPPAGE_OVE", "column_description": "Slippage from Total Standard during April to Date (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "TYPEID", "column_description": "TYPEID" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC10",
+    "table_description": "Section 10: MFIs/SHGs. Exposure to MFIs/SHGs and Micro/Small/Medium Enterprises (Domestic Operations), in Rupee and Foreign Currency, with funded/non-funded exposure, amount outstanding, impaired amount, loss provisions and interest rate range.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 35,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "FUN_EXP", "column_description": "Funded Exposure" },
+      { "column_name": "NON_FUN_EXP", "column_description": "Non-Funded Exposure" },
+      { "column_name": "TOTAL", "column_description": "Total" },
+      { "column_name": "AMT_OUT_FUN", "column_description": "Amount Outstanding - Funded" },
+      { "column_name": "OF_WHC_IMPAIR", "column_description": "Of which Impaired" },
+      { "column_name": "LOSS_PRO_HELD", "column_description": "Loss Provisions held" },
+      { "column_name": "INT_MIN", "column_description": "Interest Rate - Min" },
+      { "column_name": "INT_MAX", "column_description": "Interest Rate - Max" },
+      { "column_name": "INT_WGT_AVG_RATE", "column_description": "Interest Rate - Weighted Average Rate of Interest" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC11",
+    "table_description": "Section 11: Country Risk. Country Risk Exposure (Global Operation) by Country of Borrower/Counter Party, Country Risk Classification and Sector, reporting gross funded exposure by classification, short-term exposure, net funded exposure, gross non-funded exposure, provision held and provision as % of net funded exposure.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 36,
+    "isactive": 1,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "COUNTRY_BRW_CUNTR_PARTY", "column_description": "Country of Borrower/Counter Party" },
+      { "column_name": "COUNTRY_RISK", "column_description": "Country Risk Classification" },
+      { "column_name": "SECTOR", "column_description": "Sector" },
+      { "column_name": "STD", "column_description": "Gross Funded Exposure - Standard" },
+      { "column_name": "SUB_STD", "column_description": "Gross Funded Exposure - Sub-Standard" },
+      { "column_name": "DOUBTFUL", "column_description": "Gross Funded Exposure - Doubtful" },
+      { "column_name": "LOSS", "column_description": "Gross Funded Exposure - Loss" },
+      { "column_name": "TOTAL", "column_description": "Gross Funded Exposure - Total" },
+      { "column_name": "OF_SHRT_TR_EXP", "column_description": "Of Which Short term Exposure (Gross Funded)" },
+      { "column_name": "NET_FUND_TOTAL", "column_description": "Net Funded Exposure - Total" },
+      { "column_name": "NET_FUND_OF_SHRT_TR_EXP", "column_description": "Net Funded Exposure - Of Which Short term Exposure" },
+      { "column_name": "GR_NONFUND_EXP", "column_description": "Gross Non-Funded Exposure" },
+      { "column_name": "PROV_HELD_COUNTRY", "column_description": "Provision Held for Country Exposure" },
+      { "column_name": "PRO_AS_NET_FUND", "column_description": "Provision as % of Net Funded Exposure" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC_12_MISC",
+    "table_description": "Section 12: Misc. Table 1 - Data on Gold Loans (Non-Agricultural and Agricultural), reporting gold loan outstanding, mean effective interest rate, value of gold pledged, LTV utilisation, gross NPAs, incremental NPAs and gold pledged/auctioned in lieu of incremental NPAs.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 37,
+    "isactive": 1,
+    "scale": "Rs Lakh / Kg",
+    "columns": [
+      { "column_name": "ITEM", "column_description": "Item" },
+      { "column_name": "VALUE", "column_description": "Value" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC_12_MISC_T2",
+    "table_description": "Section 12: Misc. Table 2 - Number of MSME Accounts (Industry and Service Sector) by asset classification category (Non-SMA Standard, SMA-0/1/2, Sub-Standard, Doubtful, Loss), split by Micro, Small and Medium.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 38,
+    "isactive": 1,
+    "scale": "Number of accounts",
+    "columns": [
+      { "column_name": "CATEGORY", "column_description": "Category (asset classification)" },
+      { "column_name": "IND_MICRO", "column_description": "Industry - Micro" },
+      { "column_name": "IND_SMALL", "column_description": "Industry - Small" },
+      { "column_name": "IND_MEDIUM", "column_description": "Industry - Medium" },
+      { "column_name": "SER_MICRO", "column_description": "Services - Micro" },
+      { "column_name": "SER_SMALL", "column_description": "Services - Small" },
+      { "column_name": "SER_MEDIUM", "column_description": "Services - Medium" },
+      { "column_name": "TOT_MICRO", "column_description": "Total (Industry+Services) - Micro" },
+      { "column_name": "TOT_SMALL", "column_description": "Total (Industry+Services) - Small" },
+      { "column_name": "TOT_MEDIUM", "column_description": "Total (Industry+Services) - Medium" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC_12_MISC_T3",
+    "table_description": "Section 12: Misc. Table 3 - Pricing Details of Retail Advances (As reported in RAQ Sec 8 Part A), by benchmark type (EBLR, MCLR, Base Rate, Repo, Other Benchmark, Not linked to benchmark), reporting amount, min/max interest rate charged and weighted average interest rate.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 39,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description (benchmark type)" },
+      { "column_name": "AMT", "column_description": "Amount" },
+      { "column_name": "MIN_INT", "column_description": "Min interest rate charged" },
+      { "column_name": "MAX_INT", "column_description": "Max interest rate charged" },
+      { "column_name": "WEGHT_AVG_INT", "column_description": "Weighted Avg interest Rate" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC_12_MISC_T4",
+    "table_description": "Section 12: Misc. Table 4 - Data on Regulatory Retail (Domestic Operations), reporting Gross Advances and Gross NPA for Regulatory Retail, Wholesale Advances and Total Advances.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 40,
+    "isactive": 1,
+    "scale": "Rs Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Description" },
+      { "column_name": "GROSS_ADV", "column_description": "Gross Advances" },
+      { "column_name": "GROSS_NPA", "column_description": "Gross NPA" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_M_SEC9_SENSEC_PARTA",
+    "table_description": "Legacy/Annual variant of Section 9 Part A - Exposures to Capital Market (fund-based, non-fund-based and investments), Domestic and Overseas Operations. Same structure as CIMS_RAQ_Q_SEC9_SENSEC_PARTA, retained under the Annual (M) return prefix.",
+    "return_name": "CIMS_RAQ(Annual)",
+    "template_sheet_no": 33,
+    "isactive": 0,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "EXPOSURE_DOM", "column_description": "Exposure (Domestic Operation)" },
+      { "column_name": "GROSS_AMT_OS_DOM", "column_description": "Gross Amount Outstanding (Domestic Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operation)" },
+      { "column_name": "EXPOSURE_OVE", "column_description": "Exposure (Overseas Operation)" },
+      { "column_name": "GROSS_AMT_OS_OVE", "column_description": "Gross Amount Outstanding (Overseas Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operation)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPE_ID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_M_SEC9_SENSEC_PARTA_BK",
+    "table_description": "Backup copy of CIMS_RAQ_M_SEC9_SENSEC_PARTA, retained for historical/rollback purposes. Same structure as the source table.",
+    "return_name": "CIMS_RAQ(Annual)",
+    "template_sheet_no": 33,
+    "isactive": 0,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "EXPOSURE_DOM", "column_description": "Exposure (Domestic Operation)" },
+      { "column_name": "GROSS_AMT_OS_DOM", "column_description": "Gross Amount Outstanding (Domestic Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operation)" },
+      { "column_name": "EXPOSURE_OVE", "column_description": "Exposure (Overseas Operation)" },
+      { "column_name": "GROSS_AMT_OS_OVE", "column_description": "Gross Amount Outstanding (Overseas Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operation)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPE_ID", "column_description": "TYPEID" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_M_SEC9_SENSEC_PARTB",
+    "table_description": "Legacy/Annual variant of Section 9 Part B - Exposure to Real Estate Sector (Total Credit and Total Investment, Direct and Indirect), Domestic and Overseas Operations. Same structure as CIMS_RAQ_Q_SEC9_SENSEC_PARTB, retained under the Annual (M) return prefix.",
+    "return_name": "CIMS_RAQ(Annual)",
+    "template_sheet_no": 34,
+    "isactive": 0,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "TOT_EXPO_DOM", "column_description": "Total Exposure (Domestic Operations)" },
+      { "column_name": "AMT_OS_FUNDED_DOM", "column_description": "Amount Outstanding - Funded (Domestic Operations)" },
+      { "column_name": "RESTRU_STD_DOM", "column_description": "of which Restructured Standard (Domestic Operations)" },
+      { "column_name": "IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operations)" },
+      { "column_name": "SLIPPAGE_DOM", "column_description": "Slippage from Total Standard during April to Date (Domestic Operations)" },
+      { "column_name": "TOT_EXPO_OVE", "column_description": "Total Exposure (Overseas Operations)" },
+      { "column_name": "AMT_OS_FUNDED_OVE", "column_description": "Amount Outstanding - Funded (Overseas Operations)" },
+      { "column_name": "RESTRU_STD_OVE", "column_description": "of which Restructured Standard (Overseas Operations)" },
+      { "column_name": "IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operations)" },
+      { "column_name": "SLIPPAGE_OVE", "column_description": "Slippage from Total Standard during April to Date (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "TYPEID", "column_description": "TYPEID" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_M_SEC9_SENSEC_PARTB_bckup",
+    "table_description": "Backup copy of CIMS_RAQ_M_SEC9_SENSEC_PARTB, retained for historical/rollback purposes. Same structure as the source table.",
+    "return_name": "CIMS_RAQ(Annual)",
+    "template_sheet_no": 34,
+    "isactive": 0,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "TOT_EXPO_DOM", "column_description": "Total Exposure (Domestic Operations)" },
+      { "column_name": "AMT_OS_FUNDED_DOM", "column_description": "Amount Outstanding - Funded (Domestic Operations)" },
+      { "column_name": "RESTRU_STD_DOM", "column_description": "of which Restructured Standard (Domestic Operations)" },
+      { "column_name": "IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operations)" },
+      { "column_name": "SLIPPAGE_DOM", "column_description": "Slippage from Total Standard during April to Date (Domestic Operations)" },
+      { "column_name": "TOT_EXPO_OVE", "column_description": "Total Exposure (Overseas Operations)" },
+      { "column_name": "AMT_OS_FUNDED_OVE", "column_description": "Amount Outstanding - Funded (Overseas Operations)" },
+      { "column_name": "RESTRU_STD_OVE", "column_description": "of which Restructured Standard (Overseas Operations)" },
+      { "column_name": "IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operations)" },
+      { "column_name": "SLIPPAGE_OVE", "column_description": "Slippage from Total Standard during April to Date (Overseas Operations)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "TYPEID", "column_description": "TYPEID" },
+      { "column_name": "RDATE", "column_description": "RDATE" }
+    ]
+  },
+  {
+    "table_name": "CIMS_RAQ_Q_SEC9_SENSEC_PARTA_bkup",
+    "table_description": "Backup copy of CIMS_RAQ_Q_SEC9_SENSEC_PARTA, retained for historical/rollback purposes. Same structure as the source table.",
+    "return_name": "CIMS_RAQ(Quarterly)",
+    "template_sheet_no": 33,
+    "isactive": 0,
+    "scale": "Rs. Lakh",
+    "columns": [
+      { "column_name": "DESCRIPTION", "column_description": "Category" },
+      { "column_name": "EXPOSURE_DOM", "column_description": "Exposure (Domestic Operation)" },
+      { "column_name": "GROSS_AMT_OS_DOM", "column_description": "Gross Amount Outstanding (Domestic Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_DOM", "column_description": "of which Impaired (Domestic Operation)" },
+      { "column_name": "EXPOSURE_OVE", "column_description": "Exposure (Overseas Operation)" },
+      { "column_name": "GROSS_AMT_OS_OVE", "column_description": "Gross Amount Outstanding (Overseas Operation)" },
+      { "column_name": "OF_WHICH_IMPAIRED_OVE", "column_description": "of which Impaired (Overseas Operation)" },
+      { "column_name": "CODE", "column_description": "CODE" },
+      { "column_name": "RDATE", "column_description": "RDATE" },
+      { "column_name": "TYPE_ID", "column_description": "TYPEID" }
+    ]
+  }
+]

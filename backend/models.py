@@ -12,3 +12,8 @@ class VarianceComputeRequest(BaseModel):
     table_name:         str
     reporting_date:     str
     reporting_period:   int = 1
+    selected_columns:   Optional[List[str]] = None
+
+
+class NLResolveRequest(BaseModel):
+    query: str

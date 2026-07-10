@@ -18,7 +18,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
-import { findReturnTables, computeVariance, getMyReturns } from '../api.js'
+import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery } from '../api.js'
 import { VARIANCE_STEPS, dateHintForFreq } from '../types.js'
 
 import ControlBar         from './ControlBar.jsx'
@@ -37,6 +37,9 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
 
   // ─── NLP bar state ───────────────────────────────────────────────────────
   const [nlpQuery, setNlpQuery] = useState('')
+  // Columns resolved by the NL layer, valid only while tableName still matches
+  // the table they were resolved for (cleared on any manual re-selection).
+  const [nlColumns, setNlColumns] = useState(null)
 
   // ─── Wizard state ────────────────────────────────────────────────────────
   const [step,       setStep]       = useState(VARIANCE_STEPS.RETURN_NAME)
@@ -146,6 +149,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setLoading(true)
     setError('')
     setCandidates(null)
+    setNlColumns(null)
 
     try {
       const raw  = await findReturnTables(name, loginId)
@@ -179,6 +183,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setLoading(true)
     setError('')
     setCandidates(null)
+    setNlColumns(null)
     try {
       const info = await findReturnTables(candidate.return_name, loginId)
       if (info.candidates) {
@@ -204,12 +209,18 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setLoading(true)
     setError('')
     try {
+      // Only honor NL-resolved columns while tableName still matches the
+      // table they were resolved for (a manual table switch clears nlColumns).
+      const selectedColumns =
+        nlColumns && nlColumns.tableName === tableName ? nlColumns.columns : undefined
+
       const res = await computeVariance({
         return_id:          returnInfo.return_id,
         table_mapping_path: returnInfo.table_mapping_path,
         table_name:         tableName,
         reporting_date:     dateStr.trim(),
         reporting_period:   periods,
+        selected_columns:   selectedColumns,
       }, loginId)
       setResult(res)
       setStep(VARIANCE_STEPS.RESULT)
@@ -233,15 +244,61 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setResult(null)
     setError('')
     setCandidates(null)
+    setNlColumns(null)
     setVizOpen(false)
     setTableState('normal')
     setVizState('normal')
   }
 
   // ─── NLP handlers ────────────────────────────────────────────────────────
-  const handleNlpSearch = (query) => {
+  // One-shot: resolveNlQuery now does resolution AND computation server-side
+  // (embedding+LLM column/table pick -> date/period intent resolved against
+  // real data -> compute_variance) and returns a result shaped exactly like
+  // /variance/compute's response. So on success we show it immediately —
+  // same as handleCompute's success path — instead of pre-filling the wizard
+  // and waiting for a manual date entry + Compute click. Falls back to the
+  // plain return-name search on failure/low-confidence.
+  const handleNlpSearch = async (query) => {
     const trimmed = query.trim()
-    if (trimmed) setReturnName(trimmed)
+    if (!trimmed) return
+
+    if (authLoading) {
+      setError('Loading user permissions, please wait...')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setCandidates(null)
+    setNlColumns(null)
+
+    try {
+      const res = await resolveNlQuery(trimmed, loginId)
+
+      setReturnName(res.return_name || trimmed)
+      setReturnInfo({
+        return_id:          res.return_id,
+        return_name:        res.return_name,
+        report_freq:        res.report_freq,
+        table_mapping_path: res.table_mapping_path,
+        tables:             [{ table_name: res.table_name }],
+      })
+      setTableName(res.table_name || '')
+      setDateStr(res.reporting_date || '')
+      setPeriods(res.reporting_period || 1)
+
+      setResult(res)
+      setStep(VARIANCE_STEPS.RESULT)
+      setTableState('normal')
+      setVizState('normal')
+      setVizOpen(true)
+    } catch (err) {
+      // NL resolution unavailable/low-confidence — fall back to plain search.
+      console.warn('NL resolve failed, falling back to return-name search:', err.message)
+      setReturnName(trimmed)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleVoiceInput = () => {}
