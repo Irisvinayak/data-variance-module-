@@ -11,6 +11,11 @@ export const VARIANCE_STEPS = {
   RESULT:        'result',
 }
 
+export const COMPARISON_MODES = {
+  VS_CURRENT: 'vs_current',
+  SEQUENTIAL: 'sequential',
+}
+
 export function freqLabel(freq) {
   const f = (freq || '').toUpperCase()
   const labels = {

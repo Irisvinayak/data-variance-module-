@@ -60,6 +60,8 @@ export function DataVarianceBlock({ result }) {
     columns = [],
     display_columns,
     rows = [],
+    comparison_mode = 'vs_current',
+    chain_dates = [],
   } = result
 
   const displayRows    = showAll ? rows : rows.slice(0, 20)
@@ -76,6 +78,150 @@ export function DataVarianceBlock({ result }) {
     return ''
   }
 
+  // ── Sequential mode rendering ─────────────────────────────────────────────
+  if (comparison_mode === 'sequential' && chain_dates.length >= 2) {
+    const links = chain_dates.slice(0, -1).map((fromDate, i) => ({
+      fromDate,
+      toDate: chain_dates[i + 1],
+      key: `link_${i + 1}`,
+    }))
+    const seqColSpan = links.length * 2
+
+    return (
+      <div className="variance-block">
+
+        {/* ── Title + chain badges ── */}
+        <div className="variance-header">
+          <div className="variance-title">📊 {table_name}</div>
+          <div className="vt-period-row">
+            {links.map((lk, i) => (
+              <span key={i} className="vt-badge vt-badge-prev">
+                {lk.fromDate} → <strong>{lk.toDate}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="variance-table-wrapper">
+          <table className="variance-table">
+            <thead>
+
+              {/* Row 1 — column group labels */}
+              <tr>
+                <th className="vt-id-th" rowSpan={2}>Identifier</th>
+                {allDisplayCols.map((col) =>
+                  comparableSet.has(col.toUpperCase()) ? (
+                    <th key={col} className="vt-group-th" colSpan={seqColSpan}>
+                      {col}
+                    </th>
+                  ) : (
+                    <th key={col} className="vt-group-th vt-info-th" rowSpan={2}>
+                      {col}
+                    </th>
+                  )
+                )}
+              </tr>
+
+              {/* Row 2 — per-link sub-labels */}
+              <tr>
+                {allDisplayCols
+                  .filter((col) => comparableSet.has(col.toUpperCase()))
+                  .map((col) =>
+                    links.map((lk, i) => [
+                      <th key={`${col}_lk${i}_from`} className="vt-sub vt-sub-prev">
+                        {lk.fromDate}
+                      </th>,
+                      <th key={`${col}_lk${i}_to`} className="vt-sub vt-sub-curr">
+                        {lk.toDate}
+                      </th>,
+                    ])
+                  )}
+              </tr>
+
+            </thead>
+            <tbody>
+              {displayRows.map((row, ri) => (
+                <tr key={row.identifier ?? ri} className={ri % 2 === 0 ? '' : 'vt-row-alt'}>
+
+                  {/* Identifier cell — show display_label, title shows code */}
+                  <td className="vt-id-td" title={row.identifier}>
+                    {row.display_label ?? row.identifier ?? '—'}
+                  </td>
+
+                  {allDisplayCols.map((col) => {
+                    const isComparable = comparableSet.has(col.toUpperCase())
+
+                    if (!isComparable) {
+                      const val = row.current?.[col]
+                      return (
+                        <td key={col} className="vt-info-cell">
+                          {val != null ? val : '—'}
+                        </td>
+                      )
+                    }
+
+                    return links.map((lk, li) => {
+                      const linkData = row[lk.key]
+                      const m   = linkData?.metrics?.[col]
+                      const vs  = m?.variance_summary
+                      const cc  = cellClass(vs?.color ?? '')
+
+                      return [
+                        <td key={`${col}_${li}_from`} className="vt-num vt-prev-cell">
+                          {m?.value != null ? m.value : '—'}
+                        </td>,
+                        <td
+                          key={`${col}_${li}_to`}
+                          className={`vt-num vt-curr-cell ${cc}`}
+                          title={vs?.text ?? ''}
+                        >
+                          <div className="vt-curr-wrap">
+                            <span className="vt-curr-val">
+                              {li === links.length - 1
+                                ? (row.current?.[col] != null ? row.current[col] : '—')
+                                : (row[`link_${li + 2}`]?.metrics?.[col]?.value != null
+                                    ? row[`link_${li + 2}`].metrics[col].value
+                                    : '—')}
+                            </span>
+                            {(vs?.arrow || m?.pct_change?.value || m?.change?.value) && (
+                              <div className="vt-metrics-row">
+                                {vs?.arrow && (
+                                  <span className={`vt-arrow-icon ${cc}`}>
+                                    {vs.arrow === '▲' ? '↑' : vs.arrow === '▼' ? '↓' : vs.arrow}
+                                  </span>
+                                )}
+                                {m?.pct_change?.value && (
+                                  <span className={`vt-pct-badge ${cc}`}>{m.pct_change.value}</span>
+                                )}
+                                <span className={`vt-diff-val ${cc}`}>
+                                  Δ&thinsp;{m?.change?.value ?? '0'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </td>,
+                      ]
+                    })
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {rows.length > 20 && (
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowAll((v) => !v)}
+          >
+            {showAll ? '▲ Show less' : `▼ Show all ${rows.length} rows`}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // ── vs_current mode (default / existing rendering) ────────────────────────
   return (
     <div className="variance-block">
 
@@ -85,11 +231,11 @@ export function DataVarianceBlock({ result }) {
         <div className="vt-period-row">
           {comparison_periods.map((p, i) => (
             <span key={i} className="vt-badge vt-badge-prev">
-              {periodCount > 1 ? `Prev ${i + 1}` : 'Previous'}: <strong>{p}</strong>
+              <strong>{p}</strong>
             </span>
           ))}
           <span className="vt-badge vt-badge-curr">
-            Current: <strong>{reporting_date}</strong>
+            <strong>{reporting_date}</strong>
           </span>
         </div>
       </div>
@@ -123,12 +269,10 @@ export function DataVarianceBlock({ result }) {
                 .map((col) =>
                   comparison_periods.map((p, i) => [
                     <th key={`${col}_p${i}`} className="vt-sub vt-sub-prev">
-                      {periodCount > 1 ? `Prev ${i + 1}` : 'Previous'}
-                      <span className="vt-sub-date">{p}</span>
+                      {p}
                     </th>,
                     <th key={`${col}_c${i}`} className="vt-sub vt-sub-curr">
-                      Current
-                      <span className="vt-sub-date">{reporting_date}</span>
+                      {reporting_date}
                     </th>,
                   ])
                 )}
@@ -139,8 +283,10 @@ export function DataVarianceBlock({ result }) {
             {displayRows.map((row, ri) => (
               <tr key={row.identifier ?? ri} className={ri % 2 === 0 ? '' : 'vt-row-alt'}>
 
-                {/* Identifier cell */}
-                <td className="vt-id-td" title={row.identifier}>{row.identifier || '—'}</td>
+                {/* Identifier cell — show display_label, title shows code */}
+                <td className="vt-id-td" title={row.identifier}>
+                  {row.display_label ?? row.identifier ?? '—'}
+                </td>
 
                 {allDisplayCols.map((col) => {
                   const isComparable = comparableSet.has(col.toUpperCase())
@@ -172,15 +318,24 @@ export function DataVarianceBlock({ result }) {
                         className={`vt-num vt-curr-cell ${cc}`}
                         title={vs?.text ?? ''}
                       >
-                        <span className="vt-curr-val">{currV != null ? currV : '—'}</span>
-                        {vs?.arrow && (
-                          <span className={`vt-arrow-icon ${cc}`}>
-                            {vs.arrow === '▲' ? '↑' : vs.arrow === '▼' ? '↓' : vs.arrow}
-                          </span>
-                        )}
-                        {m?.pct_change?.value && (
-                          <span className={`vt-pct-badge ${cc}`}>{m.pct_change.value}</span>
-                        )}
+                        <div className="vt-curr-wrap">
+                          <span className="vt-curr-val">{currV != null ? currV : '—'}</span>
+                          {(vs?.arrow || m?.pct_change?.value || m?.change?.value) && (
+                            <div className="vt-metrics-row">
+                              {vs?.arrow && (
+                                <span className={`vt-arrow-icon ${cc}`}>
+                                  {vs.arrow === '▲' ? '↑' : vs.arrow === '▼' ? '↓' : vs.arrow}
+                                </span>
+                              )}
+                              {m?.pct_change?.value && (
+                                <span className={`vt-pct-badge ${cc}`}>{m.pct_change.value}</span>
+                              )}
+                              <span className={`vt-diff-val ${cc}`}>
+                                Δ&thinsp;{m?.change?.value ?? '0'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </td>,
                     ]
                   })

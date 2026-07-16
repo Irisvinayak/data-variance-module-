@@ -19,7 +19,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
 import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery } from '../api.js'
-import { VARIANCE_STEPS, dateHintForFreq } from '../types.js'
+import { VARIANCE_STEPS, COMPARISON_MODES, dateHintForFreq } from '../types.js'
 
 import ControlBar         from './ControlBar.jsx'
 import TablePanel         from './TablePanel.jsx'
@@ -49,6 +49,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const [tableName,  setTableName]  = useState('')
   const [dateStr,    setDateStr]    = useState('')
   const [periods,    setPeriods]    = useState(1)
+  const [comparisonMode, setComparisonMode] = useState(COMPARISON_MODES.VS_CURRENT)
   const [result,     setResult]     = useState(null)
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState('')
@@ -221,6 +222,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         reporting_date:     dateStr.trim(),
         reporting_period:   periods,
         selected_columns:   selectedColumns,
+        comparison_mode:    comparisonMode,
       }, loginId)
       setResult(res)
       setStep(VARIANCE_STEPS.RESULT)
@@ -241,6 +243,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setTableName('')
     setDateStr('')
     setPeriods(1)
+    setComparisonMode(COMPARISON_MODES.VS_CURRENT)
     setResult(null)
     setError('')
     setCandidates(null)
@@ -251,13 +254,14 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   }
 
   // ─── NLP handlers ────────────────────────────────────────────────────────
-  // One-shot: resolveNlQuery now does resolution AND computation server-side
+  // One-shot: resolveNlQuery does resolution AND computation server-side
   // (embedding+LLM column/table pick -> date/period intent resolved against
   // real data -> compute_variance) and returns a result shaped exactly like
-  // /variance/compute's response. So on success we show it immediately —
-  // same as handleCompute's success path — instead of pre-filling the wizard
-  // and waiting for a manual date entry + Compute click. Falls back to the
-  // plain return-name search on failure/low-confidence.
+  // /variance/compute's response. This is a display-only path: it feeds the
+  // result straight into the table/visualization panels and deliberately
+  // does NOT touch returnName/returnInfo/tableName/dateStr/periods — those
+  // belong to the manual return/table/date wizard and must stay independent
+  // of whatever the NLP bar resolved, so neither flow overrides the other.
   const handleNlpSearch = async (query) => {
     const trimmed = query.trim()
     if (!trimmed) return
@@ -269,33 +273,16 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
 
     setLoading(true)
     setError('')
-    setCandidates(null)
-    setNlColumns(null)
 
     try {
       const res = await resolveNlQuery(trimmed, loginId)
 
-      setReturnName(res.return_name || trimmed)
-      setReturnInfo({
-        return_id:          res.return_id,
-        return_name:        res.return_name,
-        report_freq:        res.report_freq,
-        table_mapping_path: res.table_mapping_path,
-        tables:             [{ table_name: res.table_name }],
-      })
-      setTableName(res.table_name || '')
-      setDateStr(res.reporting_date || '')
-      setPeriods(res.reporting_period || 1)
-
       setResult(res)
-      setStep(VARIANCE_STEPS.RESULT)
       setTableState('normal')
       setVizState('normal')
       setVizOpen(true)
     } catch (err) {
-      // NL resolution unavailable/low-confidence — fall back to plain search.
-      console.warn('NL resolve failed, falling back to return-name search:', err.message)
-      setReturnName(trimmed)
+      setError(err.message || 'Could not resolve this query.')
     } finally {
       setLoading(false)
     }
@@ -402,6 +389,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         dateStr={dateStr}         setDateStr={setDateStr}
         dateHint={dateHint}
         periods={periods}         setPeriods={setPeriods}
+        comparisonMode={comparisonMode} setComparisonMode={setComparisonMode}
         loading={loading}         error={error}
         candidates={candidates}
         handleFindReturn={handleFindReturn}

@@ -399,6 +399,7 @@ def compute_variance(
     execute_query_fn: Callable,
     connection_string: Optional[str] = None,
     selected_columns: Optional[List[str]] = None,
+    comparison_mode: str = "vs_current",
 ) -> Dict[str, Any]:
     """Orchestrate full variance computation for one table."""
     logger.info("[service] compute_variance started")
@@ -496,4 +497,5 @@ def compute_variance(
         connection_string=connection_string,
         reporting_period=reporting_period,
         selected_columns=selected_columns,
+        comparison_mode=comparison_mode,
     )

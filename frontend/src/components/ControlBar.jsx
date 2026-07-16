@@ -6,9 +6,17 @@
  * CHANGE: Disambiguation list now renders as a dropdown (custom select-style
  * overlay) instead of a flat button list, keeping the toolbar compact while
  * still showing all matches.
+ *
+ * CHANGE: Reporting Date field now uses flatpickr instead of a plain text
+ * input. The picker is initialized/torn down whenever Row 2 actually mounts
+ * (i.e. when returnInfo becomes available), since this row doesn't exist in
+ * the DOM until then — initializing on first component mount alone would
+ * silently fail to attach, since the ref would still be null at that point.
  */
 import { useEffect, useRef, useState } from 'react'
-import { VARIANCE_STEPS, freqLabel } from '../types.js'
+import flatpickr from 'flatpickr'
+import 'flatpickr/dist/flatpickr.min.css'
+import { VARIANCE_STEPS, COMPARISON_MODES, freqLabel } from '../types.js'
 
 const SCORE_BADGE = (score) => {
   if (score >= 100) return { label: 'Exact', cls: 'score-exact' }
@@ -121,6 +129,57 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
   )
 }
 
+// ── Reporting Date field (flatpickr-backed, single input, no future dates) ──
+function DateField({ dateStr, setDateStr, dateHint }) {
+  const inputRef = useRef(null)
+  const fpRef = useRef(null)
+
+  // Init/teardown flatpickr directly on the input itself (no wrap div needed).
+  // This component only mounts once returnInfo is set (see Row 2 below), so
+  // by the time this effect runs, inputRef.current is guaranteed to exist.
+  useEffect(() => {
+    if (inputRef.current && !fpRef.current) {
+      fpRef.current = flatpickr(inputRef.current, {
+        dateFormat: 'd-M-Y',
+        defaultDate: dateStr || null,
+        maxDate: 'today', // disallow picking a future date
+        onChange: (_selectedDates, selectedDate) => {
+          setDateStr(selectedDate)
+        },
+      })
+    }
+
+    return () => {
+      if (fpRef.current) {
+        fpRef.current.destroy()
+        fpRef.current = null
+      }
+    }
+  }, [])
+
+  // Keep the picker's internal display in sync if dateStr changes
+  // externally (e.g. handleReset clearing it back to '').
+  useEffect(() => {
+    if (fpRef.current) {
+      fpRef.current.setDate(dateStr || null, false)
+    }
+  }, [dateStr])
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      className="ctrl-input ctrl-input-date"
+      placeholder={dateHint.example || 'DD-MMM-YYYY'}
+      readOnly
+      title={
+        'Format: DD-MMM-YYYY' +
+        (dateHint.hint ? ' · ' + dateHint.hint : '')
+      }
+    />
+  )
+}
+
 // ── Main ControlBar ────────────────────────────────────────────────────────────
 export default function ControlBar({
   step,
@@ -135,6 +194,8 @@ export default function ControlBar({
   dateHint,
   periods,
   setPeriods,
+  comparisonMode,
+  setComparisonMode,
   loading,
   error,
   candidates,
@@ -277,18 +338,10 @@ export default function ControlBar({
           <div className="ctrl-sep" aria-hidden="true" />
 
           <span className="ctrl-label">Date</span>
-          <input
-            className="ctrl-input ctrl-input-date"
-            value={dateStr}
-            onChange={(e) => setDateStr(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === 'Enter' && canCompute && handleCompute()
-            }
-            placeholder={dateHint.example || 'DD-MMM-YYYY'}
-            title={
-              'Format: DD-MMM-YYYY' +
-              (dateHint.hint ? ' · ' + dateHint.hint : '')
-            }
+          <DateField
+            dateStr={dateStr}
+            setDateStr={setDateStr}
+            dateHint={dateHint}
           />
 
           <div className="ctrl-sep" aria-hidden="true" />
@@ -308,6 +361,29 @@ export default function ControlBar({
               </button>
             ))}
           </div>
+
+          {periods > 1 && (
+            <>
+              <div className="ctrl-sep" aria-hidden="true" />
+              <span className="ctrl-label">Compare</span>
+              <div className="ctrl-chips-compare">
+                <button
+                  className={'ctrl-chip-compare ctrl-chip' + (comparisonMode === COMPARISON_MODES.VS_CURRENT ? ' ctrl-chip-on' : '')}
+                  onClick={() => setComparisonMode(COMPARISON_MODES.VS_CURRENT)}
+                  title="Compare every previous period directly against the current period"
+                >
+                  vs Current
+                </button>
+                <button
+                  className={'ctrl-chip-compare ctrl-chip' + (comparisonMode === COMPARISON_MODES.SEQUENTIAL ? ' ctrl-chip-on' : '')}
+                  onClick={() => setComparisonMode(COMPARISON_MODES.SEQUENTIAL)}
+                  title="Compare each period to the one immediately before it (chained)"
+                >
+                  Seq
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="ctrl-sep" aria-hidden="true" />
 

@@ -13,6 +13,7 @@ class VarianceComputeRequest(BaseModel):
     reporting_date:     str
     reporting_period:   int = 1
     selected_columns:   Optional[List[str]] = None
+    comparison_mode:    str = "vs_current"
 
 
 class NLResolveRequest(BaseModel):

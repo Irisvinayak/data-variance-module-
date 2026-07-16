@@ -6,12 +6,143 @@ from __future__ import annotations
 
 import calendar
 import logging
+import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
 from typing import Callable, List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# ── SR-NO / serial-number column exclusion ────────────────────────────────────
+_EXCLUDED_VALUE_COLS = {
+    "SRNO", "SR_NO", "SR-NO", "SR.NO",
+    "SLNO", "SL_NO", "SLNO.",
+    "SNO",  "S_NO",
+    "ROWNUM", "ROW_NUM",
+}
+
+
+def _is_excluded_value_col(col: str) -> bool:
+    """Return True if `col` is a serial-number-like column that should never
+    be treated as a value column for variance computation."""
+    stripped = re.sub(r"[^A-Z]", "", col.upper())
+    excluded_stripped = {re.sub(r"[^A-Z]", "", x) for x in _EXCLUDED_VALUE_COLS}
+    return stripped in excluded_stripped
+
+
+# ── Row display-label hint words ──────────────────────────────────────────────
+_LABEL_HINT_WORDS = (
+    "NAME", "DESC", "DESCRIPTION",
+    "PARTICULAR", "PARTICULARS",
+    "ITEM", "LABEL", "TITLE",
+    "HEAD", "HEADING", "CATEGORY", "CAT",
+    "SCHEDULE", "SCH", "COMPONENT", "DETAIL",
+    "NARRATION", "NARATION", "REMARK", "REMARKS",
+    "TEXT", "CAPTION", "FIELD",
+)
+
+
+def _label_score(col: str, rows: List[Dict]) -> float:
+    """
+    Score how likely `col` contains human-readable description text (0–1).
+
+    Criteria (each contributes to the score):
+    - Average word count > 1  → likely a phrase, not a code
+    - Average string length > 8 → longer values suggest descriptions
+    - Fraction of values containing a space → spaced text
+    - Low fraction of purely-numeric or all-caps-short tokens → not a code column
+    - High fraction of mixed-case values → typed descriptions
+    """
+    values = []
+    for row in rows:
+        v = row.get(col)
+        if v is not None:
+            s = str(v).strip()
+            if s:
+                values.append(s)
+
+    if not values:
+        return 0.0
+
+    n = len(values)
+
+    # Average length
+    avg_len = sum(len(v) for v in values) / n
+
+    # Fraction with at least one space (multi-word)
+    frac_spaces = sum(1 for v in values if " " in v) / n
+
+    # Average word count
+    avg_words = sum(len(v.split()) for v in values) / n
+
+    # Fraction that are purely numeric (bad for labels)
+    frac_numeric = sum(1 for v in values if v.replace(",", "").replace(".", "").replace("-", "").isdigit()) / n
+
+    # Fraction that look like short codes (≤6 chars, all upper / alphanumeric only)
+    frac_code_like = sum(
+        1 for v in values
+        if len(v) <= 6 and re.match(r'^[A-Z0-9_\-\.]+$', v)
+    ) / n
+
+    score = (
+        min(avg_len / 30.0, 1.0) * 0.30       # length contribution (cap at 30 chars)
+        + frac_spaces * 0.35                   # spaces = descriptive text
+        + min(avg_words / 3.0, 1.0) * 0.20    # word count contribution
+        - frac_numeric * 0.40                  # penalise numeric-looking columns
+        - frac_code_like * 0.30                # penalise code-like short tokens
+    )
+    return max(score, 0.0)
+
+
+def _pick_label_columns(all_cols: List[str], comp_cols: List[str], rows: Optional[List[Dict]] = None) -> List[str]:
+    """
+    Pick the best column(s) to use as a human-readable row label.
+
+    Strategy (in priority order):
+    1. Columns whose name contains a known label hint word.
+    2. If nothing matched by name, score every non-comp, non-numeric text column
+       by how description-like its actual values are, and pick the highest-scoring
+       one (if its score is above a minimum threshold).
+    3. Fall back to comp_cols so there is always *something* to show.
+    """
+    upper_comp = {c.upper() for c in comp_cols}
+
+    # ── Pass 1: name-hint match ───────────────────────────────────────────────
+    hinted = [
+        c for c in all_cols
+        if c.upper() not in upper_comp
+        and any(h in c.upper() for h in _LABEL_HINT_WORDS)
+    ]
+    if hinted:
+        return hinted
+
+    # ── Pass 2: data-driven scoring ──────────────────────────────────────────
+    if rows:
+        candidates = [
+            c for c in all_cols
+            if c.upper() not in upper_comp
+            and not _is_excluded_value_col(c)
+            and not _is_numeric_col(c, rows)
+        ]
+        if candidates:
+            scored = [(c, _label_score(c, rows)) for c in candidates]
+            scored.sort(key=lambda x: x[1], reverse=True)
+            best_col, best_score = scored[0]
+            logger.info(
+                "[variance] Label column data-score results: %s",
+                [(c, round(s, 3)) for c, s in scored],
+            )
+            if best_score >= 0.15:   # minimum threshold — anything above this is plausibly descriptive
+                logger.info(
+                    "[variance] Auto-selected label column by data scoring: %r (score=%.3f)",
+                    best_col, best_score,
+                )
+                return [best_col]
+
+    # ── Pass 3: fallback to identifier columns ────────────────────────────────
+    return list(comp_cols)
+
 
 # ── Canonical frequency-code groups ──────────────────────────────────────────
 
@@ -135,7 +266,8 @@ def get_difference(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any]]:
         try:
             if str(prev_val).strip().lower() != str(curr_val).strip().lower():
                 return {"value": str(curr_val), "color": ""}
-            return None
+            # Equal string values — return zero-change dict rather than None
+            return {"value": "0.00", "color": ""}
         except Exception:
             return None
 
@@ -279,6 +411,7 @@ def calculate_variance(
     is_non_xbrl: bool = False,
     reporting_period: int = 1,
     selected_columns: Optional[List[str]] = None,
+    comparison_mode: str = "vs_current",
 ) -> Dict[str, Any]:
 
     logger.info(
@@ -348,16 +481,31 @@ def calculate_variance(
     ]
 
     if selected_columns is None:
-        # Only numeric, non-code columns get variance computed
+        # Only numeric, non-code, non-serial-number columns get variance computed
         selected_columns = [
             c for c in all_display_cols
             if "CODE" not in c.upper()
+            and not _is_excluded_value_col(c)
             and _is_numeric_col(c, all_rows)
         ]
         logger.info(
             "[variance] Numeric value columns selected for comparison (%d): %s",
             len(selected_columns), selected_columns,
         )
+    else:
+        # Caller-supplied list — strip excluded columns server-side
+        filtered_explicit = [
+            c for c in selected_columns
+            if not _is_excluded_value_col(c)
+        ]
+        stripped = [c for c in selected_columns if _is_excluded_value_col(c)]
+        if stripped:
+            logger.warning(
+                "[variance] Stripped %d excluded column(s) from caller-supplied "
+                "selected_columns: %s",
+                len(stripped), stripped,
+            )
+        selected_columns = filtered_explicit
 
     # ── Auto-detect identifier columns when CompFilterColName is absent in XML ──
     if not comp_cols:
@@ -397,6 +545,21 @@ def calculate_variance(
 
     logger.info("[row_match] Identifier columns: %s", comp_cols)
 
+    # ── Build display-label columns (best-effort human-readable label) ────
+    label_cols = _pick_label_columns(list(all_rows[0].keys()), comp_cols, rows=all_rows)
+    logger.info("[variance] Display-label columns: %s", label_cols)
+
+    # Exclude hint-based label columns from display_columns — they are already
+    # surfaced via display_label on each row, showing them again duplicates data.
+    non_comp_label_set = {c.upper() for c in label_cols if c.upper() not in set(comp_cols)}
+    if non_comp_label_set:
+        all_display_cols = [k for k in all_display_cols if k.upper() not in non_comp_label_set]
+        selected_columns = [c for c in selected_columns if c.upper() not in non_comp_label_set]
+        logger.info(
+            "[variance] Excluded hint-based label columns from display (already in display_label): %s",
+            non_comp_label_set,
+        )
+
     # ── Build previous-period lookup tables keyed by business identifier ──
     prev_row_sets: Dict[str, Any] = {}
     for i, pd in enumerate(prev_dates):
@@ -421,6 +584,18 @@ def calculate_variance(
         )
         prev_row_sets[f"previous_{i + 1}"] = {"date": pd, "lookup": lookup}
 
+    # ── Pre-build per-date lookups for sequential mode ───────────────────
+    date_lookups: List[Dict[str, Any]] = []
+    if comparison_mode == "sequential":
+        chronological_pre = list(reversed(prev_dates)) + [rdate]
+        for d in chronological_pre:
+            period_rows = [r for r in all_rows if dates_match(r.get(fc), d)]
+            lookup: Dict[str, Any] = {}
+            for row in period_rows:
+                ident = build_identifier(row, comp_cols)
+                lookup[ident] = row
+            date_lookups.append(lookup)
+
     result_rows = []
     seen_current_ids: set = set()
 
@@ -437,44 +612,101 @@ def calculate_variance(
         seen_current_ids.add(identifier)
 
         row_result: Dict[str, Any] = {
-            "identifier": identifier,
-            "current":    curr_row,
-            "previous":   {},
+            "identifier":    identifier,
+            "display_label": build_identifier(curr_row, label_cols) or identifier,
+            "current":       curr_row,
+            "previous":      {},
         }
 
-        for period_key, pdata in prev_row_sets.items():
-            matched = pdata["lookup"].get(identifier)
-            if not matched:
-                logger.debug(
-                    "[row_match] No previous row found | Identifier=%s | period=%s",
-                    identifier, period_key,
-                )
-                continue
+        if comparison_mode == "sequential":
+            # ── Sequential mode: chain each consecutive date pair ────────
+            chronological = list(reversed(prev_dates)) + [rdate]
+            seq_links = list(zip(chronological, chronological[1:]))
 
-            metrics: Dict[str, Any] = {}
-            for col in selected_columns:
-                col_up = col.upper()
-                prev_v = matched.get(col_up)
-                curr_v = curr_row.get(col_up)
-                logger.debug(
-                    "[row_match] Identifier=%s | Col=%s | Current=%s | Previous=%s",
-                    identifier, col, curr_v, prev_v,
-                )
-                metrics[col] = {
-                    "value":            prev_v,
-                    "change":           get_difference(prev_v, curr_v),
-                    "pct_change":       get_pct_change(prev_v, curr_v),
-                    "variance_summary": get_variance_summary(prev_v, curr_v),
+            for link_idx, (date_a, date_b) in enumerate(seq_links):
+                from_row = date_lookups[link_idx].get(identifier)
+                # For the last link, to_row IS curr_row (already available)
+                if link_idx == len(seq_links) - 1:
+                    to_row = curr_row
+                else:
+                    to_row = date_lookups[link_idx + 1].get(identifier)
+
+                link_metrics: Dict[str, Any] = {}
+                if from_row is not None and to_row is not None:
+                    for col in selected_columns:
+                        col_up = col.upper()
+                        from_v = from_row.get(col_up)
+                        to_v   = to_row.get(col_up)
+                        logger.debug(
+                            "[seq_link] Identifier=%s | Col=%s | from=%s | to=%s",
+                            identifier, col, from_v, to_v,
+                        )
+                        link_metrics[col] = {
+                            "value":            from_v,
+                            "change":           get_difference(from_v, to_v),
+                            "pct_change":       get_pct_change(from_v, to_v),
+                            "variance_summary": get_variance_summary(from_v, to_v),
+                        }
+                elif from_row is None:
+                    logger.debug(
+                        "[seq_link] No row for date_a=%s | Identifier=%s",
+                        date_a.strftime("%d-%b-%Y"), identifier,
+                    )
+
+                link_key = f"link_{link_idx + 1}"
+                row_result[link_key] = {
+                    "from_date": date_a.strftime("%d-%b-%Y").upper(),
+                    "to_date":   date_b.strftime("%d-%b-%Y").upper(),
+                    "metrics":   link_metrics,
                 }
-            row_result["previous"][period_key] = metrics
+
+            # Expose last link's metrics as previous_1 for backward-compat
+            last_link_key = f"link_{len(seq_links)}"
+            if last_link_key in row_result:
+                row_result["previous"]["previous_1"] = row_result[last_link_key]["metrics"]
+
+        else:
+            # ── vs_current mode: existing behavior ──────────────────────
+            for period_key, pdata in prev_row_sets.items():
+                matched = pdata["lookup"].get(identifier)
+                if not matched:
+                    logger.debug(
+                        "[row_match] No previous row found | Identifier=%s | period=%s",
+                        identifier, period_key,
+                    )
+                    continue
+
+                metrics: Dict[str, Any] = {}
+                for col in selected_columns:
+                    col_up = col.upper()
+                    prev_v = matched.get(col_up)
+                    curr_v = curr_row.get(col_up)
+                    logger.debug(
+                        "[row_match] Identifier=%s | Col=%s | Current=%s | Previous=%s",
+                        identifier, col, curr_v, prev_v,
+                    )
+                    metrics[col] = {
+                        "value":            prev_v,
+                        "change":           get_difference(prev_v, curr_v),
+                        "pct_change":       get_pct_change(prev_v, curr_v),
+                        "variance_summary": get_variance_summary(prev_v, curr_v),
+                    }
+                row_result["previous"][period_key] = metrics
 
         result_rows.append(row_result)
 
+    chronological = list(reversed(prev_dates)) + [rdate]
     return {
-        "table_name":        table_name,
-        "reporting_date":    reporting_date,
+        "table_name":         table_name,
+        "reporting_date":     reporting_date,
         "comparison_periods": [pd.strftime("%d-%b-%Y").upper() for pd in prev_dates],
-        "columns":           selected_columns,
-        "display_columns":   all_display_cols,
-        "rows":              result_rows,
+        "columns":            selected_columns,
+        "display_columns":    all_display_cols,
+        "rows":               result_rows,
+        "comparison_mode":    comparison_mode,
+        "chain_dates":        (
+            [d.strftime("%d-%b-%Y").upper() for d in chronological]
+            if comparison_mode == "sequential"
+            else []
+        ),
     }

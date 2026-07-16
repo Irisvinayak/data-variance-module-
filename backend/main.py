@@ -132,6 +132,7 @@ async def variance_compute(
             execute_query_fn=execute_query,
             connection_string=None,
             selected_columns=payload.selected_columns,
+            comparison_mode=payload.comparison_mode,
         )
         logger.info(
             "[main] compute_variance SUCCESS | login_id=%s | return_id=%s | table=%s",

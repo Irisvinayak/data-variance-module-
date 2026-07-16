@@ -56,7 +56,7 @@ export default function VisualizationPanel({ result, vizState, vizOpen, onExpand
   const chartData = useMemo(() => {
     if (!activeCol || !rows.length) return []
     return rows.slice(0, rowLimit).map((row) => {
-      const entry = { name: row.identifier || '—', Current: null }
+      const entry = { name: row.display_label ?? row.identifier ?? '—', Current: null }
       const currRaw = row.current?.[activeCol]
       entry['Current'] = currRaw != null ? Number(currRaw) : null
       comparison_periods.forEach((p, i) => {
