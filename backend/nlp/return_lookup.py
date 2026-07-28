@@ -47,13 +47,25 @@ def _build_lookup() -> Dict[str, Dict[str, Any]]:
             continue
 
         try:
-            root, _path = _load_table_mapping(return_id, tbl_path)
+            root, resolved_path = _load_table_mapping(return_id, tbl_path)
         except Exception as exc:
-            logger.debug(
-                "[nlp.return_lookup] Skipping return_id=%s (%s): %s", return_id, return_name, exc,
+            logger.warning(
+                "[nlp.return_lookup] Skipping return_id=%s (%s) — _load_table_mapping raised: %s",
+                return_id, return_name, exc,
             )
             continue
         if root is None:
+            # File wasn't found OR was found but failed to parse — either way this
+            # return's tables silently drop out of get_return_for_table() lookups
+            # from here on, which downstream shows up as a confusing return_id=None
+            # 404 with no indication of which return/file actually failed. Log it
+            # at WARNING (not DEBUG) so it's visible in normal production logs.
+            logger.warning(
+                "[nlp.return_lookup] Skipping return_id=%s (%s) — table mapping not found/unparseable "
+                "(tbl_path=%r, tried resolving to %r). Every table under this return is now "
+                "unresolvable via get_return_for_table().",
+                return_id, return_name, tbl_path, resolved_path,
+            )
             continue
 
         for el in root.findall("Row"):

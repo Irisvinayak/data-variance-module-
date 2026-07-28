@@ -167,7 +167,17 @@ def _validate_grounding(
     selected_columns = parsed.get("selected_columns") or []
 
     table_meta = tables_by_name.get(table_name)
-    if table_meta is None or str(table_meta.get("return_id")) != return_id:
+    if table_meta is None:
+        return None
+
+    # A table whose own return_id never resolved (return_lookup.get_return_for_table()
+    # found no table-mapping file for it — see return_lookup.py) has return_id=None.
+    # str(None) == "None" would otherwise coincidentally "match" an LLM response of
+    # {"return_id": null, ...} for the same table, passing validation with a
+    # meaningless return_id that can never be looked up downstream — producing a
+    # confusing 404 far away from the actual cause. Reject it here, explicitly.
+    table_return_id = table_meta.get("return_id")
+    if table_return_id is None or str(table_return_id) != return_id:
         return None
 
     valid_cols = {c["column"] for c in shortlist["columns"] if c["table"] == table_name}

@@ -187,6 +187,21 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
             meta.setdefault("return_id", None)
             meta.setdefault("return_name", None)
 
+    # A table whose return_id never resolved (return_lookup.get_return_for_table()
+    # found no loadable table-mapping file for it) can never be used downstream —
+    # main.py's later _parse_returns() lookup and compute_variance() both need a
+    # real return_id. Drop these unconditionally, BEFORE the auth filter, so they
+    # never reach intent_resolver as a candidate — this matters especially with
+    # AUTH_ENABLED=false, where the auth filter below is skipped entirely and would
+    # otherwise let an unusable table through untouched.
+    unresolved = [tbl for tbl in ranked_tables if all_table_meta[tbl].get("return_id") is None]
+    if unresolved:
+        logger.warning(
+            "[nlp.retriever] query=%r | dropping %d table(s) with unresolved return_id: %s",
+            query, len(unresolved), unresolved,
+        )
+    ranked_tables = [tbl for tbl in ranked_tables if tbl not in unresolved]
+
     # ── Authorization filter — reuse the existing, untouched auth function ────
     if not AUTH_ENABLED:
         logger.warning(
