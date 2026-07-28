@@ -15,13 +15,15 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List
 
 from ..auth_service import get_allowed_form_ids
 from ..config import AUTH_ENABLED
 from . import return_lookup
 from .embedder import embed_query
-from .index_store import search
+from .index_store import all_meta, search
+from .query_normalizer import normalize_query
 from .nlp_config import (
     COLUMN_INDEX_PATH,
     COLUMN_META_PATH,
@@ -38,9 +40,34 @@ from .nlp_config import (
 
 logger = logging.getLogger(__name__)
 
+# Backup/duplicate table copies (e.g. CIMS_RAQ_M_SEC9_SENSEC_PARTB_bckup,
+# ..._BK, ..._bkup) are near-identical to their primary table and otherwise
+# eat shortlist slots that should go to genuinely different candidates.
+_BACKUP_SUFFIX_RE = re.compile(r"_(bckup|bkup|bk)$", re.IGNORECASE)
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
 
 def _rrf(rank: int, k: int = 60) -> float:
     return 1.0 / (k + rank + 1)
+
+
+def _tokens(text: str) -> set:
+    return set(_TOKEN_RE.findall(text.lower()))
+
+
+def _lexical_overlap(query_tokens: set, text: str) -> float:
+    """Fraction of query tokens also present in `text` — a cheap lexical
+    signal layered on top of cosine similarity. Pure embedding similarity
+    can't tell "TOT_EXPO_DOM" (literal term match) apart from a merely
+    topic-adjacent column at nearly the same cosine score; exact word overlap
+    is a cheap, precise tie-breaker for exactly that situation."""
+    if not query_tokens:
+        return 0.0
+    text_tokens = _tokens(text)
+    if not text_tokens:
+        return 0.0
+    return len(query_tokens & text_tokens) / len(query_tokens)
 
 
 def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, Any]]]:
@@ -58,33 +85,94 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     three possibly empty. matched_labels feeds sql_generator.build_prompt()'s
     "STORAGE FORMAT: VERTICAL" row-label rules.
     """
-    q_vec = embed_query(query)
+    # Normalize known domain typos/abbreviations ("exposer"->"exposure", "std"->
+    # "standard", ...) before embedding — cosine similarity over sentence
+    # embeddings is sensitive to misspelled/informal terms landing the query
+    # vector in the wrong neighborhood. The ORIGINAL query is still what's
+    # logged/shown/sent to intent_resolver; only the text fed to the embedder
+    # and the lexical-overlap check below is normalized.
+    normalized_query = normalize_query(query)
+    if normalized_query != query:
+        logger.info("[nlp.retriever] query normalized: %r -> %r", query, normalized_query)
+    query_tokens = _tokens(normalized_query)
 
-    table_hits = search(TABLE_INDEX_PATH, TABLE_META_PATH, q_vec, TOP_K_TABLES * 3, min_score=MIN_TABLE_SCORE)
+    q_vec = embed_query(normalized_query)
+
+    # ── Column-first / label-first retrieval ──────────────────────────────────
+    # Queries name a metric or a value ("total risk assets for standard"), not
+    # a table description — so columns and row-label values are searched FIRST
+    # and drive table ranking. Table-description similarity is searched last
+    # and only acts as a secondary/supporting signal, otherwise a table whose
+    # description happens to echo the query's words out-ranks the table that
+    # actually contains the matching column/value (e.g. a column literally
+    # named STANDARD_DOM winning over the correct RISK_CATEGORY='Standard'
+    # row in a different, better-fitting table).
     col_hits = search(COLUMN_INDEX_PATH, COLUMN_META_PATH, q_vec, TOP_K_COLUMNS * 4, min_score=MIN_COLUMN_SCORE)
     label_hits = search(ROW_LABEL_INDEX_PATH, ROW_LABEL_META_PATH, q_vec, TOP_K_LABELS * 3)
+    table_hits = search(TABLE_INDEX_PATH, TABLE_META_PATH, q_vec, TOP_K_TABLES * 3, min_score=MIN_TABLE_SCORE)
 
-    all_table_meta: Dict[str, Dict[str, Any]] = {h["table"]: h for _, h in table_hits}
-    scores: Dict[str, float] = {tbl: 0.0 for tbl in all_table_meta}
+    all_table_meta: Dict[str, Dict[str, Any]] = {}
+    scores: Dict[str, float] = {}
 
-    for rank, (_, t) in enumerate(table_hits):
-        scores[t["table"]] = scores.get(t["table"], 0.0) + _rrf(rank) * 2.0
-
-    col_table_seen: Dict[str, int] = {}
-    for _, c in col_hits:
+    # Primary signal #1: matching columns. Score by each table's BEST-ranked
+    # column hit only (first occurrence in the already-sorted hit list) — NOT
+    # summed across every column that table happens to have in the results.
+    # Summing let a table with many loosely-relevant columns (e.g. 8 generic
+    # risk/finance column names all embedding "close enough") out-accumulate
+    # a table with a single, precisely-matching column, which is backwards:
+    # depth of one exact match should beat breadth of several mediocre ones.
+    col_tables_scored: set = set()
+    for rank, (_, c) in enumerate(col_hits):
         tbl = c["table"]
-        rank = col_table_seen.get(tbl, 0)
-        col_table_seen[tbl] = rank + 1
         all_table_meta.setdefault(tbl, {"table": tbl})
-        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * 1.5
+        if tbl in col_tables_scored:
+            continue
+        col_tables_scored.add(tbl)
+        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * 2.0
 
-    label_table_seen: Dict[str, int] = {}
-    for _, lbl in label_hits:
+    # Primary signal #2: matching row-label values (e.g. RISK_CATEGORY="Standard") —
+    # weighted equally with columns since a value match is just as strong evidence
+    # of the right table as a column-name match. Same best-hit-only rule applies.
+    label_tables_scored: set = set()
+    for rank, (_, lbl) in enumerate(label_hits):
         tbl = lbl["table"]
-        rank = label_table_seen.get(tbl, 0)
-        label_table_seen[tbl] = rank + 1
         all_table_meta.setdefault(tbl, {"table": tbl})
-        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * 1.0
+        if tbl in label_tables_scored:
+            continue
+        label_tables_scored.add(tbl)
+        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * 2.0
+
+    # Secondary/supporting signal: table description similarity — breaks ties
+    # and surfaces tables whose only good match is the description, but no
+    # longer dominates over an actual column/value hit.
+    texts_by_table: Dict[str, List[str]] = {}
+    for rank, (_, t) in enumerate(table_hits):
+        all_table_meta[t["table"]] = {**all_table_meta.get(t["table"], {}), **t}
+        scores[t["table"]] = scores.get(t["table"], 0.0) + _rrf(rank) * 1.0
+        texts_by_table.setdefault(t["table"], []).append(t.get("text", ""))
+    for _, c in col_hits:
+        texts_by_table.setdefault(c["table"], []).append(c.get("text", ""))
+    for _, lbl in label_hits:
+        texts_by_table.setdefault(lbl["table"], []).append(lbl.get("text", ""))
+
+    # Tertiary signal: exact lexical term overlap — a small, bounded tie-breaker
+    # (max contribution ~0.03, on par with one primary rrf hit) layered on top
+    # of cosine similarity, not a replacement for it. See _lexical_overlap.
+    for tbl in scores:
+        overlap = _lexical_overlap(query_tokens, " ".join(texts_by_table.get(tbl, [])))
+        scores[tbl] += overlap * 0.03
+
+    # Dedupe backup/duplicate table copies (same section, "_bckup"/"_bkup"/"_BK"
+    # suffix) down to their best-scoring variant BEFORE the top-K cutoff, so
+    # 2-3 near-identical copies of one section don't crowd out a genuinely
+    # different candidate table.
+    canonical_best: Dict[str, str] = {}
+    for tbl, score in scores.items():
+        canon = _BACKUP_SUFFIX_RE.sub("", tbl)
+        if canon not in canonical_best or scores[canonical_best[canon]] < score:
+            canonical_best[canon] = tbl
+    deduped_table_names = set(canonical_best.values())
+    scores = {tbl: s for tbl, s in scores.items() if tbl in deduped_table_names}
 
     ranked_tables = sorted(scores, key=scores.__getitem__, reverse=True)[:TOP_K_TABLES]
 
@@ -131,6 +219,22 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
             seen_cols.add(key)
             unique_columns.append(c)
     columns = unique_columns[: TOP_K_COLUMNS * 2]
+
+    # ── Backfill: a table can be shortlisted purely on a table-description or
+    # row-label hit, with none of its own columns making the top-k column
+    # search. Without this, intent_resolver sees that table with zero
+    # candidate columns and can never validly select it, silently discarding
+    # an otherwise-correct match. Pull the table's full column list instead.
+    tables_with_columns = {c["table"] for c in columns}
+    tables_missing_columns = authorized_table_names - tables_with_columns
+    if tables_missing_columns:
+        full_column_meta = all_meta(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+        for c in full_column_meta:
+            if c["table"] in tables_missing_columns:
+                key = (c["table"], c["column"])
+                if key not in seen_cols:
+                    seen_cols.add(key)
+                    columns.append(c)
 
     matched_labels = [lbl for _, lbl in label_hits if lbl["table"] in authorized_table_names]
     seen_labels = set()

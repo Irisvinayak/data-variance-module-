@@ -45,14 +45,20 @@ Answer:
 def _build_prompt(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> str:
     tables = shortlist["tables"]
     columns = shortlist["columns"]
+    matched_labels = shortlist.get("matched_labels") or []
 
     lines = []
     for t in tables:
         table_cols = [c["column"] for c in columns if c["table"] == t["table"]]
         cols_str = ", ".join(table_cols) if table_cols else "(no candidate columns retrieved)"
+        table_labels = [lbl for lbl in matched_labels if lbl["table"] == t["table"]]
+        labels_line = ""
+        if table_labels:
+            labels_str = ", ".join(f'{lbl["column"]}={lbl["value"]!r}' for lbl in table_labels)
+            labels_line = f"\n  matched row values: {labels_str}"
         lines.append(
             f"- return_id={t.get('return_id')} return_name={t.get('return_name')!r} "
-            f"table_name={t['table']!r}\n  candidate columns: {cols_str}"
+            f"table_name={t['table']!r}\n  candidate columns: {cols_str}{labels_line}"
         )
     candidates_block = "\n".join(lines)
 
@@ -74,8 +80,18 @@ Rules:
 - return_id and table_name MUST be copied verbatim from the candidates above — never invent new ones.
 - Every entry in selected_columns MUST be one of that table's candidate columns listed above.
 - Pick exactly ONE table. Do not combine multiple tables.
-- If the question implies a combined/total metric and both a "_DOM" and "_OVE" variant of the
-  same column exist among the candidates, include both.
+- If the question does NOT name a specific scope (domestic/overseas/global) and both a "_DOM" and
+  "_OVE" variant of the same column exist among the candidates, include both — the question is
+  implicitly asking for the combined/total figure.
+- If the question DOES name a specific scope (e.g. "for domestic", "overseas only"), select ONLY
+  the column variant matching that scope — do not also include the other side just because a
+  "total" word appears elsewhere in the question.
+- If a table lists "matched row values" and one of them matches a term in the question (e.g.
+  RISK_CATEGORY='Standard' matching the word "standard"), STRONGLY prefer that table over any
+  other table whose column NAME merely happens to contain the same word — a row-value match is
+  stronger evidence than a column-name coincidence. In that case, select the amount/value column(s)
+  associated with that row-label column (e.g. OUTSTANDING_AMT_DOM/OUTSTANDING_AMT_O alongside
+  RISK_CATEGORY), not an unrelated column that just shares the word.
 
 Output ONLY the JSON object below — the very first character of your response must be "{{"
 and the very last must be "}}". No markdown, no code fences, no explanation, no extra text

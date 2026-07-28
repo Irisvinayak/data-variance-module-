@@ -53,6 +53,16 @@ def _load_cached(index_path: str, meta_path: str) -> Tuple[faiss.Index, List[Dic
     return index, meta
 
 
+def all_meta(index_path: str, meta_path: str) -> List[Dict[str, Any]]:
+    """Return the full cached metadata list for an index, unfiltered by any
+    query/score — used when a table needs its complete column list rather
+    than just whatever a top-k similarity search happened to surface."""
+    if not os.path.isfile(index_path) or not os.path.isfile(meta_path):
+        return []
+    _, meta = _load_cached(index_path, meta_path)
+    return meta
+
+
 def search(
     index_path: str,
     meta_path: str,
