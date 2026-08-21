@@ -63,6 +63,38 @@ def all_meta(index_path: str, meta_path: str) -> List[Dict[str, Any]]:
     return meta
 
 
+_grouped_cache: Dict[str, Tuple[float, Dict[str, List[Dict[str, Any]]]]] = {}
+
+
+def meta_by_table(index_path: str, meta_path: str) -> Dict[str, List[Dict[str, Any]]]:
+    """Same records as all_meta(), grouped by each record's "table" key and
+    cached alongside the index (same mtime invalidation). Callers that only
+    need one or a few tables' records (e.g. retriever.py's column-backfill
+    path) previously did `for c in all_meta(...): if c["table"] in ...` —
+    an O(total corpus size) linear scan on EVERY triggering query, regardless
+    of how few tables were actually being looked up. Grouping once (still
+    O(n), but cached) turns every subsequent lookup into an O(1) dict get,
+    so this stops scaling with total corpus size."""
+    if not os.path.isfile(index_path) or not os.path.isfile(meta_path):
+        return {}
+
+    mtime = max(os.path.getmtime(index_path), os.path.getmtime(meta_path))
+    key = index_path
+    with _cache_lock:
+        cached = _grouped_cache.get(key)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+
+    _, meta = _load_cached(index_path, meta_path)
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for record in meta:
+        grouped.setdefault(record["table"], []).append(record)
+
+    with _cache_lock:
+        _grouped_cache[key] = (mtime, grouped)
+    return grouped
+
+
 def search(
     index_path: str,
     meta_path: str,

@@ -22,13 +22,23 @@ from ..auth_service import get_allowed_form_ids
 from ..config import AUTH_ENABLED
 from . import return_lookup
 from .embedder import embed_query
-from .index_store import all_meta, search
+from .index_store import meta_by_table, search
+from .lexical_search import search_bm25, search_qa_strong_match
 from .query_normalizer import normalize_query
 from .nlp_config import (
+    BM25_INDEX_PATH,
+    BM25_SIGNAL_WEIGHT,
+    BM25_TOP_K,
     COLUMN_INDEX_PATH,
     COLUMN_META_PATH,
     MIN_COLUMN_SCORE,
     MIN_TABLE_SCORE,
+    QA_INDEX_PATH,
+    QA_META_PATH,
+    QA_PAIRS_PATH,
+    QA_PREFILTER_TOP_N,
+    QA_STRONG_MATCH_BONUS,
+    QA_STRONG_MATCH_THRESHOLD,
     ROW_LABEL_INDEX_PATH,
     ROW_LABEL_META_PATH,
     TABLE_INDEX_PATH,
@@ -110,6 +120,7 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     col_hits = search(COLUMN_INDEX_PATH, COLUMN_META_PATH, q_vec, TOP_K_COLUMNS * 4, min_score=MIN_COLUMN_SCORE)
     label_hits = search(ROW_LABEL_INDEX_PATH, ROW_LABEL_META_PATH, q_vec, TOP_K_LABELS * 3)
     table_hits = search(TABLE_INDEX_PATH, TABLE_META_PATH, q_vec, TOP_K_TABLES * 3, min_score=MIN_TABLE_SCORE)
+    bm25_hits = search_bm25(BM25_INDEX_PATH, normalized_query, BM25_TOP_K) if BM25_SIGNAL_WEIGHT else []
 
     all_table_meta: Dict[str, Dict[str, Any]] = {}
     scores: Dict[str, float] = {}
@@ -154,6 +165,52 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
         texts_by_table.setdefault(c["table"], []).append(c.get("text", ""))
     for _, lbl in label_hits:
         texts_by_table.setdefault(lbl["table"], []).append(lbl.get("text", ""))
+
+    # Signal: BM25 lexical/term-frequency match. Dense cosine smooths over
+    # exact structural markers (e.g. near-identical "Part A"/"Part B" tables
+    # scoring within noise of each other); BM25 catches the literal term
+    # instead. Fused via RRF RANK (not raw score) since raw BM25 (~0-20+)
+    # isn't on cosine's scale (0-1) — comparing them directly would let BM25
+    # dominate or vanish depending on corpus size. Same best-hit-only-per-
+    # table rule as columns/labels above.
+    bm25_tables_scored: set = set()
+    for rank, (_, bt) in enumerate(bm25_hits):
+        tbl = bt["table"]
+        all_table_meta.setdefault(tbl, {"table": tbl})
+        texts_by_table.setdefault(tbl, []).append(bt.get("text", ""))
+        if tbl in bm25_tables_scored:
+            continue
+        bm25_tables_scored.add(tbl)
+        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * BM25_SIGNAL_WEIGHT
+
+    # Signal: QA strong-match — if this question is a near-duplicate of a
+    # known verified example, pin its table. The bonus (10.0) dwarfs any
+    # realistic RRF sum (~0.1 max), so it wins the sort at the cutoff below
+    # without a separate "force to front" code path. If it turns out
+    # unauthorized/return-id-unresolved, the existing drop/auth logic further
+    # down removes it exactly like any other candidate — no special-casing.
+    qa_table = (
+        search_qa_strong_match(
+            QA_PAIRS_PATH, query, QA_STRONG_MATCH_THRESHOLD,
+            qa_index_path=QA_INDEX_PATH, qa_meta_path=QA_META_PATH,
+            query_vector=q_vec, prefilter_top_n=QA_PREFILTER_TOP_N,
+        )
+        if QA_STRONG_MATCH_THRESHOLD
+        else None
+    )
+    if qa_table:
+        # qa_pairs.json's table names may differ in case from the FAISS/BM25
+        # meta's table names (e.g. "CIMS_..." vs "cims_..." — different build
+        # pipelines). Reuse an existing case-insensitively-matching key if the
+        # table was already scored by another signal, so this doesn't create
+        # a duplicate table entry under a different case.
+        existing = next((t for t in scores if t.upper() == qa_table.upper()), None)
+        canonical_qa_table = existing or qa_table
+        all_table_meta.setdefault(canonical_qa_table, {"table": canonical_qa_table})
+        scores[canonical_qa_table] = scores.get(canonical_qa_table, 0.0) + QA_STRONG_MATCH_BONUS
+        logger.info(
+            "[nlp.retriever] query=%r | QA strong-match pinned table=%r", query, canonical_qa_table
+        )
 
     # Tertiary signal: exact lexical term overlap — a small, bounded tie-breaker
     # (max contribution ~0.03, on par with one primary rrf hit) layered on top
@@ -243,9 +300,9 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     tables_with_columns = {c["table"] for c in columns}
     tables_missing_columns = authorized_table_names - tables_with_columns
     if tables_missing_columns:
-        full_column_meta = all_meta(COLUMN_INDEX_PATH, COLUMN_META_PATH)
-        for c in full_column_meta:
-            if c["table"] in tables_missing_columns:
+        grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+        for tbl in tables_missing_columns:
+            for c in grouped_columns.get(tbl, []):
                 key = (c["table"], c["column"])
                 if key not in seen_cols:
                     seen_cols.add(key)

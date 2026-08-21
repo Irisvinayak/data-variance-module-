@@ -1,25 +1,133 @@
 {
-  "CIMS_RAQ_M_GEN_INFO": {
+  "cims_ale_q_anx_1_bal": {
     "description": [
-      "Address",
+      "With banks Outside India ",
+      "With banks in India "
+    ]
+  },
+  "cims_ale_q_anx_1_loss_pro_iba": {
+    "description": [
+      "Loss provision made for Inter Branch Adjustments, if any"
+    ]
+  },
+  "cims_ale_q_anx_1_loss_pro_ind": {
+    "description": [
+      "Loss Provision made for accounts with banks in India, if any "
+    ]
+  },
+  "cims_ale_q_anx_1_loss_pro_ovr": {
+    "description": [
+      "Loss provision made for accounts with banks overseas, if any"
+    ]
+  },
+  "cims_ale_q_gen_info": {
+    "description": [
+      "Address of Reporting Institution",
       "Bank Category",
       "Bank Code",
       "Date of Audit",
-      "Date of Report",
+      "Date of Report ",
       "For the Period Ended",
       "General Remarks",
-      "Reporting Frquency",
+      "Reporting Frequency",
       "Reporting Institution",
+      "Reporting period start date",
       "Return Code",
       "Return Name",
       "Return Version",
-      "Start Date",
-      "Status",
+      "Status ",
       "Tool Name",
-      "Validation Status"
+      "Validation Status "
     ]
   },
-  "CIMS_RAQ_M_SIGN_INFO": {
+  "cims_ale_q_sec2_e1": {
+    "item": [
+      "    (a)  LIBOR ($)",
+      "    (a)  LIBOR ($) ",
+      "    (a)  MIBOR / OIS - Fixed ",
+      "    (b)  MIBOR / OIS - Floating",
+      "    (b)  Others (FCY)",
+      "    (c)  INBMK / INCMT - Fixed",
+      "    (d)  INBMK / INCMT - Floating",
+      "    (e) MIFOR / MIOCS / MITOR - Fixed",
+      "    (f) MIFOR / MIOCS / MITOR - Floating",
+      "    (g) Others - Fixed **",
+      "    (h) Others - Floating **",
+      "(I) Rupee - Foreign Currency Forward Contracts",
+      "(II) IRS (Rupee)*",
+      "(III) CDS - Premium Paid",
+      "(IV) CDS - Premium Received",
+      "(V) Sub-Total (I) to (IV)",
+      "(VI) IRS (FCY)*",
+      "(X) Total (V) + (VI)",
+      "(Y) Networth at end of Previous March",
+      "Memo: IRS (FCY) in terms of USD equivalent",
+      "PVBP 01 of X/Y*100"
+    ]
+  },
+  "cims_ale_q_sec2_e2": {
+    "item": [
+      "    (a)  LIBOR ($)",
+      "    (a)  LIBOR ($) ",
+      "    (a)  MIBOR / OIS - Fixed ",
+      "    (b)  MIBOR / OIS - Floating",
+      "    (b)  Others (FCY)",
+      "    (c)  INBMK / INCMT - Fixed",
+      "    (d)  INBMK / INCMT - Floating",
+      "    (e) MIFOR / MIOCS / MITOR - Fixed",
+      "    (f) MIFOR / MIOCS / MITOR - Floating",
+      "    (g) Others - Fixed **",
+      "    (h) Others - Floating **",
+      "(I) Rupee - Foreign Currency Forward Contracts",
+      "(II) IRS (Rupee)*",
+      "(III) CDS - Premium Paid",
+      "(IV) CDS - Premium Received",
+      "(V) Sub-Total (I) to (IV)",
+      "(VI) IRS (FCY)*",
+      "(X) Total (V) + (VI)",
+      "(Y) Networth at end of Previous March",
+      "Memo: IRS (FCY) in terms of USD equivalent",
+      "PVBP 01 of X/Y*100"
+    ]
+  },
+  "cims_ale_q_sec2_f1": {
+    "item": [
+      "    a) Physically Settled",
+      "    a) physically settled",
+      "    b) Cash Settled",
+      "    b) cash settled",
+      "(I) No. of Transactions,  of which",
+      "(II) Amount of Protection Bought / Sold, of which",
+      "HGJHFGJ",
+      "Rating-wise (reference entities) distribution of Protection Bought / Sold for each Broad Rating Grade",
+      "a) premium paid / received",
+      "b) Credit event payments(cash settled):",
+      "paid",
+      "received ",
+      "\u2022 paid",
+      "\u2022 received "
+    ]
+  },
+  "cims_ale_q_sec2_f2": {
+    "item": [
+      "    a) Physically Settled",
+      "    a) physically settled",
+      "    b) Cash Settled",
+      "    b) cash settled",
+      "(I) No. of Transactions,  of which",
+      "(II) Amount of Protection Bought / Sold, of which",
+      "GHKHGDJG",
+      "HGJHFGJ",
+      "Rating-wise (reference entities) distribution of Protection Bought / Sold for each Broad Rating Grade",
+      "a) premium paid / received",
+      "b) Credit event payments(cash settled):",
+      "paid",
+      "received ",
+      "\u2022 paid",
+      "\u2022 received "
+    ]
+  },
+  "cims_ale_q_signatory": {
     "description": [
       "Date",
       "Designation",
@@ -30,70 +138,32 @@
       "Place"
     ]
   },
-  "CIMS_RAQ_Q_GEN_INFO": {
+  "cims_raq_q_sec10": {
     "description": [
-      "Address",
-      "Bank Category",
-      "Bank Code",
-      "Date of Audit",
-      "Date of Report",
-      "For the Period Ended",
-      "General Remarks",
-      "Reporting Frquency",
-      "Reporting Institution",
-      "Return Code",
-      "Return Name",
-      "Return Version",
-      "Start Date",
-      "Status",
-      "Tool Name",
-      "Validation Status"
+      "    B.2.1 Micro Enterprises",
+      "    B.2.2 Small Enterprises",
+      "    B.2.3 Medium Enterprises",
+      "    F.2.1 Micro Enterprises",
+      "    F.2.2 Small Enterprises",
+      "    F.2.3 Medium Enterprises",
+      "   B.1.1 Micro Enterprises",
+      "   B.1.2 Small Enterprises",
+      "   B.1.3 Medium Enterprises",
+      "   F.1.1 Micro Enterprises",
+      "   F.1.2 Small Enterprises",
+      "   F.1.3 Medium Enterprises",
+      "A. Micro Finance Institutions/ Self Help Groups",
+      "B. Micro, Small and Medium Enterprises",
+      "B.1 Direct Exposure",
+      "B.2 Indirect Exposure",
+      "E. Micro Finance Institutions/ Self Help Groups",
+      "Exposures in Foreign Currencies_FE",
+      "F. Micro, Small and Medium Enterprises",
+      "F.1 Direct Exposure",
+      "F.2 Indirect Exposure"
     ]
   },
-  "CIMS_RAQ_Q_SIGNATORY": {
-    "description": [
-      "Date",
-      "Designation",
-      "E-mail Id",
-      "Landline No.",
-      "Mobile No.",
-      "Name",
-      "Place"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC1_PART_A_DOM": {
-    "period_delinquency": [
-      "A. PERFORMING(i + ii)",
-      "B. NON-PERFORMING (iii + iv + v)",
-      "C. Total ( A + B)",
-      "i) Current",
-      "ii) Overdue [ii.a + ii.b]",
-      "ii.a) Loans and Advances where 90 day norms is applicable as per IRAC",
-      "ii.a.1 Overdue less than 30 days (SMA -0)",
-      "ii.a.2 Overdue for 30 to 60 days (SMA -1)",
-      "ii.a.3 Overdue for 60 to 90 days (SMA -2)",
-      "ii.b) Loans and Advances where 90 day norms is NOT applicable as per IRAC",
-      "iii) Substandard",
-      "iv) Doubtful",
-      "v) Loss"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC1_PART_B_DOM": {
-    "period_delinquency": [
-      "1) Current",
-      "2) Overdue",
-      "2.1 Overdue less than 30 days",
-      "2.2 Overdue for 30 to 60 days",
-      "2.3 Overdue for 60 to 90 days",
-      "3) Substandard",
-      "4) Doubtful",
-      "5) Loss",
-      "A. PERFORMING (1 + 2)",
-      "B. NON-PERFORMING (3 + 4 + 5)",
-      "C. TOTAL (A+B)"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER": {
+  "cims_raq_q_sec1_exc_govt_paper": {
     "description": [
       "(a) Treasury bills",
       "(b) GOI Securities(Bonds)",
@@ -101,44 +171,82 @@
       "Total"
     ]
   },
-  "CIMS_RAQ_Q_SEC1_PART_C_O": {
+  "cims_raq_q_sec1_last_date_port": {
+    "description": [
+      "* Last date of portfolio review (dd/mm/yyyy)"
+    ]
+  },
+  "cims_raq_q_sec1_part_a_dom": {
     "period_delinquency": [
+      "    ii.a.1 Overdue less than 30 days (SMA -0)",
+      "    ii.a.2 Overdue for 30 to 60 days (SMA -1)",
+      "    ii.a.3 Overdue for 60 to 90 days (SMA -2)",
       "A. PERFORMING(i + ii)",
-      "B. NON-PERFORMING (iii + iv + v)",
+      "B. NON-PERFORMING (iii + iv + v) ",
       "C. Total ( A + B)",
       "i) Current",
       "ii) Overdue [ii.a + ii.b]",
       "ii.a) Loans and Advances where 90 day norms is applicable as per IRAC",
-      "ii.a.1 Overdue less than 30 days (SMA -0)",
-      "ii.a.2 Overdue for 30 to 60 days (SMA -1)",
-      "ii.a.3 Overdue for 60 to 90 days (SMA -2)",
       "ii.b) Loans and Advances where 90 day norms is NOT applicable as per IRAC",
       "iii) Substandard",
       "iv) Doubtful",
       "v) Loss"
     ]
   },
-  "CIMS_RAQ_Q_SEC1_PART_D_O": {
+  "cims_raq_q_sec1_part_b_dom": {
     "period_delinquency": [
+      "     3) Substandard",
+      "     4) Doubtful",
+      "     5) Loss",
+      "    2.1 Overdue less than 30 days",
+      "    2.2 Overdue for 30 to 60 days",
+      "    2.3 Overdue for 60 to 90 days",
       "1) Current",
       "2) Overdue",
-      "2.1 Overdue less than 30 days",
-      "2.2 Overdue for 30 to 60 days",
-      "2.3 Overdue for 60 to 90 days",
-      "3) Substandard",
-      "4) Doubtful",
-      "5) Loss",
       "A. PERFORMING (1 + 2)",
       "B. NON-PERFORMING (3 + 4 + 5)",
       "C. TOTAL (A+B)"
     ]
   },
-  "CIMS_RAQ_Q_SEC1_LAST_DATE_PORT": {
-    "description": [
-      "* Last date of portfolio review (dd/mm/yyyy)"
+  "cims_raq_q_sec1_part_c_o": {
+    "period_delinquency": [
+      "    ii.a.1 Overdue less than 30 days (SMA -0)",
+      "    ii.a.2 Overdue for 30 to 60 days (SMA -1)",
+      "    ii.a.3 Overdue for 60 to 90 days (SMA -2)",
+      "A. PERFORMING(i + ii)",
+      "B. NON-PERFORMING (iii + iv + v) ",
+      "C. Total ( A + B)",
+      "i) Current",
+      "ii) Overdue [ii.a + ii.b]",
+      "ii.a) Loans and Advances where 90 day norms is applicable as per IRAC",
+      "ii.b) Loans and Advances where 90 day norms is NOT applicable as per IRAC",
+      "iii) Substandard",
+      "iv) Doubtful",
+      "v) Loss"
     ]
   },
-  "CIMS_RAQ_Q_SEC2_PART_A": {
+  "cims_raq_q_sec1_part_d_o": {
+    "period_delinquency": [
+      "     3) Substandard",
+      "     4) Doubtful",
+      "     5) Loss",
+      "    2.1 Overdue less than 30 days",
+      "    2.2 Overdue for 30 to 60 days",
+      "    2.3 Overdue for 60 to 90 days",
+      "1) Current",
+      "2) Overdue ",
+      "A. PERFORMING (1 + 2)",
+      "B. NON-PERFORMING (3 + 4 + 5)",
+      "C. TOTAL (A+B)"
+    ]
+  },
+  "cims_raq_q_sec2_last_date_port": {
+    "description": [
+      "* Date of last portfolio review / classification (dd/mm/yyyy)",
+      "@ Date of last provisioning review (dd/mm/yyyy)"
+    ]
+  },
+  "cims_raq_q_sec2_part_a": {
     "risk_category": [
       "1. Standard #",
       "2. Sub-Standard",
@@ -150,81 +258,52 @@
       "Total (1 to 4)"
     ]
   },
-  "CIMS_RAQ_Q_SEC2_PART_A_NPA": {
+  "cims_raq_q_sec2_part_a_memo": {
+    "memorandum_item": [
+      "# Include amount of loans & advances to Government or carrying Government guarantee which are non-performing",
+      "(a) for less than 18 months",
+      "(b) for 18 months and over",
+      "Amount of interest not recognised on the above Government & Government guaranteed loans (Break-up)"
+    ]
+  },
+  "cims_raq_q_sec2_part_a_npa": {
     "risk_category": [
       "Net NPAs",
       "Netting Items for NPAs"
     ]
   },
-  "CIMS_RAQ_Q_SEC2_LAST_DATE_PORT": {
-    "description": [
-      "* Date of last portfolio review / classification (dd/mm/yyyy)",
-      "@ Date of last provisioning review (dd/mm/yyyy)"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC2_PART_B": {
+  "cims_raq_q_sec2_part_b": {
     "movement_provision_npa": [
+      "    C1. On account of Write Offs (Prov. Utilised for write-off)",
+      "    C2. Others",
       "A. Amount of Provisions for NPAs at beginning of the FY",
       "B. New additions during the Period (April to Date)",
       "C. Reductions during the Period (April to Date)",
-      "C1. On account of Write Offs (Prov. Utilised for write-off)",
-      "C2. Others",
       "D. Amount of Provisions for NPAs at end of the FY/Period"
     ]
   },
-  "CIMS_RAQ_Q_SEC2_PART_C": {
-    "item": [
-      "- (Loss provision)",
-      "- Amount",
-      "1  Inter-bank assets",
-      "2   Commercial paper",
-      "3     Notes and bonds",
-      "4     SLR Securities",
-      "5    Receivables",
-      "6 Guarantee outstanding",
-      "7 Letters of credit (Docy+Clean) outstanding",
-      "8 Other contingent credit exposures",
-      "Grand-Total ( 1 to 8)",
-      "Sub-Total (1 to 5)",
-      "Sub-total(6 to 8)"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC3_PART_A": {
-    "category": [
-      "Doubtful Advances",
-      "Loss Advances",
-      "Standard Advances",
-      "Sub-standard Advances",
-      "Total"
-    ],
-    "description": [
-      "Amount",
-      "Number of borrowers",
-      "Sacrifice on diminution"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC3_PART_B": {
+  "cims_raq_q_sec3_part_b": {
     "movement_restructure_std_la": [
+      "       Of  which increase in outstanding due to additional /fresh sanctions to existing restructured accounts",
+      "     C1. Movement of Rest Std Adv to Normal Std Adv",
+      "     C2. Slipped to NPAs",
+      "     C3. Recovery",
+      "     C4. Sold to ARCs/Others",
+      "     C5. Write-offs",
+      "     C6. Others, please specify",
       "A. Amount of Restructured Standard Loans/Advances at beginning of the FY/Period",
       "Abcd",
       "B. New additions during the FY/Period",
       "B1. Due to Fresh Restructuring during the FY/Period",
       "B2. Due to Upgradation of Rest NPAs to Rest Std Adv",
       "C. Reductions in Rest Std Adv during the FY/Period",
-      "C1. Movement of Rest Std Adv to Normal Std Adv",
-      "C2. Slipped to NPAs",
-      "C3. Recovery",
-      "C4. Sold to ARCs/Others",
-      "C5. Write-offs",
-      "C6. Others, please specify",
-      "D. Amount of Restructured Standard Loans/Advances at end of the FY/Period",
-      "Of  which increase in outstanding due to additional /fresh sanctions to existing restructured accounts"
+      "D. Amount of Restructured Standard Loans/Advances at end of the FY/Period"
     ]
   },
-  "CIMS_RAQ_Q_SEC4_PART_A": {
+  "cims_raq_q_sec4_part_a": {
     "movement_from": [
       "A. Loans and advances at the beginning of the period (Should be equal to the figure at end of previous period)",
-      "B. Loans and Advances Disbursed during April to Date",
+      "B. Loans and Advances Disbursed during April to Date             ",
       "C. Actual Repayments / Recoveries",
       "D. Write-offs / Technical Write offs / Compromise etc.",
       "E. Others (+ / -)",
@@ -240,7 +319,7 @@
       "Total Upgrade/Downgrade"
     ]
   },
-  "CIMS_RAQ_Q_SEC4_PART_B": {
+  "cims_raq_q_sec4_part_b": {
     "movement_from": [
       "A. NPAs at the beginning of the FY",
       "B. New Addition to NPAs during the Period (Without Netting, pl. see Note 1)",
@@ -251,7 +330,7 @@
       "C.1 Due to Upgradation",
       "C.2 Due to Actual Recoveries",
       "C.3 Due to Write-offs",
-      "C.3.1 Technical/Prudential Write-offs/AUC",
+      "C.3.1 Technical/Prudential Write-offs/AUC ",
       "C.3.2 Write-offs on Account of Compromise Settlements",
       "C.3.3 Actual Write-offs, if any",
       "C.4 Due to Regulatory Instructions, Amalgamation, Compliance to RBI Inspection Action Points, etc.",
@@ -264,164 +343,35 @@
       "G. NPAs at the end of the Period"
     ]
   },
-  "CIMS_RAQ_Q_SEC4_PART_C": {
-    "description": [
-      "A. Amount of Technical/Prudential Write-offs/AUC at beginning of the year",
-      "B. New additions during the period (April to Date)",
-      "C. Reductions",
-      "C.1 Cash Recoveries",
-      "C.1.1 Due to Sale to ARCs, etc.",
-      "C.1.2 Others",
-      "C.2 Sacrifice on account of sale of w/o A/Cs",
-      "C.3 Others",
-      "D. Amount of Technical/Prudential Write-offs/AUC at end of the quarter",
-      "E. Amount of Cumulative write-offs at end of the quarter"
+  "cims_raq_q_sec6_part_a": {
+    "category_investment_dom_opr": [
+      "        - GOI Securities(Dated)",
+      "        - GOI Treasury bills",
+      "        - Other approved Securities",
+      "        - State Govt. Securities(Dated)",
+      "      (i) Quoted",
+      "      (ii) Unquoted",
+      "     (i) GOI Recapitalisation bonds",
+      "     (ii) PSU bonds(excluding Banks/FIs)",
+      "     (iii) Mutual funds(debt oriented)",
+      "     (iv) Bank Certificate of Deposits",
+      "     (v) All others excluding equities",
+      "    (i) PSU bonds (excluding Banks/FIs)  ",
+      "    (ii) Mutual funds(debt oriented)",
+      "    (iii) Bank Certificate of Deposits",
+      "    (iv) All others excluding equities",
+      "A. SLR Investments - Total",
+      "B. Debt Securities - Total(Ba + Bb)",
+      "B.a Debt Securities - Quoted - Total",
+      "B.b Debt Securities - Unquoted - Total",
+      "C. Equities - Total",
+      "Investments (Global Operations)",
+      "Investments (Overseas Operation)",
+      "Out of C Equities - Total - investments in equity - oriented mutual funds",
+      "TOTAL Investments (A+B+C) - Domestic Operations"
     ]
   },
-  "CIMS_RAQ_Q_SEC4_PART_D": {
-    "description": [
-      "Cases Decided at the beginning of the Quarter",
-      "Cases Transferred/Filed with DRTs",
-      "Cases decided at the end of the Quarter",
-      "Cases decided by DRTs",
-      "Cases decided during the Quarter",
-      "Cases pending with DRTs",
-      "Cases where Compromise Proposals Received",
-      "Cases where Recovery Effected - at the beginning of the Quarter",
-      "Cases where Recovery Effected - at the end of the Quarter",
-      "Cases where Recovery Effected - during the Quarter",
-      "Cost of Filing Cases with DRT",
-      "DRT - Cumulative since Inception of the DRTs",
-      "Lok Adalat - Cumulative since Inception Lok Adalat",
-      "New cases during the Quarter",
-      "No. of Notices Issued",
-      "Of Compromise Proposal, Cases where Amount was Recovered",
-      "Of Total Notices Issued, cases where Amount was Recovered",
-      "Recovery in cases decided by DRTs",
-      "SARFAESI - Cumulative since Inception of the Act",
-      "Total Cases at the beginning of the Quarter",
-      "Total Cases at the end of the Quarter"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC5_TOP_CR_TL": {
-    "description": [
-      "Total"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC6_PART_B": {
-    "item": [
-      "AFS to HFT",
-      "AFS to HTM",
-      "HFT to AFS",
-      "HFT to HTM",
-      "HTM to AFS",
-      "HTM to HFT"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC6_PART_C": {
-    "category": [
-      "A. Listed",
-      "B. Unlisted",
-      "C. Equities",
-      "Grand Total (I+II+III)"
-    ],
-    "item": [
-      "1 .Listed",
-      "1.PSU Bonds",
-      "2.Unlisted",
-      "2.Venture Capital Fund",
-      "3.Mortgage backed Securities",
-      "4.Securities issued by ARCs",
-      "5.Other Asset backed Securities",
-      "6.Other Corporate Bonds and Debentures",
-      "7.Mutual funds(Including Units)",
-      "8.Others",
-      "I. Sub Total (Listed)",
-      "II. Sub Total (Unlisted)",
-      "III. Equities: ( 1+2)"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC6_PART_C_2": {
-    "description": [
-      "D. Investments in non-SLR securities (as per extant DBOD guidelines for monitoring prudential limits on investments in non-SLR securities) as at end of previous March",
-      "E. Investments in non-SLR securities which are excluded from  monitoring of prudential limits on unlisted securities , as per extant DBOD guidelines",
-      "F. Investments in unlisted non-SLR securities as % of non-SLR investments"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC6_PART_D": {
-    "description": [
-      "A. Amount of Provisions for NPIs at beginning of the FY",
-      "B. New additions during the Period (April to Date)",
-      "C. Reductions during the Period (April to Date)",
-      "C1. On account of Write Offs (Prov. Utilised for write-off)",
-      "C2. Others",
-      "D. Amount of Provisions for NPIs at end of the FY/Period"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC8_SEC_CREDIT": {
-    "item": [
-      "1. Agriculture and Allied Activities",
-      "1.1 Direct",
-      "1.2 Indirect",
-      "2. Industry (2.1 to 2.4)",
-      "2.1 Micro",
-      "2.2 Small",
-      "2.3 Medium",
-      "2.4 Large",
-      "3. Services (3.1 to 3.10 equals 3.a to 3.d)",
-      "3.1 Transport Operators",
-      "3.1. Land Transport and Pipelines",
-      "3.2 Post and Telecommunication Services",
-      "3.2 Water Transport",
-      "3.2.1 Post and courier activities",
-      "3.2.2 Telecommunication",
-      "3.3 Air Transport (Aviation)",
-      "3.3 Tourism, Hotel and Restaurants",
-      "3.4 Trade",
-      "3.4.1 Wholesale Trade (other than Food Procurement)",
-      "3.4.2 Retail Trade",
-      "3.5 Financial Intermediation",
-      "3.5.1 Banking & Finance other than NBFCs and DFIs",
-      "3.5.1.1 Scheduled Commercial Banks",
-      "3.5.1.2 Co-operative Banks",
-      "3.5.1.2.1 Urban Cooperative Banks",
-      "3.5.1.2.2 District Central Cooperative Banks",
-      "3.5.1.2.3 Other Cooperative Banks",
-      "3.5.2 MFIs, HFCs and NBFCs other than DFIs",
-      "3.5.2.1 Micro Financial Institutions (MFIs)",
-      "3.5.2.2 Housing Finance Companies (HFCs)",
-      "3.5.2.3 Other NBFCs",
-      "3.5.3 Other Financial Intermediation",
-      "3.5.3.1 Mutual Fund (MFs)",
-      "3.5.3.2 Insurance and Pension Funding, Except compulsory Social Security",
-      "3.5.3.3 DFIs",
-      "3.5.3.4 Other Financial Intermediation activities (please specify)",
-      "3.6 Real Estate Activities  (Other than Residential Mortgages)",
-      "3.7 Computer and Related Activities",
-      "3.8 Professional Services",
-      "3.9 Other Services",
-      "3.a Micro",
-      "3.b Small",
-      "ABCD",
-      "DSFKLDJ",
-      "I. Gross Advances (II + III)",
-      "II. 1 Food Corporation of India",
-      "II. 2 State Civil Supplies",
-      "II. 3. Other Food Credit",
-      "II. Food Credit",
-      "III. Non-Food Credit ( 1 to 5)"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC8_SEC_CREDIT_1": {
-    "description": [
-      "F. Investments on Account of Short fall in Priority Sector Lending for the Previous Financial Year",
-      "G. Investments on Account of Expected Short fall in Priority Sector Lending for the Current Financial Year",
-      "H. ANBC (Adjusted Net Bank Credit) - as per Extant FIDD Circular",
-      "I PSLC Certificate Sold(-)/Bought(+)",
-      "J. Priority Sector Lending as % of ANBC [ (Sub - Total - A ( 1 to 3) + G + I)*100/ H]]"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC8_IND_BRKUP": {
+  "cims_raq_q_sec8_ind_brkup": {
     "industry_name": [
       "A. Mining and Quarrying",
       "A.1 Coal",
@@ -469,7 +419,7 @@
       "S. Other Industries, pl. specify"
     ]
   },
-  "CIMS_RAQ_Q_SEC8_INFRA_BRKUP": {
+  "cims_raq_q_sec8_infra_brkup": {
     "industry_name": [
       "1. Transport and adjoining Infrastructure",
       "1.1 Roads and Bridges",
@@ -523,7 +473,61 @@
       "5.6 Fertilizer (Capital investment)"
     ]
   },
-  "CIMS_RAQ_Q_SEC9_SENSEC_PARTA": {
+  "cims_raq_q_sec8_sec_credit": {
+    "item": [
+      "1. Agriculture and Allied Activities",
+      "1.1 Direct",
+      "1.2 Indirect",
+      "2. Industry (2.1 to 2.4)",
+      "2.1 Micro",
+      "2.2 Small",
+      "2.3 Medium",
+      "2.4 Large",
+      "3. Services (3.1 to 3.10 equals 3.a to 3.d)",
+      "3.1 Transport Operators",
+      "3.1. Land Transport and Pipelines",
+      "3.2 Post and Telecommunication Services",
+      "3.2 Water Transport",
+      "3.2.1 Post and courier activities",
+      "3.2.2 Telecommunication",
+      "3.3 Air Transport (Aviation)",
+      "3.3 Tourism, Hotel and Restaurants",
+      "3.4 Trade",
+      "3.4.1 Wholesale Trade (other than Food Procurement)",
+      "3.4.2 Retail Trade",
+      "3.5 Financial Intermediation",
+      "3.5.1 Banking & Finance other than NBFCs and DFIs",
+      "3.5.1.1 Scheduled Commercial Banks",
+      "3.5.1.2 Co-operative Banks",
+      "3.5.1.2.1 Urban Cooperative Banks",
+      "3.5.1.2.2 District Central Cooperative Banks",
+      "3.5.1.2.3 Other Cooperative Banks",
+      "3.5.2 MFIs, HFCs and NBFCs other than DFIs",
+      "3.5.2.1 Micro Financial Institutions (MFIs)",
+      "3.5.2.2 Housing Finance Companies (HFCs)",
+      "3.5.2.3 Other NBFCs",
+      "3.5.3 Other Financial Intermediation",
+      "3.5.3.1 Mutual Fund (MFs)",
+      "3.5.3.2 Insurance and Pension Funding, Except compulsory Social Security",
+      "3.5.3.3 DFIs",
+      "3.5.3.4 Other Financial Intermediation activities (please specify)",
+      "3.6 Real Estate Activities  (Other than Residential Mortgages)",
+      "3.7 Computer and Related Activities",
+      "3.8 Professional Services",
+      "3.9 Other Services",
+      "3.a Micro",
+      "3.b Small",
+      "ABCD",
+      "DSFKLDJ",
+      "I. Gross Advances (II + III)",
+      "II. 1 Food Corporation of India",
+      "II. 2 State Civil Supplies",
+      "II. 3. Other Food Credit",
+      "II. Food Credit",
+      "III. Non-Food Credit ( 1 to 5)"
+    ]
+  },
+  "cims_raq_q_sec9_sensec_parta": {
     "description": [
       "1. Convertible Bonds and Debentures",
       "1. Financial Guarantees issued to Stock Exchanges on behalf of Stock Brokers",
@@ -551,8 +555,9 @@
       "of which All Borrowers against security of shares"
     ]
   },
-  "CIMS_RAQ_Q_SEC9_SENSEC_PARTB": {
+  "cims_raq_q_sec9_sensec_partb": {
     "description": [
+      " A.2.2 Any Other- Please Specify",
       "A Total Credit",
       "A.1 Direct",
       "A.1.1 Residential Mortgages",
@@ -563,8 +568,7 @@
       "A.1.2.2 Commercial Real Estate - Other",
       "A.2 Indirect",
       "A.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
-      "A.2.2 Any Other- Please Specify",
-      "Any Other- Please Specify",
+      "Any Other- Please Specify ",
       "B Total Investment",
       "B.1 Direct",
       "B.1.1 Commercial Real Estate",
@@ -592,37 +596,7 @@
       "OTHERS"
     ]
   },
-  "CIMS_RAQ_Q_SEC10": {
-    "description": [
-      "A. Micro Finance Institutions/ Self Help Groups",
-      "B. Micro, Small and Medium Enterprises",
-      "B.1 Direct Exposure",
-      "B.1.1 Micro Enterprises",
-      "B.1.2 Small Enterprises",
-      "B.1.3 Medium Enterprises",
-      "B.2 Indirect Exposure",
-      "B.2.1 Micro Enterprises",
-      "B.2.2 Small Enterprises",
-      "B.2.3 Medium Enterprises",
-      "E. Micro Finance Institutions/ Self Help Groups",
-      "Exposures in Foreign Currencies_FE",
-      "F. Micro, Small and Medium Enterprises",
-      "F.1 Direct Exposure",
-      "F.1.1 Micro Enterprises",
-      "F.1.2 Small Enterprises",
-      "F.1.3 Medium Enterprises",
-      "F.2 Indirect Exposure",
-      "F.2.1 Micro Enterprises",
-      "F.2.2 Small Enterprises",
-      "F.2.3 Medium Enterprises"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC11": {
-    "country_brw_cuntr_party": [
-      "Ninc"
-    ]
-  },
-  "CIMS_RAQ_Q_SEC_12_MISC": {
+  "cims_raq_q_sec_12_misc": {
     "item": [
       "1. Type of Gold Loan - Non Agricultural",
       "2. Type of Gold Loan - Agricultural",
@@ -636,7 +610,7 @@
       "h. Gold auctioned in lieu of such incremental NPAs during the quarter (in KG)"
     ]
   },
-  "CIMS_RAQ_Q_SEC_12_MISC_T2": {
+  "cims_raq_q_sec_12_misc_t2": {
     "category": [
       "Doubtful",
       "Loss",
@@ -647,7 +621,7 @@
       "Sub Standard"
     ]
   },
-  "CIMS_RAQ_Q_SEC_12_MISC_T3": {
+  "cims_raq_q_sec_12_misc_t3": {
     "description": [
       "Base Rate",
       "External Benchmark based Lending Rate(EBLR)",
@@ -658,113 +632,11 @@
       "Total Retail Advances"
     ]
   },
-  "CIMS_RAQ_Q_SEC_12_MISC_T4": {
+  "cims_raq_q_sec_12_misc_t4": {
     "description": [
       "Regulatory Retail",
       "Total Advances",
       "Wholesale Advances"
-    ]
-  },
-  "CIMS_RAQ_M_SEC9_SENSEC_PARTA": {
-    "description": [
-      "1. Convertible Bonds and Debentures",
-      "1. Financial Guarantees issued to Stock Exchanges on behalf of Stock Brokers",
-      "1. Individuals",
-      "2. Equities",
-      "2. Other Financial Guarantees",
-      "2. Share and Stock Brokers",
-      "2..Equities",
-      "2a. Not exempted from regulatory ceiling",
-      "2b. Exempted from regulatory ceiling",
-      "3. Any other (Pl. specify)",
-      "3. Equity Oriented Mutual Funds",
-      "3. Market Makers",
-      "4. Any other (to be specified)",
-      "4. IPO Financing",
-      "5. Other Corporates",
-      "6. Any other (Pl. specify)",
-      "A1. Advances to Capital Market (Fund based)_DOM_EXP",
-      "A2. Advances to Capital Market (Non-fund based)",
-      "A3. Investments in Capital Market",
-      "All other",
-      "NIL",
-      "Total Advances to Capital Market (1 to 6)",
-      "Total Capital Market Exposure (A1 + A2 + A3)",
-      "Total Investments in Capital Market",
-      "Total Non-fund based",
-      "VCF Exposure (86185) and JV/Associate(4847)",
-      "of which All Borrowers against security of shares"
-    ]
-  },
-  "CIMS_RAQ_M_SEC9_SENSEC_PARTA_BK": {
-    "description": [
-      "1. Convertible Bonds and Debentures",
-      "1. Financial Guarantees issued to Stock Exchanges on behalf of Stock Brokers",
-      "1. Individuals",
-      "2. Equities",
-      "2. Other Financial Guarantees",
-      "2. Share and Stock Brokers",
-      "2a. Not exempted from regulatory ceiling",
-      "2b. Exempted from regulatory ceiling",
-      "3. Any other (Pl. specify)",
-      "3. Equity Oriented Mutual Funds",
-      "3. Market Makers",
-      "4. Any other (to be specified)",
-      "4. IPO Financing",
-      "5. Other Corporates",
-      "6. Any other (Pl. specify)",
-      "A1. Advances to Capital Market (Fund based)",
-      "A2. Advances to Capital Market (Non-fund based)",
-      "A3. Investments in Capital Market",
-      "All other",
-      "Total Advances to Capital Market (1 to 6)",
-      "Total Capital Market Exposure (A1 + A2 + A3)",
-      "Total Investments in Capital Market",
-      "Total Non-fund based",
-      "VCF Exposure (86185) and JV/Associate(4847)",
-      "of which All Borrowers against security of shares"
-    ]
-  },
-  "CIMS_RAQ_M_SEC9_SENSEC_PARTB": {
-    "description": [
-      "A Total Credit",
-      "A.1 Direct",
-      "A.1.1 Residential Mortgages",
-      "A.1.1.a Residential Mortgages - Individual Housing Loans qualifying for Priority Sector",
-      "A.1.1.b Residential Mortgages - All Others",
-      "A.1.2 Commercial Real Estate",
-      "A.1.2.1 Commercial Real Estate - Residential Housing (CRE-RH)",
-      "A.1.2.2 Commercial Real Estate - Other",
-      "A.1.3 Any Other- Please Specify",
-      "A.2 Indirect",
-      "A.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
-      "A.2.2 Any Other- Please Specify",
-      "Any Other- Please Specify",
-      "B Total Investment",
-      "B.1 Direct",
-      "B.1.1 Commercial Real Estate",
-      "B.1.2 Investments in MBS and other securitized exposures",
-      "B.1.2.a Residential Real Estate",
-      "B.1.2.b Commercial Real Estate",
-      "B.1.3 Any Other- Please Specify",
-      "B.2 Indirect",
-      "B.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
-      "B.2.2 Any Other- Please Specify",
-      "C Total Credit and Investment",
-      "C.1 Direct (A.1 + B.1)",
-      "C.1.1 Residential Mortgages (A.1.1)",
-      "C.1.1.1 Residential Mortgages - Individual Housing Loans qualifying for Priority Sector (A.1.1.a)",
-      "C.1.1.2 Residential Mortgages - All Others (A.1.1.b)",
-      "C.1.2 Commercial Real Estate (A.1.2 + B.1.1)",
-      "C.1.3 Investments in MBS and other securitized exposures",
-      "C.1.3.1 Residential Real Estate (B.1.2.a)",
-      "C.1.3.2 Commercial Real Estate (B.1.2.b)",
-      "C.1.4 Any Other (A.1.3 + B.1.3)",
-      "C.2 Indirect (A.2+B.2)",
-      "C.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs) (A.2.1 + B.2.1)",
-      "C.2.2 Any Other- Indirect Exposure (A.2.2 + B.2.2)",
-      "NIL",
-      "OTHERS"
     ]
   }
 }

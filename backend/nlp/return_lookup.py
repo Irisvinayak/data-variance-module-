@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from typing import Any, Dict, Optional
 
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 _TTL = float(os.getenv("DV_NLP_RETURN_LOOKUP_TTL_SEC", "3600"))
 _cache: Dict[str, Any] | None = None
 _cache_ts: float = 0.0
+_lock = threading.Lock()
+_rebuild_in_progress = False
 
 
 def _strip_dp_suffix(table_name: str) -> str:
@@ -86,11 +89,52 @@ def _build_lookup() -> Dict[str, Dict[str, Any]]:
     return lookup
 
 
+def _rebuild_in_background() -> None:
+    """Runs _build_lookup() off the request thread and swaps the cache in
+    when done. Any exception just leaves the stale cache in place — a table
+    lookup failing entirely is worse than serving slightly-stale metadata."""
+    global _cache, _cache_ts, _rebuild_in_progress
+    try:
+        new_lookup = _build_lookup()
+        with _lock:
+            _cache = new_lookup
+            _cache_ts = time.monotonic()
+    except Exception:
+        logger.exception("[nlp.return_lookup] Background cache rebuild failed — keeping stale cache")
+    finally:
+        with _lock:
+            _rebuild_in_progress = False
+
+
 def _get_lookup() -> Dict[str, Dict[str, Any]]:
-    global _cache, _cache_ts
-    if _cache is None or (time.monotonic() - _cache_ts) >= _TTL:
-        _cache = _build_lookup()
-        _cache_ts = time.monotonic()
+    """As the number of returns grows, _build_lookup()'s O(returns) XML
+    read+parse cost grows with it. Rebuilding synchronously on whichever
+    user's request happens to land right after the TTL expires — the
+    original behavior — turns that growth into a periodic, user-facing
+    latency spike, and with no locking, concurrent requests at that moment
+    would each kick off their own redundant rebuild (thundering herd).
+
+    Fix: once a cache exists, an expired cache is still served immediately
+    (return metadata a few minutes stale is harmless) while exactly one
+    background thread refreshes it — every other caller during that window
+    gets the same stale-but-fast answer instead of paying for or piling up
+    rebuilds. Only the very first call (no cache yet) blocks, since there's
+    nothing valid to serve in the meantime."""
+    global _cache, _cache_ts, _rebuild_in_progress
+
+    if _cache is None:
+        with _lock:
+            if _cache is None:  # re-check: another thread may have built it while we waited for the lock
+                _cache = _build_lookup()
+                _cache_ts = time.monotonic()
+        return _cache
+
+    if (time.monotonic() - _cache_ts) >= _TTL:
+        with _lock:
+            if not _rebuild_in_progress:
+                _rebuild_in_progress = True
+                threading.Thread(target=_rebuild_in_background, daemon=True).start()
+
     return _cache
 
 
@@ -103,6 +147,10 @@ def get_return_for_table(table_name: str) -> Optional[Dict[str, Any]]:
 
 
 def invalidate() -> None:
-    """Force the next get_return_for_table() call to re-read the XML."""
-    global _cache
-    _cache = None
+    """Force the next get_return_for_table() call to re-read the XML
+    synchronously (bypasses stale-while-revalidate — the caller explicitly
+    wants a guaranteed-fresh read, e.g. tests or an admin action)."""
+    global _cache, _cache_ts
+    with _lock:
+        _cache = None
+        _cache_ts = 0.0

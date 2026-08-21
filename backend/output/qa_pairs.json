@@ -1,0 +1,727 @@
+[
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A",
+    "question": "What is the provision made for possible losses on doubtful advances, comparing domestic and overseas operations?",
+    "sql": "SELECT RISK_CATEGORY, PROVISION_MADE_LOSSES_DOM, PROVISION_MADE_LOSSES_O FROM CIMS_RAQ_Q_SEC2_PART_A WHERE RISK_CATEGORY = '3. Doubtful' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_A_DOM",
+    "question": "How much of the domestic loan book falls under SMA-2 (60 to 90 days overdue) compared to the total loan assets?",
+    "sql": "SELECT PERIOD_DELINQUENCY, TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_A_DOM WHERE PERIOD_DELINQUENCY IN ('ii.a.3 Overdue for 60 to 90 days (SMA -2)', 'C. Total ( A + B)') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_A_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_A",
+    "question": "What is the closing-period breakdown of loans and advances into standard, sub-standard, doubtful and loss categories, domestic operations?",
+    "sql": "SELECT STANDARD_DOM, SUBSTANDARD_DOM, DOUBTFUL_DOM, LOSS_DOM FROM CIMS_RAQ_Q_SEC4_PART_A WHERE MOVEMENT_FROM = 'F. Outstanding Loans and Advances at end of period (A+B-C-D+E)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_B",
+    "question": "How much of the NPA reduction during the period came from actual recoveries versus write-offs, domestic operations?",
+    "sql": "SELECT MOVEMENT_FROM, SUBSTANDARD_DOM, DOUBTFUL_DOM, LOSS_DOM, TOTAL_DOM FROM CIMS_RAQ_Q_SEC4_PART_B WHERE MOVEMENT_FROM IN ('C.2 Due to Actual Recoveries', 'C.3 Due to Write-offs') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "How much of the restructured standard advances slipped into NPA status during the period, across domestic, overseas and global operations?",
+    "sql": "SELECT DOMESTIC, OVERSEAS, GLOBAL FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'C2. Slipped to NPAs' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC9_SENSEC_PARTA",
+    "question": "What is the bank's domestic exposure to equity-oriented mutual funds under capital-market sensitive-sector exposure?",
+    "sql": "SELECT EXPOSURE_DOM, GROSS_AMT_OS_DOM FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTA WHERE DESCRIPTION = '3. Equity Oriented Mutual Funds' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC9_SENSEC_PARTB",
+    "question": "How does the bank's direct exposure to priority-sector-qualifying residential housing loans compare to its commercial real estate exposure, domestic operations?",
+    "sql": "SELECT DESCRIPTION, TOT_EXPO_DOM FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTB WHERE DESCRIPTION IN ('A.1.1.a Residential Mortgages - Individual Housing Loans qualifying for Priority Sector', 'A.1.2 Commercial Real Estate') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTB)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC10",
+    "question": "What is the direct funded exposure to Micro Enterprises under MSME, and how much of it is impaired?",
+    "sql": "SELECT FUN_EXP, OF_WHC_IMPAIR FROM CIMS_RAQ_Q_SEC10 WHERE TRIM(DESCRIPTION) = 'B.1.1 Micro Enterprises' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC10)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC",
+    "question": "What mean effective interest rate is charged on gold loans, and what level of gross NPAs has that portfolio reached?",
+    "sql": "SELECT ITEM, VALUE FROM CIMS_RAQ_Q_SEC_12_MISC WHERE ITEM IN ('b. Mean effective Interest rate charged', 'e. Gross NPAs') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_B",
+    "question": "Of the reduction in NPA provisions during the period, how much was on account of write-offs versus other reasons, globally?",
+    "sql": "SELECT MOVEMENT_PROVISION_NPA, GLOBAL FROM CIMS_RAQ_Q_SEC2_PART_B WHERE TRIM(MOVEMENT_PROVISION_NPA) IN ('C1. On account of Write Offs (Prov. Utilised for write-off)', 'C2. Others') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_INFRA_BRKUP",
+    "question": "For the Roads and Bridges infrastructure sub-sector, what is the SMA-2 exposure and the gross NPA at the end of the period?",
+    "sql": "SELECT SMA_2, GROSS_NPA_END FROM CIMS_RAQ_Q_SEC8_INFRA_BRKUP WHERE INDUSTRY_NAME = '1.1 Roads and Bridges' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_INFRA_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_SEC_CREDIT",
+    "question": "How does total credit exposure compare across Micro, Small and Medium industry categories under sectoral credit?",
+    "sql": "SELECT ITEM, TL_EXP FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT WHERE ITEM IN ('2.1 Micro', '2.2 Small', '2.3 Medium') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_NPA",
+    "question": "What is the net NPA figure after applying netting items, for domestic operations?",
+    "sql": "SELECT RISK_CATEGORY, OUTSTANDING_AMT_DOM FROM CIMS_RAQ_Q_SEC2_PART_A_NPA WHERE RISK_CATEGORY IN ('Net NPAs', 'Netting Items for NPAs') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_NPA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER",
+    "question": "Of the government paper excluded from the portfolio analysis, how much is treasury bills versus GOI securities versus state government securities?",
+    "sql": "SELECT DESCRIPTION, VALUE FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER WHERE DESCRIPTION IN ('(a) Treasury bills', '(b) GOI Securities(Bonds)', '(c) State Govt. securities') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_IND_BRKUP",
+    "question": "How does the gross NPA for the Coal industry compare to the gross NPA across all industries combined?",
+    "sql": "SELECT INDUSTRY_NAME, GROSS_NPA_END FROM CIMS_RAQ_Q_SEC8_IND_BRKUP WHERE INDUSTRY_NAME IN ('A.1 Coal', 'All Industries (A to S)') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_IND_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_B_DOM",
+    "question": "What is the total off-balance-sheet investment book for domestic operations, and how much of it is inter-bank assets?",
+    "sql": "SELECT TOTAL_OIBA, INTER_BANK_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_B_DOM WHERE TRIM(PERIOD_DELINQUENCY) = 'C. TOTAL (A+B)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_B_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_C_O",
+    "question": "What is the total overseas loan book, and how much of it falls in the SMA-2 (60 to 90 day overdue) bucket?",
+    "sql": "SELECT PERIOD_DELINQUENCY, TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_C_O WHERE TRIM(PERIOD_DELINQUENCY) IN ('ii.a.3 Overdue for 60 to 90 days (SMA -2)', 'C. Total ( A + B)') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_C_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_D_O",
+    "question": "What is the total overseas off-balance-sheet investment book, broken down between performing and non-performing categories?",
+    "sql": "SELECT PERIOD_DELINQUENCY, TOTAL_OIBA FROM CIMS_RAQ_Q_SEC1_PART_D_O WHERE TRIM(PERIOD_DELINQUENCY) IN ('A. PERFORMING (1 + 2)', 'B. NON-PERFORMING (3 + 4 + 5)') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_D_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_LAST_DATE_PORT",
+    "question": "When was the last portfolio review conducted for domestic loans and advances?",
+    "sql": "SELECT VALUE FROM CIMS_RAQ_Q_SEC1_LAST_DATE_PORT WHERE TRIM(DESCRIPTION) = '* Last date of portfolio review (dd/mm/yyyy)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_LAST_DATE_PORT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_LAST_DATE_PORT",
+    "question": "When was the last provisioning review conducted, compared to the last portfolio classification review?",
+    "sql": "SELECT DESCRIPTION, VALUE FROM CIMS_RAQ_Q_SEC2_LAST_DATE_PORT WHERE TRIM(DESCRIPTION) IN ('* Date of last portfolio review / classification (dd/mm/yyyy)', '@ Date of last provisioning review (dd/mm/yyyy)') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_LAST_DATE_PORT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_MEMO",
+    "question": "How much government-guaranteed NPA interest remains unrecognized, broken down by age: less than 18 months versus 18 months and over?",
+    "sql": "SELECT MEMORANDUM_ITEM, OUTSTANDING_AMT_DOM FROM CIMS_RAQ_Q_SEC2_PART_A_MEMO WHERE TRIM(MEMORANDUM_ITEM) IN ('(a) for less than 18 months', '(b) for 18 months and over') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_MEMO)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC6_PART_A",
+    "question": "What is the book value versus market value of the bank's SLR investments?",
+    "sql": "SELECT TOTAL_BV, TOTAL_MV FROM CIMS_RAQ_Q_SEC6_PART_A WHERE TRIM(CATEGORY_INVESTMENT_DOM_OPR) = 'A. SLR Investments - Total' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC6_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC7_EXP_CR",
+    "question": "How does export credit disbursed during the quarter under pre-shipment compare to post-shipment, and how many Gold Cards were issued?",
+    "sql": "SELECT DISBURSH_PRE_TOTAL, DISBURSH_POST_TOTAL, NO_GOLD_CARD_ISSUED FROM CIMS_RAQ_Q_SEC7_EXP_CR WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC7_EXP_CR)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T2",
+    "question": "How does the SMA-2 exposure compare between the industry and services sub-segments of MSME?",
+    "sql": "SELECT IND_MICRO, SER_MICRO FROM CIMS_RAQ_Q_SEC_12_MISC_T2 WHERE TRIM(CATEGORY) = 'SMA-2' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T2)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T3",
+    "question": "What is the weighted average interest rate on retail advances linked to the repo rate versus MCLR?",
+    "sql": "SELECT DESCRIPTION, WEGHT_AVG_INT FROM CIMS_RAQ_Q_SEC_12_MISC_T3 WHERE TRIM(DESCRIPTION) IN ('Repo', 'MCLR') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T3)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T4",
+    "question": "What is the gross NPA for regulatory retail advances compared to wholesale advances?",
+    "sql": "SELECT DESCRIPTION, GROSS_ADV, GROSS_NPA FROM CIMS_RAQ_Q_SEC_12_MISC_T4 WHERE TRIM(DESCRIPTION) IN ('Regulatory Retail', 'Wholesale Advances') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T4)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC10",
+    "question": "What is the total combined exposure to MFIs/SHGs and MSMEs reported for domestic operations under Section 10?",
+    "sql": "SELECT TRIM(DESCRIPTION) AS description, FUN_EXP, NON_FUN_EXP, TOTAL FROM CIMS_RAQ_Q_SEC10 WHERE TRIM(DESCRIPTION) IN ('A. Micro Finance Institutions/ Self Help Groups','B. Micro, Small and Medium Enterprises') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC10)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC10",
+    "question": "What is the weighted average interest rate charged on direct exposure to Small Enterprises under MSME?",
+    "sql": "SELECT INT_WGT_AVG_RATE FROM CIMS_RAQ_Q_SEC10 WHERE TRIM(DESCRIPTION) = 'B.1.2 Small Enterprises' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC10)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER",
+    "question": "What is the total value of government paper excluded from the portfolio analysis, and how does it compare to the sum of its individual components?",
+    "sql": "SELECT TRIM(DESCRIPTION) AS description, VALUE FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER WHERE TRIM(DESCRIPTION) = 'Total' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER",
+    "question": "How much state government securities are excluded from the portfolio analysis?",
+    "sql": "SELECT VALUE FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER WHERE TRIM(DESCRIPTION) = '(c) State Govt. securities' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_LAST_DATE_PORT",
+    "question": "What date does the bank report as its last domestic portfolio review?",
+    "sql": "SELECT VALUE FROM CIMS_RAQ_Q_SEC1_LAST_DATE_PORT WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_LAST_DATE_PORT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_LAST_DATE_PORT",
+    "question": "Show the description and value reported for the last portfolio review entry for the most recent quarter.",
+    "sql": "SELECT DESCRIPTION, VALUE, RDATE FROM CIMS_RAQ_Q_SEC1_LAST_DATE_PORT WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_LAST_DATE_PORT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_A_DOM",
+    "question": "What fraction of the domestic loan book is non-performing versus performing?",
+    "sql": "SELECT TRIM(PERIOD_DELINQUENCY) AS period_delinquency, TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_A_DOM WHERE TRIM(PERIOD_DELINQUENCY) IN ('A. PERFORMING(i + ii)', 'B. NON-PERFORMING (iii + iv + v)') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_A_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_A_DOM",
+    "question": "How much of the domestic loan book is classified as Doubtful?",
+    "sql": "SELECT TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_A_DOM WHERE TRIM(PERIOD_DELINQUENCY) = 'iv) Doubtful' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_A_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_B_DOM",
+    "question": "What is the current (not overdue) portion of the domestic off-balance-sheet investment book?",
+    "sql": "SELECT TOTAL_OIBA FROM CIMS_RAQ_Q_SEC1_PART_B_DOM WHERE TRIM(PERIOD_DELINQUENCY) = '1) Current' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_B_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_B_DOM",
+    "question": "How much commercial paper and notes/bonds of corporates are classified as Sub-standard in the domestic OIBA book?",
+    "sql": "SELECT COMMERCIAL_PAPER, NOTE_BONDS_CORPORATE FROM CIMS_RAQ_Q_SEC1_PART_B_DOM WHERE TRIM(PERIOD_DELINQUENCY) = '3) Substandard' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_B_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_C_O",
+    "question": "What proportion of the overseas loan book is current versus overdue?",
+    "sql": "SELECT TRIM(PERIOD_DELINQUENCY) AS period_delinquency, TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_C_O WHERE TRIM(PERIOD_DELINQUENCY) IN ('i) Current', 'ii) Overdue [ii.a + ii.b]') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_C_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_C_O",
+    "question": "How much of the overseas loan book falls under Loss classification?",
+    "sql": "SELECT TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_C_O WHERE TRIM(PERIOD_DELINQUENCY) = 'v) Loss' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_C_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_D_O",
+    "question": "How much of the overseas off-balance-sheet investment book is classified as Doubtful?",
+    "sql": "SELECT TOTAL_OIBA FROM CIMS_RAQ_Q_SEC1_PART_D_O WHERE TRIM(PERIOD_DELINQUENCY) = '4) Doubtful' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_D_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_D_O",
+    "question": "What is the overdue breakdown (30-60 vs 60-90 days) of the overseas off-balance-sheet investment book?",
+    "sql": "SELECT TRIM(PERIOD_DELINQUENCY) AS period_delinquency, TOTAL_OIBA FROM CIMS_RAQ_Q_SEC1_PART_D_O WHERE TRIM(PERIOD_DELINQUENCY) IN ('2.2 Overdue for 30 to 60 days', '2.3 Overdue for 60 to 90 days') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_D_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_LAST_DATE_PORT",
+    "question": "What date was the last provisioning review carried out?",
+    "sql": "SELECT VALUE FROM CIMS_RAQ_Q_SEC2_LAST_DATE_PORT WHERE TRIM(DESCRIPTION) = '@ Date of last provisioning review (dd/mm/yyyy)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_LAST_DATE_PORT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_LAST_DATE_PORT",
+    "question": "List both the portfolio classification review date and the provisioning review date reported for the latest quarter.",
+    "sql": "SELECT DESCRIPTION, VALUE FROM CIMS_RAQ_Q_SEC2_LAST_DATE_PORT WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_LAST_DATE_PORT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A",
+    "question": "What is the total outstanding amount and provision across all risk categories, domestic operations?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, PROVISION_MADE_LOSSES_DOM FROM CIMS_RAQ_Q_SEC2_PART_A WHERE TRIM(RISK_CATEGORY) = 'Total (1 to 4)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A",
+    "question": "How much standard advances outstanding does the bank have, domestic vs overseas?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A WHERE TRIM(RISK_CATEGORY) = '1. Standard #' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_MEMO",
+    "question": "What is the total unrecognised interest on government-guaranteed non-performing loans?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A_MEMO WHERE TRIM(MEMORANDUM_ITEM) = 'Amount of interest not recognised on the above Government & Government guaranteed loans (Break-up)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_MEMO)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_MEMO",
+    "question": "How much government-guaranteed non-performing loan amount is reported in the memorandum items, domestic operations?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM FROM CIMS_RAQ_Q_SEC2_PART_A_MEMO WHERE TRIM(MEMORANDUM_ITEM) LIKE '# Include amount%' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_MEMO)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_NPA",
+    "question": "What is the gross netting adjustment applied to arrive at net NPAs, domestic and overseas?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A_NPA WHERE TRIM(RISK_CATEGORY) = 'Netting Items for NPAs' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_NPA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_NPA",
+    "question": "What is the net NPA amount for overseas operations?",
+    "sql": "SELECT OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A_NPA WHERE TRIM(RISK_CATEGORY) = 'Net NPAs' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_NPA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_B",
+    "question": "What was the opening and closing balance of NPA provisions for the period, globally?",
+    "sql": "SELECT TRIM(MOVEMENT_PROVISION_NPA) AS movement_provision_npa, GLOBAL FROM CIMS_RAQ_Q_SEC2_PART_B WHERE TRIM(MOVEMENT_PROVISION_NPA) IN ('A. Amount of Provisions for NPAs at beginning of the FY', 'D. Amount of Provisions for NPAs at end of the FY/Period') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_B",
+    "question": "How much new NPA provision was added during the period, domestic operations?",
+    "sql": "SELECT DOMESTIC FROM CIMS_RAQ_Q_SEC2_PART_B WHERE TRIM(MOVEMENT_PROVISION_NPA) = 'B. New additions during the Period (April to Date)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "What was the opening balance of restructured standard advances at the start of the period, compared to the closing balance?",
+    "sql": "SELECT TRIM(MOVEMENT_RESTRUCTURE_STD_LA) AS movement, DOMESTIC FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) IN ('A. Amount of Restructured Standard Loans/Advances at beginning of the FY/Period', 'D. Amount of Restructured Standard Loans/Advances at end of the FY/Period') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "How much of the restructured standard advances were sold to ARCs or other entities during the period?",
+    "sql": "SELECT DOMESTIC, OVERSEAS FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'C4. Sold to ARCs/Others' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_A",
+    "question": "What is the excess or deficit in provisions held against the required provisions estimate, domestic operations?",
+    "sql": "SELECT STANDARD_DOM FROM CIMS_RAQ_Q_SEC4_PART_A WHERE TRIM(MOVEMENT_FROM) = 'I. Excess/Deficit in Provisions Held (G-H)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_A",
+    "question": "How much did the bank disburse in new loans and advances during the period, domestic operations?",
+    "sql": "SELECT STANDARD_DOM, TOTAL_DOM FROM CIMS_RAQ_Q_SEC4_PART_A WHERE TRIM(MOVEMENT_FROM) = 'B. Loans and Advances Disbursed during April to Date' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_B",
+    "question": "How many NPAs originated from standard advances during the period, including LC/BG devolvement?",
+    "sql": "SELECT TOTAL_DOM FROM CIMS_RAQ_Q_SEC4_PART_B WHERE TRIM(MOVEMENT_FROM) = 'B.1 From Standard Advances (incl. Devolvement of LCs, BGs, etc)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_B",
+    "question": "What was the NPA level at the beginning versus the end of the financial year, domestic operations?",
+    "sql": "SELECT TRIM(MOVEMENT_FROM) AS movement, TOTAL_DOM FROM CIMS_RAQ_Q_SEC4_PART_B WHERE TRIM(MOVEMENT_FROM) IN ('A. NPAs at the beginning of the FY', 'G. NPAs at the end of the Period') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC6_PART_A",
+    "question": "What is the book value versus market value of the bank's total equity investments?",
+    "sql": "SELECT TOTAL_BV, TOTAL_MV FROM CIMS_RAQ_Q_SEC6_PART_A WHERE TRIM(CATEGORY_INVESTMENT_DOM_OPR) = 'C. Equities - Total' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC6_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC6_PART_A",
+    "question": "How much of the bank's debt securities investments are quoted versus unquoted?",
+    "sql": "SELECT TRIM(CATEGORY_INVESTMENT_DOM_OPR) AS category, TOTAL_BV FROM CIMS_RAQ_Q_SEC6_PART_A WHERE TRIM(CATEGORY_INVESTMENT_DOM_OPR) IN ('B.a Debt Securities - Quoted - Total', 'B.b Debt Securities - Unquoted - Total') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC6_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC7_EXP_CR",
+    "question": "What is the total balance outstanding at the end of the quarter for export credit, pre-shipment versus post-shipment?",
+    "sql": "SELECT BAL_OUT_PRE_TOTAL, BAL_OUT_POST_TOTAL, BAL_OUT_TOTAL FROM CIMS_RAQ_Q_SEC7_EXP_CR WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC7_EXP_CR)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC7_EXP_CR",
+    "question": "How much export credit was disbursed via PCFC during the quarter, pre-shipment?",
+    "sql": "SELECT DISBURSH_PRE_PCFC FROM CIMS_RAQ_Q_SEC7_EXP_CR WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC7_EXP_CR)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_IND_BRKUP",
+    "question": "Which industry sub-sector has the highest exposure under SMA-2, and how does the Textiles sector's exposure compare?",
+    "sql": "SELECT INDUSTRY_NAME, SMA_2 FROM CIMS_RAQ_Q_SEC8_IND_BRKUP WHERE TRIM(INDUSTRY_NAME) = 'D. Textiles' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_IND_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_IND_BRKUP",
+    "question": "What is the total funded and non-funded credit exposure to the Gems and Jewellery industry?",
+    "sql": "SELECT TL_F_CR_EXP, TL_NF_CR_EXP FROM CIMS_RAQ_Q_SEC8_IND_BRKUP WHERE TRIM(INDUSTRY_NAME) = 'P. Gems and Jewellery' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_IND_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_INFRA_BRKUP",
+    "question": "What is the credit exposure and gross NPA at the end of the period for Telecommunication towers?",
+    "sql": "SELECT TL_EXP, GROSS_NPA_END FROM CIMS_RAQ_Q_SEC8_INFRA_BRKUP WHERE TRIM(INDUSTRY_NAME) = '4.2 Telecommunication towers' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_INFRA_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_INFRA_BRKUP",
+    "question": "How much has been written off against Electricity Generation exposure during the year?",
+    "sql": "SELECT WRITE_OFFS FROM CIMS_RAQ_Q_SEC8_INFRA_BRKUP WHERE TRIM(INDUSTRY_NAME) = '2.1 Electricity Generation' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_INFRA_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_SEC_CREDIT",
+    "question": "What is the total credit exposure to agriculture and allied activities, and how much of it is direct versus indirect?",
+    "sql": "SELECT TRIM(ITEM) AS item, TL_EXP FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT WHERE TRIM(ITEM) IN ('1. Agriculture and Allied Activities', '1.1 Direct', '1.2 Indirect') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_SEC_CREDIT",
+    "question": "How does gross NPA in the retail trade sub-sector compare to wholesale trade?",
+    "sql": "SELECT TRIM(ITEM) AS item, GROSS_NPA_END FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT WHERE TRIM(ITEM) IN ('3.4.1 Wholesale Trade (other than Food Procurement)', '3.4.2 Retail Trade') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC9_SENSEC_PARTA",
+    "question": "What is the bank's total capital market exposure combining fund-based, non-fund-based and investment components?",
+    "sql": "SELECT EXPOSURE_DOM, EXPOSURE_OVE FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTA WHERE TRIM(DESCRIPTION) = 'Total Capital Market Exposure (A1 + A2 + A3)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC9_SENSEC_PARTA",
+    "question": "How much financial guarantee exposure does the bank have to share and stock brokers?",
+    "sql": "SELECT EXPOSURE_DOM FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTA WHERE TRIM(DESCRIPTION) = '2. Share and Stock Brokers' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC9_SENSEC_PARTB",
+    "question": "What is the bank's total credit and investment exposure to the real estate sector combined?",
+    "sql": "SELECT TOT_EXPO_DOM, TOT_EXPO_OVE FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTB WHERE TRIM(DESCRIPTION) = 'C Total Credit and Investment' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTB)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC9_SENSEC_PARTB",
+    "question": "How much of the real estate exposure is via indirect funded and non-funded exposure to NHB and Housing Finance Companies?",
+    "sql": "SELECT TOT_EXPO_DOM FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTB WHERE TRIM(DESCRIPTION) = 'A.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC9_SENSEC_PARTB)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC",
+    "question": "How much gold has been pledged against gold loans, and what is the LTV utilisation on that book?",
+    "sql": "SELECT TRIM(ITEM) AS item, VALUE FROM CIMS_RAQ_Q_SEC_12_MISC WHERE TRIM(ITEM) IN ('c. Value of Gold pledged against the loan', 'd. LTV Utilisation') AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC",
+    "question": "How much incremental NPA arose in the gold loan book during the quarter?",
+    "sql": "SELECT VALUE FROM CIMS_RAQ_Q_SEC_12_MISC WHERE TRIM(ITEM) = 'f. Incremental NPAs during the Quarter' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T2",
+    "question": "How does the Sub Standard exposure compare between industry and services segments of MSME?",
+    "sql": "SELECT IND_MICRO, SER_MICRO FROM CIMS_RAQ_Q_SEC_12_MISC_T2 WHERE TRIM(CATEGORY) = 'Sub Standard' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T2)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T2",
+    "question": "What is the total (industry plus services) Doubtful exposure under MSME for medium enterprises?",
+    "sql": "SELECT TOT_MEDIUM FROM CIMS_RAQ_Q_SEC_12_MISC_T2 WHERE TRIM(CATEGORY) = 'Doubtful' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T2)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T3",
+    "question": "What is the minimum and maximum interest rate charged on retail advances linked to the External Benchmark based Lending Rate (EBLR)?",
+    "sql": "SELECT MIN_INT, MAX_INT FROM CIMS_RAQ_Q_SEC_12_MISC_T3 WHERE TRIM(DESCRIPTION) = 'External Benchmark based Lending Rate(EBLR)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T3)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T3",
+    "question": "What is the total amount of retail advances reported across all benchmark categories?",
+    "sql": "SELECT AMT FROM CIMS_RAQ_Q_SEC_12_MISC_T3 WHERE TRIM(DESCRIPTION) = 'Total Retail Advances' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T3)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T4",
+    "question": "What is the overall gross NPA across total advances, and how does it compare to gross advances?",
+    "sql": "SELECT GROSS_ADV, GROSS_NPA FROM CIMS_RAQ_Q_SEC_12_MISC_T4 WHERE TRIM(DESCRIPTION) = 'Total Advances' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T4)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T4",
+    "question": "What are the gross advances reported for wholesale advances?",
+    "sql": "SELECT GROSS_ADV FROM CIMS_RAQ_Q_SEC_12_MISC_T4 WHERE TRIM(DESCRIPTION) = 'Wholesale Advances' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T4)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A",
+    "question": "Show me the total risk exposure for RAQ",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A WHERE TRIM(RISK_CATEGORY) = 'Total (1 to 4)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A",
+    "question": "What is the total risk exposure across all risk categories, domestic and overseas combined?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A WHERE TRIM(RISK_CATEGORY) = 'Total (1 to 4)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A",
+    "question": "What is the overall risk asset classification exposure for the bank?",
+    "sql": "SELECT RISK_CATEGORY, OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A) ORDER BY RISK_CATEGORY"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER",
+    "question": "What is the total government paper excluded from portfolio for RAQ?",
+    "sql": "SELECT VALUE FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER WHERE TRIM(DESCRIPTION) = 'Total' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_EXC_GOVT_PAPER)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_A_DOM",
+    "question": "What is the total domestic loan exposure for RAQ?",
+    "sql": "SELECT TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_A_DOM WHERE TRIM(PERIOD_DELINQUENCY) = 'C. Total ( A + B)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_A_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_B_DOM",
+    "question": "What is the total domestic investment exposure for RAQ?",
+    "sql": "SELECT TOTAL_OIBA FROM CIMS_RAQ_Q_SEC1_PART_B_DOM WHERE TRIM(PERIOD_DELINQUENCY) = 'C. TOTAL (A+B)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_B_DOM)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_C_O",
+    "question": "What is the total overseas loan exposure for RAQ?",
+    "sql": "SELECT TOTAL_LOAN_ASSETS FROM CIMS_RAQ_Q_SEC1_PART_C_O WHERE TRIM(PERIOD_DELINQUENCY) = 'C. Total ( A + B)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_C_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC1_PART_D_O",
+    "question": "What is the total overseas investment exposure for RAQ?",
+    "sql": "SELECT TOTAL_OIBA FROM CIMS_RAQ_Q_SEC1_PART_D_O WHERE TRIM(PERIOD_DELINQUENCY) = 'C. TOTAL (A+B)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC1_PART_D_O)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC4_PART_A",
+    "question": "What is the total upgrade and downgrade movement for RAQ?",
+    "sql": "SELECT STANDARD_DOM, TOTAL_DOM FROM CIMS_RAQ_Q_SEC4_PART_A WHERE TRIM(MOVEMENT_FROM) = 'Total Upgrade/Downgrade' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC4_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC6_PART_A",
+    "question": "What is the total SLR investment for RAQ?",
+    "sql": "SELECT TOTAL_BV, TOTAL_MV FROM CIMS_RAQ_Q_SEC6_PART_A WHERE TRIM(CATEGORY_INVESTMENT_DOM_OPR) = 'A. SLR Investments - Total' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC6_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC6_PART_A",
+    "question": "What is the total domestic investment book for RAQ?",
+    "sql": "SELECT TOTAL_BV, TOTAL_MV FROM CIMS_RAQ_Q_SEC6_PART_A WHERE TRIM(CATEGORY_INVESTMENT_DOM_OPR) = 'TOTAL Investments (A+B+C) - Domestic Operations' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC6_PART_A)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_IND_BRKUP",
+    "question": "What is the total industry credit exposure for RAQ?",
+    "sql": "SELECT TL_EXP FROM CIMS_RAQ_Q_SEC8_IND_BRKUP WHERE TRIM(INDUSTRY_NAME) = 'All Industries (A to S)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_IND_BRKUP)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_A_NPA",
+    "question": "What is the net NPA for RAQ?",
+    "sql": "SELECT OUTSTANDING_AMT_DOM, OUTSTANDING_AMT_O FROM CIMS_RAQ_Q_SEC2_PART_A_NPA WHERE TRIM(RISK_CATEGORY) = 'Net NPAs' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_A_NPA)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC2_PART_B",
+    "question": "What is the total NPA provision for RAQ?",
+    "sql": "SELECT GLOBAL FROM CIMS_RAQ_Q_SEC2_PART_B WHERE TRIM(MOVEMENT_PROVISION_NPA) = 'D. Amount of Provisions for NPAs at end of the FY/Period' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC2_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "What is the total restructured standard advances for RAQ?",
+    "sql": "SELECT DOMESTIC, OVERSEAS, GLOBAL FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'D. Amount of Restructured Standard Loans/Advances at end of the FY/Period' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC7_EXP_CR",
+    "question": "What is the total export credit exposure for RAQ?",
+    "sql": "SELECT BAL_OUT_TOTAL FROM CIMS_RAQ_Q_SEC7_EXP_CR WHERE RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC7_EXP_CR)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC8_SEC_CREDIT",
+    "question": "What is the total sectoral credit exposure for RAQ?",
+    "sql": "SELECT TL_EXP FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT WHERE TRIM(ITEM) = 'I. Gross Advances (II + III)' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC8_SEC_CREDIT)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC_12_MISC_T2",
+    "question": "What is the total standard (non-SMA) MSME exposure for RAQ?",
+    "sql": "SELECT TOT_MICRO, TOT_SMALL, TOT_MEDIUM FROM CIMS_RAQ_Q_SEC_12_MISC_T2 WHERE TRIM(CATEGORY) = 'Non SMA Standard' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC_12_MISC_T2)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "How much restructured standard advances are outstanding at the end of the period?",
+    "sql": "SELECT DOMESTIC, OVERSEAS, GLOBAL FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'D. Amount of Restructured Standard Loans/Advances at end of the FY/Period' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "What is the closing balance of restructured standard advances for RAQ?",
+    "sql": "SELECT DOMESTIC, OVERSEAS, GLOBAL FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'D. Amount of Restructured Standard Loans/Advances at end of the FY/Period' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "Show restructured standard advances at end of period for RAQ",
+    "sql": "SELECT DOMESTIC, OVERSEAS, GLOBAL FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'D. Amount of Restructured Standard Loans/Advances at end of the FY/Period' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_RAQ_Q_SEC3_PART_B",
+    "question": "What is the restructured standard loans and advances balance for RAQ?",
+    "sql": "SELECT DOMESTIC, OVERSEAS, GLOBAL FROM CIMS_RAQ_Q_SEC3_PART_B WHERE TRIM(MOVEMENT_RESTRUCTURE_STD_LA) = 'D. Amount of Restructured Standard Loans/Advances at end of the FY/Period' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_RAQ_Q_SEC3_PART_B)"
+  },
+  {
+    "table": "CIMS_ALE_Q_SEC_2A",
+    "question": "What are the off-balance sheet exposures for domestic operations, credit equivalent from ale?",
+    "sql": "SELECT CR_EQV_DOM AS total_credit_equivalent_domestic FROM CIMS_ALE_Q_SEC_2A WHERE CONTRACTS = 'Total OBS Exposure' AND RDATE = (SELECT MAX(RDATE) FROM CIMS_ALE_Q_SEC_2A)"
+  },
+  {
+    "table": "cims_ale_q_anx_1_b",
+    "question": "Which overseas bank account categories have credit entry amounts exceeding debit entry amounts in the latest reported quarter?",
+    "sql": "SELECT ac_bnk_ind, rdate, db_amt, cr_amt FROM cims_ale_q_anx_1_b WHERE cr_amt > db_amt AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_anx_1_b) ORDER BY cr_amt DESC"
+  },
+  {
+    "table": "cims_ale_q_anx_1_bal",
+    "question": "As of the latest reporting date, what is the balance in current accounts held with banks in India?",
+    "sql": "SELECT rdate, description, value FROM cims_ale_q_anx_1_bal WHERE description = 'With banks in India ' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_anx_1_bal)"
+  },
+  {
+    "table": "cims_ale_q_anx_1_bal",
+    "question": "Compare the current account balances held with banks in India versus outside India for each reporting date.",
+    "sql": "SELECT rdate, description, value FROM cims_ale_q_anx_1_bal WHERE description IN ('With banks in India ', 'With banks Outside India ') ORDER BY rdate, description"
+  },
+  {
+    "table": "cims_ale_q_anx_1_loss_pro_iba",
+    "question": "Show the trend of Inter Branch Adjustment loss provision amounts reported over the last four quarters.",
+    "sql": "SELECT rdate, value FROM cims_ale_q_anx_1_loss_pro_iba WHERE description = 'Loss provision made for Inter Branch Adjustments, if any' ORDER BY rdate DESC FETCH FIRST 4 ROWS ONLY"
+  },
+  {
+    "table": "cims_ale_q_anx_1_loss_pro_ind",
+    "question": "Can I see the quarter-on-quarter trend of the Loss Provision made for accounts with banks in India over the last four reporting dates?",
+    "sql": "SELECT rdate, code, value FROM cims_ale_q_anx_1_loss_pro_ind WHERE description = 'Loss Provision made for accounts with banks in India, if any ' ORDER BY rdate DESC FETCH FIRST 4 ROWS ONLY"
+  },
+  {
+    "table": "cims_ale_q_gen_info",
+    "question": "What is the current Validation Status and Status of the ALE general info submission for each bank entity code as of the latest reporting date?",
+    "sql": "SELECT code, rdate, description, value FROM cims_ale_q_gen_info WHERE description IN ('Validation Status ', 'Status ') AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_gen_info) ORDER BY code, description"
+  },
+  {
+    "table": "cims_ale_q_sec2_d1",
+    "question": "As of the latest reporting date, what is the total notional principal of derivatives and how much of it was contracted purely for hedging purposes?",
+    "sql": "SELECT derivative, nat_prin_tl, nat_pri_out_tl_dr FROM cims_ale_q_sec2_d1 WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_d1) ORDER BY nat_prin_tl DESC"
+  },
+  {
+    "table": "cims_ale_q_sec2_d1",
+    "question": "For the latest quarter, which derivative categories have breached their PVBP or VaR sanctioned limits based on actual values?",
+    "sql": "SELECT derivative, pvbp_sanc_lmt, pvbp_actual, var_sanc_lmt, vat_actual FROM cims_ale_q_sec2_d1 WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_d1) AND (pvbp_actual > pvbp_sanc_lmt OR vat_actual > var_sanc_lmt)"
+  },
+  {
+    "table": "cims_ale_q_sec2_d2",
+    "question": "Which overseas derivative exposures have breached their PVBP or VaR sanctioned limits as of the latest reporting date?",
+    "sql": "SELECT derivative, pvbp_sanc_lmt, pvbp_actual, var_sanc_lmt, vat_actual, remark FROM cims_ale_q_sec2_d2 WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_d2) AND (pvbp_actual > pvbp_sanc_lmt OR vat_actual > var_sanc_lmt) ORDER BY derivative"
+  },
+  {
+    "table": "cims_ale_q_sec2_e1",
+    "question": "For the IRS (Rupee) line item, what is the total notional principal and how does it break down across trading book pays/receives and hedging book pays/receives?",
+    "sql": "SELECT item, trade_bnk_pays, trade_bnk_rec, hedg_bnk_pays, hedg_bnk_rec, tl_nat_pri FROM cims_ale_q_sec2_e1 WHERE item = '(II) IRS (Rupee)*'"
+  },
+  {
+    "table": "cims_ale_q_sec2_e1",
+    "question": "What is the net PVBP01 and the higher of gross received vs gross paid PVBP01 for the PVBP 01 of X/Y*100 row, along with any remarks?",
+    "sql": "SELECT item, gross_rec_total, gross_paid_rec_total, higher, net_pvbp, remark FROM cims_ale_q_sec2_e1 WHERE item = 'PVBP 01 of X/Y*100'"
+  },
+  {
+    "table": "cims_ale_q_sec2_e2",
+    "question": "For the IRS (Rupee) line item, what is the total notional principal from bank pays and bank receives under both trading and hedging books?",
+    "sql": "SELECT item, trade_bnk_pays, trade_bnk_rec, hedg_bnk_pays, hedg_bnk_rec, tl_nat_pri FROM cims_ale_q_sec2_e2 WHERE item = '(II) IRS (Rupee)*'"
+  },
+  {
+    "table": "cims_ale_q_sec2_e2",
+    "question": "What is the net PVBP01 and the higher of gross received or gross paid PVBP for the PVBP 01 of X/Y*100 row as of the latest reporting date?",
+    "sql": "SELECT item, gross_rec_total, gross_paid_rec_total, higher, net_pvbp, remark FROM cims_ale_q_sec2_e2 WHERE item = 'PVBP 01 of X/Y*100' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_e2)"
+  },
+  {
+    "table": "cims_ale_q_sec2_f1",
+    "question": "For the quarter, what is the at-end-of-quarter notional principal amount of protection bought and sold under 'Amount of Protection Bought / Sold, of which'?",
+    "sql": "SELECT item, at_end_nat_prot_buy, at_end_nat_prot_sell FROM cims_ale_q_sec2_f1 WHERE item = '(II) Amount of Protection Bought / Sold, of which'"
+  },
+  {
+    "table": "cims_ale_q_sec2_f1",
+    "question": "How do physically settled and cash settled credit derivative transactions compare in terms of April-to-date notional principal protection bought and sold?",
+    "sql": "SELECT item, nat_prot_buy, nat_prot_sell FROM cims_ale_q_sec2_f1 WHERE item IN ('    a) physically settled', '    b) cash settled')"
+  },
+  {
+    "table": "cims_ale_q_sec2_f2",
+    "question": "For the latest reporting date, what is the notional principal amount of protection bought and sold at the end of the quarter, excluding number-of-transactions rows?",
+    "sql": "SELECT rdate, item, at_end_nat_prot_buy, at_end_nat_prot_sell FROM cims_ale_q_sec2_f2 WHERE item = '(II) Amount of Protection Bought / Sold, of which' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_f2)"
+  },
+  {
+    "table": "cims_ale_q_sec2_f2",
+    "question": "How does the April-to-date notional principal for physically settled credit derivative protection compare to cash settled protection, for both buyer and seller positions, in the latest quarter?",
+    "sql": "SELECT rdate, item, nat_prot_buy, nat_prot_sell FROM cims_ale_q_sec2_f2 WHERE item IN ('    a) physically settled', '    b) cash settled') AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_f2)"
+  },
+  {
+    "table": "cims_ale_q_sec2_g1_bk_fi",
+    "question": "For the latest reporting date, list each Bank/FI along with its notional amount, current credit exposure and potential future exposure, ordered by notional amount descending.",
+    "sql": "SELECT name_bk_fi, nat_amt, cur_cr_exp, pot_fut_exp FROM cims_ale_q_sec2_g1_bk_fi WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_g1_bk_fi) ORDER BY nat_amt DESC"
+  },
+  {
+    "table": "cims_ale_q_sec2_g2_corp_otr",
+    "question": "For the latest reporting date, list each bank/FI counterparty along with its notional amount, current credit exposure and potential future exposure, ordered by current credit exposure descending.",
+    "sql": "SELECT name_bk_fi, nat_amt, cur_cr_exp, pot_fut_exp FROM cims_ale_q_sec2_g2_corp_otr WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_g2_corp_otr) ORDER BY cur_cr_exp DESC"
+  },
+  {
+    "table": "cims_ale_q_sec_1b",
+    "question": "For the latest reporting date available, what is the total Capital and Reserves under Global Operations, split between total amount and the portion held in forex?",
+    "sql": "SELECT assets, gbl_amt_tot, gbl_amt_frx FROM cims_ale_q_sec_1b WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_1b) ORDER BY assets"
+  },
+  {
+    "table": "cims_ale_q_sec_2a",
+    "question": "For the latest reporting date, what is the total credit equivalent amount for off-balance sheet exposures across domestic and overseas operations combined?",
+    "sql": "SELECT contracts, cr_eqv_dom, cr_eqv_os, cr_eqv_gobl FROM cims_ale_q_sec_2a WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_2a) ORDER BY cr_eqv_gobl DESC"
+  },
+  {
+    "table": "cims_ale_q_sec_2c",
+    "question": "For the latest reporting date, show each contract item along with its notional principal outstanding split between trading book and banking book, and the total credit equivalent outstanding.",
+    "sql": "SELECT contracts, trade_out, bank_out, cr_prin_amt\nFROM cims_ale_q_sec_2c\nWHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_2c)\nORDER BY contracts"
+  },
+  {
+    "table": "cims_ale_q_anx_1_a",
+    "question": "For accounts with banks in India, what are the total debit and credit entry counts and amounts as of the latest reporting date?",
+    "sql": "SELECT ac_bnk_ind, db_no, db_amt, cr_no, cr_amt FROM cims_ale_q_anx_1_a WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_anx_1_a) ORDER BY ac_bnk_ind"
+  },
+  {
+    "table": "cims_ale_q_anx_1_b",
+    "question": "How do credit entries number and amount for overseas bank accounts compare across the last four quarter-end dates?",
+    "sql": "SELECT rdate, ac_bnk_ind, cr_no, cr_amt FROM cims_ale_q_anx_1_b ORDER BY rdate DESC FETCH FIRST 4 ROWS ONLY"
+  },
+  {
+    "table": "cims_ale_q_anx_1_bal",
+    "question": "What is the total balance held in current accounts with banks outside India as of the latest reporting date?",
+    "sql": "SELECT rdate, value FROM cims_ale_q_anx_1_bal WHERE description = 'With banks Outside India ' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_anx_1_bal)"
+  },
+  {
+    "table": "cims_ale_q_anx_1_bal",
+    "question": "Can you compare the current account balances held with banks in India versus with banks outside India for each reporting date?",
+    "sql": "SELECT rdate, description, value FROM cims_ale_q_anx_1_bal WHERE description IN ('With banks in India ', 'With banks Outside India ') ORDER BY rdate, description"
+  },
+  {
+    "table": "cims_ale_q_anx_1_loss_pro_ovr",
+    "question": "Show the quarter-on-quarter trend of loss provisions made for overseas bank accounts over the last four reporting dates.",
+    "sql": "SELECT rdate, value FROM cims_ale_q_anx_1_loss_pro_ovr WHERE description = 'Loss provision made for accounts with banks overseas, if any' ORDER BY rdate DESC FETCH FIRST 4 ROWS ONLY"
+  },
+  {
+    "table": "cims_ale_q_anx_2",
+    "question": "For the latest reporting date, show the ageing bucket-wise break-up of debit and credit entries outstanding, both in number and amount.",
+    "sql": "SELECT ac_bnk_ind, db_no, db_amt, cr_no, cr_amt FROM cims_ale_q_anx_2 WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_anx_2) ORDER BY ac_bnk_ind"
+  },
+  {
+    "table": "cims_ale_q_gen_info",
+    "question": "For our bank code, what is the return name, return version, and status of the ALE quarterly filing as of today?",
+    "sql": "SELECT code, description, value, rdate FROM cims_ale_q_gen_info WHERE description IN ('Return Name', 'Return Version', 'Status ') ORDER BY code, description"
+  },
+  {
+    "table": "cims_ale_q_gen_info",
+    "question": "What is the validation status and the period end date for each reporting date we have on file?",
+    "sql": "SELECT code, rdate, description, value FROM cims_ale_q_gen_info WHERE description IN ('Validation Status ', 'For the Period Ended') ORDER BY rdate DESC, code"
+  },
+  {
+    "table": "cims_ale_q_sec2_d1",
+    "question": "Which derivative categories have actual PVBP or VaR utilization exceeding their sanctioned limits as of the latest reporting date?",
+    "sql": "SELECT derivative, pvbp_sanc_lmt, pvbp_actual, var_sanc_lmt, vat_actual, remark FROM cims_ale_q_sec2_d1 WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_d1) AND (pvbp_actual > pvbp_sanc_lmt OR vat_actual > var_sanc_lmt)"
+  },
+  {
+    "table": "cims_ale_q_sec2_e1",
+    "question": "For the MIBOR / OIS - Fixed leg, what is the gross received (trading book vs banking book) and gross paid PVBP01 total, along with the resulting net PVBP01, for the latest return date?",
+    "sql": "SELECT item, gross_rec_tb, gross_rec_bb, gross_rec_total, gross_paid_rec_total, higher, net_pvbp FROM cims_ale_q_sec2_e1 WHERE item = '    (a)  MIBOR / OIS - Fixed ' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_e1)"
+  },
+  {
+    "table": "cims_ale_q_sec2_e2",
+    "question": "For the IRS (Rupee) line item, what is the total notional principal from trading and hedging pays/receives, and what is the net PVBP01 as reported for the latest RDATE?",
+    "sql": "SELECT item, trade_bnk_pays, trade_bnk_rec, hedg_bnk_pays, hedg_bnk_rec, tl_nat_pri, net_pvbp FROM cims_ale_q_sec2_e2 WHERE item = '(II) IRS (Rupee)*' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_e2)"
+  },
+  {
+    "table": "cims_ale_q_sec2_e2",
+    "question": "Compare Gross Received (TB and BB) against Gross Paid PVBP01 (TB and BB) for the Total (V)+(VI) row across all reported dates, and flag which of Gross Received Total or Gross Paid PVBP01 Total was higher.",
+    "sql": "SELECT rdate, gross_rec_tb, gross_rec_bb, gross_rec_total, gross_paid_rec_tb, gross_paid_rec_bb, gross_paid_rec_total, higher FROM cims_ale_q_sec2_e2 WHERE item = '(X) Total (V) + (VI)' ORDER BY rdate"
+  },
+  {
+    "table": "cims_ale_q_sec2_f1",
+    "question": "For the quarter, what is the total notional principal amount of protection bought versus sold at the end of the month/quarter, split by physically settled and cash settled transactions?",
+    "sql": "SELECT item, at_end_nat_prot_buy, at_end_nat_prot_sell FROM cims_ale_q_sec2_f1 WHERE item IN ('    a) Physically Settled', '    b) Cash Settled')"
+  },
+  {
+    "table": "cims_ale_q_sec2_f1",
+    "question": "How much premium has been paid versus received on credit default swap protection so far this financial year to date?",
+    "sql": "SELECT item, nat_prot_buy, nat_prot_sell FROM cims_ale_q_sec2_f1 WHERE item = 'a) premium paid / received'"
+  },
+  {
+    "table": "cims_ale_q_sec2_f2",
+    "question": "For the latest reporting date, what is the at-end-of-quarter notional principal amount of credit protection bought versus sold under the 'Amount of Protection Bought / Sold' category?",
+    "sql": "SELECT rdate, item, at_end_nat_prot_buy, at_end_nat_prot_sell FROM cims_ale_q_sec2_f2 WHERE item = '(II) Amount of Protection Bought / Sold, of which' AND rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_f2)"
+  },
+  {
+    "table": "cims_ale_q_sec2_f2",
+    "question": "How has the April-to-date number of credit protection transactions (buyer vs seller) trended across reporting dates?",
+    "sql": "SELECT rdate, item, nat_prot_buy, nat_prot_sell FROM cims_ale_q_sec2_f2 WHERE item = '(I) No. of Transactions,  of which' ORDER BY rdate"
+  },
+  {
+    "table": "cims_ale_q_sec2_g2_corp_otr",
+    "question": "For the latest reporting date, list each bank/FI counterparty in the corporate OTC derivatives exposure return along with their notional amount, current credit exposure and potential future exposure, ordered by current credit exposure descending.",
+    "sql": "SELECT sr_no, name_bk_fi, nat_amt, cur_cr_exp, pot_fut_exp\nFROM cims_ale_q_sec2_g2_corp_otr\nWHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec2_g2_corp_otr)\nORDER BY cur_cr_exp DESC"
+  },
+  {
+    "table": "cims_ale_q_sec_1a",
+    "question": "For the latest reporting date available, what is the total Global Operations amount and how much of it is held in forex, for each asset category?",
+    "sql": "SELECT assets, gbl_amt_tot, gbl_amt_frx FROM cims_ale_q_sec_1a WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_1a) ORDER BY gbl_amt_tot DESC"
+  },
+  {
+    "table": "cims_ale_q_sec_1c",
+    "question": "For the latest reporting date, what is the total domestic and overseas liability amount for each liability category, along with their combined global total?",
+    "sql": "SELECT assets, dom_amt_tot, ovr_amt_tot, gbl_amt_tot FROM cims_ale_q_sec_1c WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_1c) ORDER BY gbl_amt_tot DESC"
+  },
+  {
+    "table": "cims_ale_q_sec_2a",
+    "question": "For the latest reporting date, what is the total credit equivalent amount for off-balance sheet exposures across domestic, overseas and global operations?",
+    "sql": "SELECT contracts, cr_eqv_dom, cr_eqv_os, cr_eqv_gobl FROM cims_ale_q_sec_2a WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_2a) ORDER BY contracts"
+  },
+  {
+    "table": "cims_ale_q_sec_2a",
+    "question": "How has the global operations book value of off-balance sheet exposures moved over the last 4 reporting quarters?",
+    "sql": "SELECT rdate, contracts, bok_val_gobl FROM cims_ale_q_sec_2a WHERE rdate IN (SELECT DISTINCT rdate FROM cims_ale_q_sec_2a ORDER BY rdate DESC FETCH FIRST 4 ROWS ONLY) ORDER BY contracts, rdate"
+  },
+  {
+    "table": "cims_ale_q_sec_2b",
+    "question": "How does the notional principal turnover during the month compare between the Trading Book and Banking Book for each contract type as of the latest report date?",
+    "sql": "SELECT contracts, trade_turn_ovr, bank_turn_ovr, prin_turn_ovr FROM cims_ale_q_sec_2b WHERE rdate = (SELECT MAX(rdate) FROM cims_ale_q_sec_2b) ORDER BY prin_turn_ovr DESC"
+  }
+]

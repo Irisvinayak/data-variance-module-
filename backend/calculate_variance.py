@@ -561,7 +561,17 @@ def calculate_variance(
         )
 
     # ── Build previous-period lookup tables keyed by business identifier ──
+    # get_previous_dates() computes each prior period by pure calendar-quarter
+    # arithmetic (e.g. Dec -> Sep) — it has no way to know a return was
+    # actually FILED off-cycle (e.g. 30-Nov instead of 30-Sep). When that
+    # happens the query for that date legitimately returns zero rows, and
+    # every row's "previous" entry for that period silently comes back
+    # empty with no indication why. missing_periods surfaces exactly which
+    # requested comparison dates had no submission at all, so the caller
+    # (main.py -> frontend) can tell the user "we asked for X, nothing was
+    # filed then" instead of a silent, unexplained blank comparison.
     prev_row_sets: Dict[str, Any] = {}
+    missing_periods: List[str] = []
     for i, pd in enumerate(prev_dates):
         period_rows = [r for r in all_rows if dates_match(r.get(fc), pd)]
         lookup: Dict[str, Any] = {}
@@ -582,6 +592,8 @@ def calculate_variance(
             "[row_match] Previous period %d (%s): %d rows, %d unique identifiers",
             i + 1, pd.strftime("%d-%b-%Y"), len(period_rows), len(lookup),
         )
+        if not period_rows:
+            missing_periods.append(pd.strftime("%d-%b-%Y").upper())
         prev_row_sets[f"previous_{i + 1}"] = {"date": pd, "lookup": lookup}
 
     # ── Pre-build per-date lookups for sequential mode ───────────────────
@@ -709,4 +721,5 @@ def calculate_variance(
             if comparison_mode == "sequential"
             else []
         ),
+        "missing_periods":    missing_periods,
     }

@@ -48,6 +48,32 @@ TOP_K_LABELS: int = int(os.getenv("DV_NLP_TOP_K_LABELS", "10"))
 MIN_TABLE_SCORE: float = float(os.getenv("DV_NLP_MIN_TABLE_SCORE", "0.25"))
 MIN_COLUMN_SCORE: float = float(os.getenv("DV_NLP_MIN_COLUMN_SCORE", "0.20"))
 
+# ── Lexical (BM25) + QA-pairs signals ──────────────────────────────────────────
+# Additive to the dense FAISS signals above — built by the same external tool,
+# dropped into INDEX_DIR alongside the FAISS files. Both degrade to a silent
+# no-op if their file is missing (see backend/nlp/lexical_search.py), so
+# leaving these files out of INDEX_DIR reproduces today's exact behavior.
+BM25_INDEX_PATH: str = os.path.join(INDEX_DIR, "bm25_table_index.pkl")
+BM25_SIGNAL_WEIGHT: float = float(os.getenv("DV_NLP_BM25_SIGNAL_WEIGHT", "1.5"))
+BM25_TOP_K: int = int(os.getenv("DV_NLP_BM25_TOP_K", str(TOP_K_TABLES * 3)))
+
+QA_PAIRS_PATH: str = os.path.join(INDEX_DIR, "qa_pairs.json")
+QA_STRONG_MATCH_THRESHOLD: float = float(os.getenv("DV_NLP_QA_STRONG_MATCH_THRESHOLD", "0.95"))
+QA_STRONG_MATCH_BONUS: float = float(os.getenv("DV_NLP_QA_STRONG_MATCH_BONUS", "10.0"))
+
+# Optional embedding pre-filter ahead of the QA strong-match difflib scan —
+# at 145 pairs a full difflib scan is instant, but difflib's per-comparison
+# cost (string-similarity, not a cheap vector/term lookup) makes it the
+# first signal to slow down as QA pairs scale into the hundreds/thousands.
+# If qa_index.faiss/qa_meta.pkl are present (same external tool, dropped in
+# alongside qa_pairs.json), narrow to the QA_PREFILTER_TOP_N nearest by
+# cosine similarity first and only difflib-score those — degrades to the
+# original full-corpus scan if these files are absent, same as every other
+# signal here.
+QA_INDEX_PATH: str = os.path.join(INDEX_DIR, "qa_index.faiss")
+QA_META_PATH: str = os.path.join(INDEX_DIR, "qa_meta.pkl")
+QA_PREFILTER_TOP_N: int = int(os.getenv("DV_NLP_QA_PREFILTER_TOP_N", "20"))
+
 # ── Ollama (LLM-assisted intent resolution + SQL generation) ──────────────────
 # Reuses the same self-hosted Ollama endpoint sql_agent already talks to.
 OLLAMA_URL: str = os.getenv(

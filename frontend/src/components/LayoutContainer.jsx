@@ -24,6 +24,7 @@ import { VARIANCE_STEPS, COMPARISON_MODES, dateHintForFreq } from '../types.js'
 import ControlBar         from './ControlBar.jsx'
 import TablePanel         from './TablePanel.jsx'
 import VisualizationPanel from './VisualizationPanel.jsx'
+import NoticeToast        from './NoticeToast.jsx'
 
 export default function LayoutContainer({ loginId = '', uid = '' }) {
 
@@ -53,11 +54,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const [result,     setResult]     = useState(null)
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState('')
+  const [notice,     setNotice]     = useState('')
 
   // ─── Panel state ─────────────────────────────────────────────────────────
   const tablePanelRef = useRef(null)
   const vizPanelRef   = useRef(null)
-  const [savedTablePct, setSavedTablePct] = useState(70)
   const [tableState,    setTableState]    = useState('normal')
   const [vizState,      setVizState]      = useState('normal')
   const [vizOpen,       setVizOpen]       = useState(false)
@@ -205,6 +206,21 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     }
   }
 
+  // calculate_variance.py's comparison periods are computed by pure
+  // calendar-quarter arithmetic (e.g. Dec -> Sep) — if a return was actually
+  // filed off-cycle (e.g. 30-Nov instead of 30-Sep), that date query returns
+  // zero rows and every row's "previous" entry for it silently comes back
+  // empty, with nothing telling the user why. missing_periods (added to the
+  // compute response) surfaces exactly which requested dates had no
+  // submission at all, so a popup can explain it instead of a silent gap.
+  const applyMissingPeriodsNotice = (res) => {
+    if (res?.missing_periods?.length) {
+      const list = res.missing_periods.join(', ')
+      const plural = res.missing_periods.length > 1 ? 's' : ''
+      setNotice(`No submission on file for comparison period${plural}: ${list}.`)
+    }
+  }
+
   const handleCompute = async () => {
     if (!returnInfo || !tableName || !dateStr) return
     setLoading(true)
@@ -225,6 +241,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         comparison_mode:    comparisonMode,
       }, loginId)
       setResult(res)
+      applyMissingPeriodsNotice(res)
       setStep(VARIANCE_STEPS.RESULT)
       setTableState('normal')
       setVizState('normal')
@@ -246,6 +263,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setComparisonMode(COMPARISON_MODES.VS_CURRENT)
     setResult(null)
     setError('')
+    setNotice('')
     setCandidates(null)
     setNlColumns(null)
     setVizOpen(false)
@@ -278,6 +296,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
       const res = await resolveNlQuery(trimmed, loginId)
 
       setResult(res)
+      applyMissingPeriodsNotice(res)
       setTableState('normal')
       setVizState('normal')
       setVizOpen(true)
@@ -304,15 +323,27 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   }
 
   // ─── Panel resize handlers ────────────────────────────────────────────────
-  const getTablePct = () => tablePanelRef.current?.getSize()?.asPercentage ?? 70
-
+  // "Expand panel X" means "make X take (nearly) the whole row" — the ONLY
+  // way to do that in a 2-panel Group is to shrink the SIBLING, not to
+  // resize() this panel to a hardcoded 92%. resize() ignored that: both
+  // panels declare minSize={20}, so pushing table to 92 (leaving viz at ~8,
+  // below viz's own minSize) or viz to 92 (leaving table at ~8) fought the
+  // library's own minSize/collapsible enforcement — confirmed empirically to
+  // invert the result (clicking table's expand button actually shrank the
+  // table to ~7% and blew viz up to ~93%, the opposite of the intent).
+  // collapse()/expand() are the library's dedicated bypass for exactly this
+  // ("collapse the sibling to its collapsedSize, independent of minSize"),
+  // matching the pattern handleToggleViz below already used successfully —
+  // so no more manual resize-to-magic-number and no savedTablePct bookkeeping
+  // needed: expand() natively restores a collapsed panel to its pre-collapse
+  // size, and the sibling's size falls out of that for free.
   const handleTableExpand = () => {
     if (tableState === 'expanded') {
-      tablePanelRef.current?.resize(savedTablePct)
+      vizPanelRef.current?.expand()
       setTableState('normal')
+      if (vizState === 'minimized') setVizState('normal')
     } else {
-      setSavedTablePct(getTablePct())
-      tablePanelRef.current?.resize(92)
+      vizPanelRef.current?.collapse()
       setTableState('expanded')
       if (vizOpen) setVizState('minimized')
     }
@@ -320,10 +351,9 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
 
   const handleTableMinimize = () => {
     if (tableState === 'minimized') {
-      tablePanelRef.current?.resize(savedTablePct)
+      tablePanelRef.current?.expand()
       setTableState('normal')
     } else {
-      setSavedTablePct(getTablePct())
       tablePanelRef.current?.collapse()
       setTableState('minimized')
     }
@@ -331,12 +361,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
 
   const handleVizExpand = () => {
     if (vizState === 'expanded') {
-      tablePanelRef.current?.resize(savedTablePct)
+      tablePanelRef.current?.expand()
       setVizState('normal')
       setTableState('normal')
     } else {
-      setSavedTablePct(getTablePct())
-      tablePanelRef.current?.resize(8)
+      tablePanelRef.current?.collapse()
       setVizState('expanded')
       setTableState('minimized')
     }
@@ -405,6 +434,14 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
       />
 
       {/* ── Analysis area ────────────────────────────────────────────── */}
+      {/* react-resizable-panels treats a bare number on minSize/maxSize/
+          collapsedSize as PIXELS, not percent (only defaultSize/defaultLayout
+          use percentages for a bare number) — collapsedSize={4} was 4 PIXELS,
+          not 4%, so "minimized" panels shrank to an unusably thin sliver
+          whose header/restore button got visually overlapped by the sibling
+          panel's content (confirmed: an unclickable "Restore panel" button).
+          minSize={20} had the same issue (20px is effectively no floor at
+          all). Always use string percentages ("20%"/"4%") for these props. */}
       {result && (
         <div className="lc-bottom lc-bottom-enter">
           <Group
@@ -415,12 +452,22 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
             <Panel
               panelRef={tablePanelRef}
               defaultSize={55}
-              minSize={20}
+              minSize="20%"
               collapsible
-              collapsedSize={4}
-              onResize={(size) => {
-                if (size?.asPercentage <= 4 && tableState !== 'minimized') setTableState('minimized')
-                else if (size?.asPercentage > 4 && tableState === 'minimized') setTableState('normal')
+              collapsedSize="4%"
+              onResize={() => {
+                // isCollapsed() is the library's own authoritative flag —
+                // comparing size.asPercentage against the same 4 used for
+                // collapsedSize put the "is it collapsed?" check exactly on
+                // the boundary the collapse settles at, so float rounding on
+                // the resize event could land a hair above 4 and immediately
+                // flip tableState back to 'normal' right after minimizing
+                // (confirmed: two renders back-to-back, minimized -> normal).
+                const collapsed = tablePanelRef.current?.isCollapsed() ?? false
+                setTableState((prev) => {
+                  if (collapsed) return prev === 'minimized' ? prev : 'minimized'
+                  return prev === 'minimized' ? 'normal' : prev
+                })
               }}
               style={{ overflow: 'hidden' }}
             >
@@ -441,16 +488,20 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
             <Panel
               panelRef={vizPanelRef}
               defaultSize={45}
-              minSize={20}
+              minSize="20%"
               collapsible
-              collapsedSize={4}
-              onResize={(size) => {
-                if (size?.asPercentage <= 4) {
+              collapsedSize="4%"
+              onResize={() => {
+                // See the table Panel's onResize comment — isCollapsed() is
+                // the library's own flag, avoiding the same boundary race a
+                // size.asPercentage<=4 comparison had against collapsedSize="4%".
+                const collapsed = vizPanelRef.current?.isCollapsed() ?? false
+                if (collapsed) {
                   if (vizOpen) setVizOpen(false)
-                  if (vizState !== 'minimized') setVizState('minimized')
+                  setVizState((prev) => (prev === 'minimized' ? prev : 'minimized'))
                 } else {
                   if (!vizOpen) setVizOpen(true)
-                  if (vizState === 'minimized') setVizState('normal')
+                  setVizState((prev) => (prev === 'minimized' ? 'normal' : prev))
                 }
               }}
               style={{ overflow: 'hidden' }}
@@ -487,6 +538,8 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
           <div className="lc-idle-sub">Querying Oracle and building the comparison table</div>
         </div>
       )}
+
+      <NoticeToast message={notice} onDismiss={() => setNotice('')} />
 
     </div>
   )

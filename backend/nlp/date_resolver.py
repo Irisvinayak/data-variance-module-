@@ -7,17 +7,20 @@
 
 from __future__ import annotations
 
+import calendar
 import logging
 import re
 from datetime import date, datetime
 from typing import Optional, Tuple
 
 from dateutil import parser as dateutil_parser
+from dateutil.relativedelta import relativedelta
 
 from ..calculate_variance import get_previous_dates
 from ..config import DP_TABLE_SCHEMA, IS_SP_TABLE_DATA_ENABLED
 from ..db import execute_query
 from ..report_lookup import _parse_returns, get_is_excel_by_return_code
+from .query_normalizer import normalize_query
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +89,65 @@ def _looks_date_shaped(text: str) -> bool:
     return bool(_MONTH_NAME_RE.search(text) or _YEAR_TOKEN_RE.search(text) or _DATE_SEP_RE.search(text))
 
 
+# "Q1FY25"/"Q1 FY25"/"FY25 Q1"/"FY2024-25 Q1" — Indian financial-year quarter
+# notation (Apr-Mar), extremely common phrasing for this app's RBI-regulated
+# data but NOT something dateutil's fuzzy parser understands (it would either
+# ignore "FY25" entirely for lacking a 4-digit year, or mis-parse it). Checked
+# ahead of the generic dateutil path in _try_parse_date for that reason.
+# Gap between the Q-token and the FY-token: optional whitespace/comma plus
+# an optional connector word ("Q1 of FY25", "Q1, FY25") — deliberately NOT
+# a `\b` boundary check on the digit itself: "Q1FY25" has no boundary
+# between "1" and "F" (both are \w characters), so `\bQ([1-4])\b` would
+# never match the glued form at all. `(?!\d)` blocks "Q12"-style false
+# matches instead.
+_FY_Q_GAP = r"(?:\s|,)*(?:of\s+|for\s+)?"
+_Q_THEN_FY_RE = re.compile(rf"\bQ([1-4])(?!\d){_FY_Q_GAP}FY\s*'?(\d{{2,4}})(-\d{{2,4}})?\b", re.IGNORECASE)
+_FY_THEN_Q_RE = re.compile(rf"\bFY\s*'?(\d{{2,4}})(-\d{{2,4}})?{_FY_Q_GAP}Q([1-4])(?!\d)", re.IGNORECASE)
+
+
+def _fy_quarter_end_date(fy_end_year: int, quarter: int) -> datetime:
+    """FYyy runs Apr(yy-1)-Mar(yy). Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec (all in
+    the calendar year BEFORE fy_end_year), Q4=Jan-Mar (in fy_end_year itself).
+    Returns that quarter's last calendar day."""
+    if quarter == 4:
+        month, year = 3, fy_end_year
+    else:
+        month, year = 3 + 3 * quarter, fy_end_year - 1
+    last_day = calendar.monthrange(year, month)[1]
+    return datetime(year, month, last_day)
+
+
+def _try_parse_fy_quarter(text: str) -> Optional[datetime]:
+    m = _Q_THEN_FY_RE.search(text)
+    if m:
+        quarter, fy_raw, fy_range_suffix = int(m.group(1)), m.group(2), m.group(3)
+    else:
+        m = _FY_THEN_Q_RE.search(text)
+        if not m:
+            return None
+        fy_raw, fy_range_suffix, quarter = m.group(1), m.group(2), int(m.group(3))
+    if fy_range_suffix:
+        # "FY2024-25" dash-range notation — ambiguous which half the caller
+        # means without more context; decline rather than silently guessing
+        # the wrong one (e.g. reading "FY2024-25" as ending in 2024).
+        return None
+    # "FY25"/"FY2025" both denote the fiscal year ENDING in that year (Indian
+    # convention) — 2-digit forms are expanded assuming the 2000s.
+    fy_end_year = int(fy_raw) if len(fy_raw) == 4 else 2000 + int(fy_raw)
+    if fy_end_year not in _YEAR_RANGE:
+        return None
+    return _fy_quarter_end_date(fy_end_year, quarter)
+
+
 def _try_parse_date(text: str) -> Optional[datetime]:
     """Best-effort explicit date parse — only attempted when the substring
     looks date-shaped (see _looks_date_shaped), and only trusted when the
-    resulting year is plausible for this application's data."""
+    resulting year is plausible for this application's data. FY-quarter
+    notation is checked first since it's an unambiguous explicit marker that
+    doesn't need (and wouldn't reliably pass) the date-shaped guard below."""
+    fy_quarter = _try_parse_fy_quarter(text)
+    if fy_quarter is not None:
+        return fy_quarter
     if not _looks_date_shaped(text):
         return None
     try:
@@ -117,16 +175,70 @@ _N_WORD_RE = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twel
 
 
 def _extract_relative_periods_back(query: str) -> int:
-    """Detects 'last/previous/past N quarters|months|years|periods'. Returns
-    0 if nothing found (caller treats that as 'no relative phrase')."""
+    """Detects 'last/previous/past N quarters|months|years|periods'. The count
+    is OPTIONAL — bare "last quarter"/"previous month" (no number) is common
+    phrasing and means N=1, same as this function's own no-count default.
+    Unit words also accept the abbreviations (qtr/qtrs, mo/mos) that survive
+    even after normalize_query()'s typo/abbreviation dictionary has already
+    run on `query` (see resolve_reporting_date) — belt-and-suspenders so a
+    dictionary miss doesn't silently defeat this match. Returns 0 if nothing
+    found at all (caller treats that as 'no relative phrase')."""
     m = re.search(
-        rf"\b(?:last|previous|past|trailing)\s+{_N_WORD_RE}\s+"
-        r"(?:quarters?|months?|years?|periods?|reporting\s+periods?)\b",
+        rf"\b(?:last|previous|past|trailing)\s+(?:{_N_WORD_RE}\s+)?"
+        r"(?:quarters?|qtrs?|months?|mos?|years?|yrs?|periods?|reporting\s+periods?)\b",
         query, re.IGNORECASE,
     )
     if not m:
         return 0
+    if m.group(1) is None:
+        return 1
     return max(_extract_n(m.group(1)), 0)
+
+
+# Finance-shorthand period-over-period phrasing (QoQ/MoM/YoY/WoW, and their
+# spelled-out equivalents). YoY specifically means "the same period one
+# calendar YEAR ago", which is freq-dependent (4 periods back for quarterly
+# data, 12 for monthly, ...) — resolved via _steps_between, same mechanism
+# the two-explicit-dates path already uses. QoQ/MoM/WoW all mean "compare
+# with the immediately preceding reporting period" (N=1) — the table's own
+# report_freq already defines what one period is, so no freq-specific
+# handling is needed for those.
+_YOY_TOKEN_RE = re.compile(
+    r"\byoy\b|year[\s-]?over[\s-]?year|same\s+(?:period|quarter|month)\s+last\s+year",
+    re.IGNORECASE,
+)
+_XOX_RE = re.compile(
+    r"\b(?:qoq|mom|yoy|wow)\b|"
+    r"quarter[\s-]?over[\s-]?quarter|month[\s-]?over[\s-]?month|"
+    r"year[\s-]?over[\s-]?year|week[\s-]?over[\s-]?week|"
+    r"same\s+(?:period|quarter|month)\s+last\s+year",
+    re.IGNORECASE,
+)
+
+
+def _extract_xox_periods(query: str, anchor: datetime, freq: str) -> int:
+    """Returns 0 if no XoX-style phrase is present."""
+    if not _XOX_RE.search(query):
+        return 0
+    if _YOY_TOKEN_RE.search(query):
+        one_year_back = anchor - relativedelta(years=1)
+        return max(_steps_between(anchor, one_year_back, freq), 1)
+    return 1
+
+
+# "since March 2024" / "since Q1FY24" — open-ended range from an explicit
+# start date up to the latest available submission (as opposed to "on
+# March 2024", which anchors ON that date with period=1). Reuses
+# _try_parse_date (including its FY-quarter support) on whatever follows
+# "since".
+_SINCE_RE = re.compile(r"\bsince\s+(.+?)$", re.IGNORECASE)
+
+
+def _extract_since_date(query: str) -> Optional[datetime]:
+    m = _SINCE_RE.search(query)
+    if not m:
+        return None
+    return _try_parse_date(m.group(1))
 
 
 def _extract_two_dates(query: str) -> Optional[Tuple[datetime, datetime]]:
@@ -163,16 +275,31 @@ def resolve_reporting_date(
     at all (nothing to anchor to)."""
     freq = (report_freq or "M").strip().upper() or "M"
 
+    # Fix known typos/abbreviations ("perids"->"periods", "quater"->"quarter",
+    # ...) before any regex matching below — a misspelled unit word must not
+    # silently defeat period-count detection and fall through to the
+    # single-period default. Shares the same dictionary retriever.py already
+    # normalizes through for embedding quality (backend/nlp/query_normalizer.py).
+    original_query, query = query, normalize_query(query)
+    if query != original_query:
+        logger.info("[nlp.date_resolver] query normalized: %r -> %r", original_query, query)
+
     latest = _latest_available_date(return_id, table_name, filter_col)
     if latest is None:
         raise ValueError(
             f"No data found in {table_name} to determine a reporting date."
         )
 
-    # Checked first, before any fuzzy date parsing: "last/previous N
-    # quarters/months/years" is an exact, unambiguous regex match — it must
-    # win over _try_parse_date ever getting a chance to fuzzy-match the bare
-    # numeral (e.g. the "2" in "last 2 quarters") as a bogus calendar date.
+    # Checked first, before any fuzzy date parsing: finance shorthand
+    # (QoQ/MoM/YoY/WoW) and "last/previous N quarters/months/years" are both
+    # exact, unambiguous regex matches — they must win over _try_parse_date
+    # ever getting a chance to fuzzy-match a bare numeral (e.g. the "2" in
+    # "last 2 quarters") as a bogus calendar date.
+    xox_n = _extract_xox_periods(query, latest, freq)
+    if xox_n > 0:
+        logger.info("[nlp.date_resolver] query=%r -> XoX shorthand, %d period(s) back from latest=%s", query, xox_n, latest)
+        return latest.strftime(_DATE_FMT).upper(), xox_n
+
     n = _extract_relative_periods_back(query)
     if n > 0:
         logger.info("[nlp.date_resolver] query=%r -> relative %d period(s) back from latest=%s", query, n, latest)
@@ -188,6 +315,18 @@ def resolve_reporting_date(
             query, anchor, periods,
         )
         return anchor.strftime(_DATE_FMT).upper(), max(periods, 1)
+
+    # "since <date>" — open-ended range from an explicit start up to the
+    # latest submission, distinct from "on <date>" (which anchors ON that
+    # date with period=1, handled below).
+    since_date = _extract_since_date(query)
+    if since_date:
+        periods = _steps_between(latest, since_date, freq)
+        logger.info(
+            "[nlp.date_resolver] query=%r -> since date=%s, periods=%d",
+            query, since_date, periods,
+        )
+        return latest.strftime(_DATE_FMT).upper(), max(periods, 1)
 
     single_date = _try_parse_date(query)
     if single_date:

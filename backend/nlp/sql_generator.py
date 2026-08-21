@@ -13,7 +13,9 @@ from __future__ import annotations
 import calendar
 import json
 import logging
+import os
 import re
+import threading
 from collections import defaultdict
 from datetime import date
 from typing import Any, Dict, List, Optional
@@ -36,20 +38,53 @@ logger = logging.getLogger(__name__)
 _session = requests.Session()
 
 
+# mtime-keyed in-memory cache, same pattern as index_store.py/lexical_search.py/
+# return_lookup.py — schema.json/description_samples.json only change when the
+# external build tool rebuilds them, so re-reading+re-parsing from disk on
+# every call (generate_sql() triggers up to 4 reads of schema.json alone: one
+# from build_prompt, one from validate_sql, doubled again on the one retry) is
+# pure waste that grows with total schema size as the corpus scales up.
+_json_cache: Dict[str, Any] = {}
+_json_cache_lock = threading.Lock()
+
+
+def _load_json_cached(path: str, default: Any) -> Any:
+    if not os.path.isfile(path):
+        return default
+
+    mtime = os.path.getmtime(path)
+    with _json_cache_lock:
+        cached = _json_cache.get(path)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    with _json_cache_lock:
+        _json_cache[path] = (mtime, data)
+    return data
+
+
 def load_samples(path: str = DESCRIPTION_SAMPLES_PATH) -> Dict[str, Dict[str, List[str]]]:
     """Load the full row-label samples dict the external build tool produced
     (backend/output/description_samples.json) — supplements the FAISS top-K
     matches with every known label value for a matched table. Returns {} if
-    the file doesn't exist."""
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except FileNotFoundError:
-        return {}
+    the file doesn't exist. Cached by file mtime — a freshly rebuilt file is
+    picked up on the next call, no restart needed."""
+    return _load_json_cached(path, {})
 
 
 BANNED_KEYWORDS = ["delete", "update", "drop", "insert", "truncate", "alter", "create", "exec"]
 MAX_LABELS_MINIMAL = 8
+# "rules"-style prompts previously had NO cap here at all — load_samples()
+# injected every known row-label value for every column of every matched
+# table, unbounded. Fine for today's small per-table label vocabularies, but
+# a wide production table with hundreds of label values would balloon the
+# prompt with no ceiling except OLLAMA_TIMEOUT_SEC failing the whole request.
+# More generous than MAX_LABELS_MINIMAL since "rules" style is meant to carry
+# richer context, but still bounded.
+MAX_LABELS_RULES = 25
 
 
 def _resolve_relative_time(query: str, today: date) -> Optional[str]:
@@ -222,11 +257,13 @@ def _load_all_columns(table_names, schema_path: str = SCHEMA_JSON_PATH):
     """Return all columns for the given table names, loaded from schema.json
     (produced by the external embedding-build tool, dropped into
     backend/output/) — the LLM sees every column of a matched table, not
-    just the top-K the embedding retrieval happened to surface."""
-    try:
-        with open(schema_path, encoding="utf-8") as f:
-            schema = json.load(f)
-    except FileNotFoundError:
+    just the top-K the embedding retrieval happened to surface. schema.json
+    itself is cached by mtime (see _load_json_cached) — this function still
+    re-filters per call since the requested table_names differ per call, but
+    no longer re-reads+re-parses the (potentially large, corpus-sized) file
+    from disk every time."""
+    schema = _load_json_cached(schema_path, [])
+    if not schema:
         return []
     normalized_table_names = {name.lower() for name in table_names}
     result = []
@@ -498,6 +535,8 @@ def build_prompt(user_query, tables, columns, dialect="Oracle", today_date=None,
                 for col, vals in all_samples[tbl].items():
                     existing = set(label_map[tbl][col])
                     for v in vals:
+                        if len(label_map[tbl][col]) >= MAX_LABELS_RULES:
+                            break
                         if v not in existing:
                             label_map[tbl][col].append(v)
 

@@ -31,6 +31,20 @@ _TERM_MAP: Dict[str, str] = {
     "adv": "advances",
     "acc": "account",
     "bal": "balance",
+    # Date/period phrasing — also relied on by date_resolver.py, which
+    # normalizes through this same function before parsing relative-period
+    # phrases ("last 3 perids") so a typo there doesn't silently defeat
+    # period-count detection and fall back to a single-period default.
+    "perids": "periods",
+    "perid": "period",
+    "quater": "quarter",
+    "quaters": "quarters",
+    "qtr": "quarter",
+    "qtrs": "quarters",
+    "mnth": "month",
+    "mnths": "months",
+    "yr": "year",
+    "yrs": "years",
 }
 
 # Longest terms first so multi-word entries ("sub std") match before any
