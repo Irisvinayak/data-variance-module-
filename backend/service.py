@@ -390,6 +390,73 @@ def _get_table_metadata(
     )
 
 
+def _resolve_physical_table_name(
+    return_id: str,
+    table_name: str,
+    return_meta: Optional[Dict[str, Any]] = None,
+) -> str:
+    """is_excel -> optional '_DP' suffix -> optional DP_TABLE_SCHEMA prefix.
+
+    `return_meta` lets a caller that already parsed Returns.xml (e.g.
+    compute_variance) skip a redundant get_is_excel_by_return_code() XML
+    scan; pass None to have it looked up here instead."""
+    is_excel = (
+        str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
+        if return_meta
+        else get_is_excel_by_return_code(return_id)
+    )
+    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
+        dp_name = f"{table_name}_DP"
+        return f"{DP_TABLE_SCHEMA}.{dp_name}" if DP_TABLE_SCHEMA else dp_name
+    return table_name
+
+
+def get_available_dates(
+    return_id: str,
+    return_tbl_path: str,
+    table_name: str,
+    execute_query_fn: Callable,
+) -> List[str]:
+    """List every distinct value of the table's filter (date) column that
+    actually has data, newest first — lets the manual UI offer a dropdown of
+    real submission dates instead of a free calendar where most picks return
+    zero rows (see service._run_table_diagnostics, which today only surfaces
+    this after the fact via logs).
+
+    Raises FileNotFoundError/KeyError exactly like compute_variance does when
+    the table mapping or table itself can't be resolved. Returns [] (not an
+    error) when the table resolves fine but genuinely has no rows yet.
+    """
+    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name)
+    filter_col = table_meta["filter_col"]
+    resolved_table_name = _resolve_physical_table_name(return_id, table_name)
+
+    sql = (
+        f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
+        f"ORDER BY {filter_col} DESC FETCH FIRST 500 ROWS ONLY"
+    )
+    cols, rows, err = execute_query_fn(sql)
+    if err:
+        # Older Oracle without FETCH FIRST support — same fallback pattern
+        # _run_table_diagnostics already uses.
+        sql = (
+            f"SELECT DISTINCT {filter_col} FROM "
+            f"(SELECT {filter_col} FROM {resolved_table_name} ORDER BY {filter_col} DESC) "
+            f"WHERE ROWNUM <= 500"
+        )
+        cols, rows, err = execute_query_fn(sql)
+        if err:
+            raise RuntimeError(f"{err} | table_queried={resolved_table_name}")
+
+    dates: List[str] = []
+    for row in rows:
+        value = row[0]
+        if value is None:
+            continue
+        dates.append(value.strftime("%d-%b-%Y").upper())
+    return dates
+
+
 def compute_variance(
     return_id: str,
     return_tbl_path: str,
@@ -417,19 +484,9 @@ def compute_variance(
         return_id, report_freq, table_name, reporting_date, reporting_period,
     )
 
-    is_excel = (
-        str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
-        if return_meta
-        else get_is_excel_by_return_code(return_id)
-    )
-    report_name = table_name
-    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
-        dp_name     = f"{table_name}_DP"
-        report_name = f"{DP_TABLE_SCHEMA}.{dp_name}" if DP_TABLE_SCHEMA else dp_name
-    resolved_table_name = report_name
+    resolved_table_name = _resolve_physical_table_name(return_id, table_name, return_meta=return_meta)
 
     logger.debug("[table_resolution] ReturnCode=%s", return_id)
-    logger.debug("[table_resolution] IsExcel=%s", is_excel)
     logger.debug("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
     logger.debug("[table_resolution] ReturnFoundInXml=%s", return_meta is not None)
     logger.debug("[table_resolution] OriginalTable=%s", table_name)
@@ -462,12 +519,11 @@ def compute_variance(
                 "  resolved_table   = %s\n"
                 "  reporting_date   = %s\n"
                 "  reporting_period = %s\n"
-                "  is_excel         = %s\n"
                 "  sp_table_enabled = %s\n"
                 "  error            = %s",
                 return_id, table_name, resolved_table_name,
                 reporting_date, reporting_period,
-                is_excel, IS_SP_TABLE_DATA_ENABLED, err,
+                IS_SP_TABLE_DATA_ENABLED, err,
             )
             raise RuntimeError(
                 f"{err} | table_queried={resolved_table_name} "

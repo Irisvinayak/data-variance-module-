@@ -18,8 +18,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
-import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery } from '../api.js'
-import { VARIANCE_STEPS, COMPARISON_MODES, dateHintForFreq } from '../types.js'
+import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery, getAvailableDates, SKIP_ANSWER } from '../api.js'
+import { VARIANCE_STEPS, COMPARISON_MODES } from '../types.js'
 
 import ControlBar         from './ControlBar.jsx'
 import TablePanel         from './TablePanel.jsx'
@@ -41,6 +41,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   // Columns resolved by the NL layer, valid only while tableName still matches
   // the table they were resolved for (cleared on any manual re-selection).
   const [nlColumns, setNlColumns] = useState(null)
+  // Set when the backend can't confidently resolve the query to one table —
+  // { question, options, resolvedContext }. Rendered below the NLP input;
+  // independent of the manual wizard's step/candidates (same reasoning as
+  // nlpQuery/nlColumns above — the NLP flow must stay independent).
+  const [nlpClarification, setNlpClarification] = useState(null)
 
   // ─── Wizard state ────────────────────────────────────────────────────────
   const [step,       setStep]       = useState(VARIANCE_STEPS.RETURN_NAME)
@@ -49,6 +54,8 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const [candidates, setCandidates] = useState(null)
   const [tableName,  setTableName]  = useState('')
   const [dateStr,    setDateStr]    = useState('')
+  const [availableDates, setAvailableDates] = useState([])
+  const [datesLoading,   setDatesLoading]   = useState(false)
   const [periods,    setPeriods]    = useState(1)
   const [comparisonMode, setComparisonMode] = useState(COMPARISON_MODES.VS_CURRENT)
   const [result,     setResult]     = useState(null)
@@ -67,7 +74,36 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const tables = (returnInfo?.tables || []).filter(
     (t, i, arr) => t.table_name && arr.findIndex((x) => x.table_name === t.table_name) === i
   )
-  const dateHint = returnInfo ? dateHintForFreq(returnInfo.report_freq) : { example: '', hint: '' }
+  // ─── Fetch available dates whenever the selected table changes ──────────
+  // Feeds the manual Date dropdown (ControlBar's DateField) with the real
+  // submission dates on file, instead of a free calendar where most picks
+  // return zero rows.
+  useEffect(() => {
+    if (!returnInfo || !tableName) {
+      setAvailableDates([])
+      return
+    }
+
+    let cancelled = false
+    setDatesLoading(true)
+    setDateStr('') // stale date from a previous table must not linger
+
+    getAvailableDates(returnInfo.return_id, returnInfo.table_mapping_path, tableName, loginId)
+      .then((data) => {
+        if (cancelled) return
+        setAvailableDates(data.dates || [])
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setAvailableDates([])
+        console.warn('Failed to load available dates:', err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setDatesLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [returnInfo, tableName, loginId])
 
   // ─── Step 1: Fetch allowed form IDs on mount ─────────────────────────────
   useEffect(() => {
@@ -266,6 +302,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setNotice('')
     setCandidates(null)
     setNlColumns(null)
+    setNlpClarification(null)
     setVizOpen(false)
     setTableState('normal')
     setVizState('normal')
@@ -280,7 +317,13 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   // does NOT touch returnName/returnInfo/tableName/dateStr/periods — those
   // belong to the manual return/table/date wizard and must stay independent
   // of whatever the NLP bar resolved, so neither flow overrides the other.
-  const handleNlpSearch = async (query) => {
+  // `clarificationOverride` lets a caller force which (if any) clarification
+  // this request continues — omit it to use whatever's currently pending
+  // (the normal select/skip case), or pass `null` explicitly to start a
+  // brand-new top-level query instead of answering the pending one (see
+  // handleClarificationOthers below: the user's extra info should be
+  // re-resolved from scratch, not treated as an answer to the old prompt).
+  const handleNlpSearch = async (query, selectedOption, clarificationOverride) => {
     const trimmed = query.trim()
     if (!trimmed) return
 
@@ -292,9 +335,29 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setLoading(true)
     setError('')
 
-    try {
-      const res = await resolveNlQuery(trimmed, loginId)
+    const activeClarification =
+      clarificationOverride !== undefined ? clarificationOverride : nlpClarification
 
+    try {
+      const res = await resolveNlQuery(trimmed, loginId, {
+        dimension:            activeClarification?.dimension,
+        clarificationAnswer:  selectedOption?.id,
+        resolvedContext:      activeClarification?.resolvedContext,
+      })
+
+      if (res.needs_clarification) {
+        setNlpClarification({
+          dimension:       res.dimension,
+          question:        res.question,
+          options:         res.options,
+          skippable:       res.skippable,
+          allowOther:      res.allow_other,
+          resolvedContext: res.resolved_context,
+        })
+        return
+      }
+
+      setNlpClarification(null)
       setResult(res)
       applyMissingPeriodsNotice(res)
       setTableState('normal')
@@ -305,6 +368,29 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleClarificationSelect = (option) => {
+    handleNlpSearch(nlpQuery, option)
+  }
+
+  const handleClarificationSkip = () => {
+    handleNlpSearch(nlpQuery, { id: SKIP_ANSWER })
+  }
+
+  const handleClarificationCancel = () => setNlpClarification(null)
+
+  // User typed extra detail into the "Others" box instead of picking a
+  // listed return — fold it into the original query and re-resolve as a
+  // brand-new query (clarificationOverride=null) rather than answering the
+  // pending clarification, since free text isn't a valid return_id.
+  const handleClarificationOthers = (extraInfo) => {
+    const extra = extraInfo.trim()
+    if (!extra) return
+    const combined = `${nlpQuery} ${extra}`.trim()
+    setNlpQuery(combined)
+    setNlpClarification(null)
+    handleNlpSearch(combined, undefined, null)
   }
 
   const handleVoiceInput = () => {}
@@ -416,7 +502,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         returnInfo={returnInfo}   tables={tables}
         tableName={tableName}     setTableName={setTableName}
         dateStr={dateStr}         setDateStr={setDateStr}
-        dateHint={dateHint}
+        availableDates={availableDates} datesLoading={datesLoading}
         periods={periods}         setPeriods={setPeriods}
         comparisonMode={comparisonMode} setComparisonMode={setComparisonMode}
         loading={loading}         error={error}
@@ -431,6 +517,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         setNlpQuery={setNlpQuery}
         handleNlpSearch={handleNlpSearch}
         handleVoiceInput={handleVoiceInput}
+        nlpClarification={nlpClarification}
+        onClarificationSelect={handleClarificationSelect}
+        onClarificationSkip={handleClarificationSkip}
+        onClarificationCancel={handleClarificationCancel}
+        onClarificationOthers={handleClarificationOthers}
       />
 
       {/* ── Analysis area ────────────────────────────────────────────── */}

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -157,6 +158,51 @@ async def variance_compute(
     return res
 
 
+# ── GET /variance/dates ─────────────────────────────────────────────────────────
+@app.get("/variance/dates", status_code=status.HTTP_200_OK, tags=["Variance"])
+async def variance_dates(
+    return_id: str,
+    table_mapping_path: str,
+    table_name: str,
+    login_id: str = Depends(require_login),
+) -> dict:
+    """List every reporting date that actually has data for this return/table,
+    newest first — lets the manual UI offer a dropdown of real submission
+    dates instead of a free calendar picker.
+    """
+    logger.info(
+        "[main] GET /variance/dates | login_id=%s | return_id=%s | table=%s",
+        login_id, return_id, table_name,
+    )
+
+    require_return_access(login_id, return_id)
+
+    try:
+        dates = service.get_available_dates(
+            return_id=return_id,
+            return_tbl_path=table_mapping_path,
+            table_name=table_name,
+            execute_query_fn=execute_query,
+        )
+    except FileNotFoundError as exc:
+        logger.error("[main] 404 FileNotFoundError | %s", exc)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except KeyError as exc:
+        logger.error("[main] 404 KeyError | %s", exc)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        logger.error("[main] 500 RuntimeError | %s", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("[main] 500 Unhandled exception | return_id=%s", return_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected server error: {type(exc).__name__}: {exc}",
+        ) from exc
+
+    return {"dates": dates}
+
+
 def _restrict_result_columns(computed: dict, requested_columns: list) -> dict:
     """Restrict a compute_variance() result to just the column(s) the NL query
     asked about. compute_variance() itself always computes every numeric
@@ -196,6 +242,245 @@ def _restrict_result_columns(computed: dict, requested_columns: list) -> dict:
     return {**computed, "columns": keep, "display_columns": display_columns, "rows": filtered_rows}
 
 
+# Sentinel `clarification_answer` value meaning "don't ask me, just proceed
+# with your best guess" — both dimensions below treat it identically: skip
+# the pin/ambiguity-gate and hand the (possibly still-ambiguous) shortlist
+# straight to resolve_intent, letting the LLM pick on its own.
+_SKIP_ANSWER = "__skip__"
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+# Words too generic to count as "the query named this return" on their own
+# (return names in this domain are things like "DNBS-01 Monthly Return",
+# "CRILC" — matching on "monthly"/"return"/"report" alone would false-positive
+# on almost every query). Real product/section names still match fine.
+_GENERIC_NAME_TOKENS = {
+    "return", "report", "monthly", "quarterly", "fortnightly", "weekly",
+    "annual", "statement", "form", "data", "summary", "the", "of", "and", "for",
+}
+
+
+def _tokens(text: str) -> set:
+    return set(_TOKEN_RE.findall((text or "").lower()))
+
+
+def _find_named_return_ids(query: str, login_id: str) -> list:
+    """Literal name-mention check, layered in FRONT of the embedding-
+    confidence gate below: does the query text itself contain a
+    recognizable, non-generic word from any authorized return's Name (e.g.
+    the user typed "CRILC" or "DNBS01")? This catches the case a pure
+    embedding-similarity score can miss/get lucky on, and lets us skip the
+    "which return?" prompt entirely when the answer is already spelled out
+    in the query.
+
+    Returns the list of matching return_ids (authorized only) — empty if
+    the query names no known return at all, exactly one if it's specific,
+    more than one if several returns share the mentioned word."""
+    from .auth_service import get_allowed_form_ids
+    from .config import AUTH_ENABLED
+
+    query_tokens = _tokens(query) - _GENERIC_NAME_TOKENS
+    if not query_tokens:
+        return []
+
+    returns = list(_parse_returns())
+    if AUTH_ENABLED:
+        allowed = get_allowed_form_ids(login_id) or set()
+        returns = [r for r in returns if str(r.get("Id")) in allowed]
+
+    matches = []
+    for r in returns:
+        if not r.get("Id") or not r.get("Name"):
+            continue
+        name_tokens = _tokens(r["Name"]) - _GENERIC_NAME_TOKENS
+        if name_tokens and (query_tokens & name_tokens):
+            matches.append(r["Id"])
+    return matches
+
+
+def _build_return_clarification(query: str, login_id: str, restrict_to: list | None = None) -> dict:
+    """Build a needs_clarification response for the "no table/return signal
+    at all" case (today's old 404) — asks the user to pick a return, rather
+    than failing outright.
+
+    When `restrict_to` is given (return_ids the query already narrowed down
+    to — either a literal name mention via _find_named_return_ids, or the
+    return_ids behind the query's own (low-confidence) embedding shortlist —
+    see the call site in variance_nlresolve), the options are narrowed to
+    just those instead of every authorized return. `restrict_to` is only
+    ever omitted/empty as a last resort, when the query matched nothing at
+    all — otherwise showing the user's entire authorized return list (which
+    can be long) for a query that already gave SOME signal would defeat the
+    point of asking.
+
+    `allow_other: True` is always included so the frontend can offer an
+    "Others" free-text box (see ControlBar.jsx's NlpReturnPicker) for a user
+    whose intended return isn't among the narrowed options."""
+    from .auth_service import get_allowed_form_ids
+    from .config import AUTH_ENABLED
+
+    returns = list(_parse_returns())
+    if AUTH_ENABLED:
+        allowed = get_allowed_form_ids(login_id) or set()
+        returns = [r for r in returns if str(r.get("Id")) in allowed]
+    if restrict_to:
+        restrict_set = set(restrict_to)
+        returns = [r for r in returns if r.get("Id") in restrict_set]
+
+    options = [
+        {"id": r["Id"], "label": r["Name"]}
+        for r in returns
+        if r.get("Id") and r.get("Name")
+    ]
+    options.sort(key=lambda o: o["label"].lower())
+
+    question = (
+        "I found a few returns that might match what you typed. Which one did you mean?"
+        if restrict_to
+        else "I couldn't tell which return your query is about. Which one did you mean?"
+    )
+    return {
+        "needs_clarification": True,
+        "dimension": "return",
+        "question": question,
+        "options": options,
+        "skippable": True,
+        "allow_other": True,
+        "confidence": 0.0,
+        "resolved_context": {"query": query},
+    }
+
+
+def _build_table_clarification(
+    query: str, shortlist: dict, table_confidence: float, return_id: str | None = None,
+) -> dict:
+    """Build a needs_clarification response for table/section-level
+    ambiguity — either the free-form cross-return case (backend/nlp/
+    retriever.py's table_ambiguous) or the narrower case after a return has
+    already been pinned (via a prior "return" clarification answer), which
+    passes `return_id` through so a subsequent skip/answer on THIS prompt
+    stays scoped to that same return (see resolved_context handling in
+    variance_nlresolve) instead of falling back to free-form retrieval.
+
+    Deliberately does NOT surface the candidate table names to the user —
+    they're internal schema details, not something a business user should
+    have to pick between. Instead this always just asks for more descriptive
+    detail about the data they're after (frontend: ControlBar.jsx's
+    NlpClarificationPanel renders a single free-text box, no option list),
+    which gets folded back into the query and re-resolved from scratch. The
+    candidate tables are kept in `options` purely for callers other than the
+    shipped UI (e.g. direct API use/tests) that may still want to answer by
+    table name — see the dimension=="table" branch in variance_nlresolve.
+
+    `resolved_context` is just echoed back to the client — there is no
+    server-side session store; the follow-up request resends it verbatim
+    alongside the user's pick (see NLResolveRequest.clarification_answer/
+    resolved_context)."""
+    candidates = shortlist["tables"][:8]
+    options = [
+        {
+            "id": t["table"],
+            "label": f"{t.get('return_name') or t.get('return_id') or 'Unknown return'} — {t['table']}",
+        }
+        for t in candidates
+    ]
+    question = (
+        "I'm not fully confident which data you mean yet — "
+        "can you describe it in a bit more detail (e.g. the specific metric, "
+        "section, or return)?"
+    )
+
+    resolved_context: dict = {"query": query}
+    if return_id:
+        resolved_context["return_id"] = return_id
+
+    return {
+        "needs_clarification": True,
+        "dimension": "table",
+        "question": question,
+        "options": options,
+        "skippable": True,
+        "confidence": round(table_confidence, 3),
+        "resolved_context": resolved_context,
+    }
+
+
+def _shortlist_for_return(return_id: str) -> dict | None:
+    """Build a minimal shortlist scoped to every table under one specific
+    return, for when the user has explicitly named the return (either via
+    the "return" clarification, or in a future phase directly in the
+    query) but the query itself gave no table-level signal to rank among
+    them. Column candidates are pulled straight from the embedding index's
+    per-table grouping (same helper retriever.py's own backfill logic
+    uses) rather than re-running a query-scoped FAISS search, since there's
+    no query signal to search with here — intent_resolver still needs a
+    full column list to pick from."""
+    from .nlp.index_store import meta_by_table
+    from .nlp.nlp_config import COLUMN_INDEX_PATH, COLUMN_META_PATH
+
+    return_row = next((r for r in _parse_returns() if r.get("Id") == return_id), None)
+    if return_row is None:
+        return None
+
+    found = service.find_return_and_tables(return_row.get("Name", ""))
+    if found.get("error") or found.get("candidates") or not found.get("table_mapping_path"):
+        return None
+
+    tables = [
+        {
+            "table":        t["table_name"],
+            "return_id":    found["return_id"],
+            "return_name":  found["return_name"],
+            "filter_col":   t.get("filter_col") or "RDATE",
+            "report_freq":  found.get("report_freq") or "M",
+        }
+        for t in found.get("tables", []) if t.get("table_name")
+    ]
+    if not tables:
+        return None
+
+    grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+    seen_cols: set = set()
+    columns: list = []
+    for t in tables:
+        for c in grouped_columns.get(t["table"], []):
+            key = (c["table"], c["column"])
+            if key not in seen_cols:
+                seen_cols.add(key)
+                columns.append(c)
+
+    ambiguous = len(tables) > 1
+    return {
+        "tables": tables,
+        "columns": columns,
+        "matched_labels": [],
+        "table_confidence": 0.5 if ambiguous else 1.0,
+        "table_ambiguous": ambiguous,
+    }
+
+
+def _shortlist_for_table(table_name: str) -> dict | None:
+    """Build a minimal single-table shortlist once the user has picked (or
+    a prior step pinned) one specific table by name — used both for the
+    "table" clarification's non-skip answer and to re-derive a table's
+    return_id/report_freq when it's needed but wasn't already in scope."""
+    from .nlp import return_lookup
+    from .nlp.index_store import meta_by_table
+    from .nlp.nlp_config import COLUMN_INDEX_PATH, COLUMN_META_PATH
+
+    ret = return_lookup.get_return_for_table(table_name)
+    if not ret or not ret.get("return_id"):
+        return None
+
+    grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+    return {
+        "tables": [{"table": table_name, **ret}],
+        "columns": grouped_columns.get(table_name, []),
+        "matched_labels": [],
+        "table_confidence": 1.0,
+        "table_ambiguous": False,
+    }
+
+
 # ── POST /variance/nlresolve ───────────────────────────────────────────────────
 @app.post("/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_nlresolve(
@@ -217,20 +502,143 @@ async def variance_nlresolve(
     from .nlp.retriever import get_relevant_schema
     from .nlp.intent_resolver import resolve_intent
     from .nlp.date_resolver import resolve_reporting_date
+    from .nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
 
     query = payload.query.strip()
-    logger.info("[main] POST /variance/nlresolve | login_id=%s | query=%r", login_id, query)
+    logger.info(
+        "[main] POST /variance/nlresolve | login_id=%s | query=%r | dimension=%r | answer=%r",
+        login_id, query, payload.dimension, payload.clarification_answer,
+    )
 
     if not query:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="query must not be empty.")
 
-    shortlist = get_relevant_schema(query, login_id)
-    if not shortlist["tables"]:
-        logger.warning("[main] 404 /variance/nlresolve | login_id=%s | query=%r | no authorized table matched", login_id, query)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No accessible return/table matches this query.",
-        )
+    resolved_context = payload.resolved_context or {}
+    pinned_return_id = resolved_context.get("return_id")
+    answer = payload.clarification_answer
+
+    if payload.dimension == "return" and answer:
+        if answer == _SKIP_ANSWER:
+            # No return picked — best-effort: fall back to whatever the
+            # free-form retrieval found, even below the confidence floor
+            # that originally triggered this prompt. If it found literally
+            # nothing, there's nothing to guess with.
+            shortlist = get_relevant_schema(query, login_id)
+            if not shortlist["tables"]:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Still couldn't find a matching return/table for this query — please add more detail.",
+                )
+            logger.info(
+                "[main] /variance/nlresolve | login_id=%s | query=%r | return clarification skipped -> best-effort guess",
+                login_id, query,
+            )
+        else:
+            shortlist = _shortlist_for_return(answer)
+            if shortlist is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selected return is no longer available.")
+            logger.info(
+                "[main] /variance/nlresolve | login_id=%s | query=%r | return answered -> return_id=%s (%d table(s))",
+                login_id, query, answer, len(shortlist["tables"]),
+            )
+            if shortlist["table_ambiguous"]:
+                return _build_table_clarification(query, shortlist, shortlist["table_confidence"], return_id=answer)
+
+    elif payload.dimension == "table" and answer:
+        if answer == _SKIP_ANSWER:
+            # No specific table picked — best-effort: let resolve_intent's
+            # LLM choose freely from the (still-ambiguous) shortlist, scoped
+            # to whichever return was already pinned if one was.
+            shortlist = _shortlist_for_return(pinned_return_id) if pinned_return_id else get_relevant_schema(query, login_id)
+            if shortlist is None or not shortlist["tables"]:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No accessible return/table matches this query.",
+                )
+            logger.info(
+                "[main] /variance/nlresolve | login_id=%s | query=%r | table clarification skipped -> best-effort guess",
+                login_id, query,
+            )
+        else:
+            shortlist = _shortlist_for_table(answer)
+            if shortlist is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Selected option is no longer valid for this query.",
+                )
+            logger.info(
+                "[main] /variance/nlresolve | login_id=%s | query=%r | table answered -> table=%s",
+                login_id, query, answer,
+            )
+
+    else:
+        # First pass for this query — no clarification answer yet.
+        shortlist = get_relevant_schema(query, login_id)
+        table_confidence = shortlist.get("table_confidence", 0.0)
+        table_ambiguous = shortlist.get("table_ambiguous", False)
+
+        weak_retrieval = not shortlist["tables"] or table_confidence < CONFIDENCE_ASK_FLOOR
+        if weak_retrieval:
+            # Retrieval alone isn't confident there's a real match — before
+            # asking a broad "which return?" question, check whether the
+            # query TEXT already names a known return explicitly. A literal
+            # name mention is stronger evidence than a coincidental (or
+            # coincidentally absent) embedding score.
+            named_return_ids = _find_named_return_ids(query, login_id)
+
+            if len(named_return_ids) == 1:
+                named_shortlist = _shortlist_for_return(named_return_ids[0])
+                if named_shortlist is not None:
+                    logger.info(
+                        "[main] /variance/nlresolve | login_id=%s | query=%r | "
+                        "query names return_id=%s directly -> using it instead of asking",
+                        login_id, query, named_return_ids[0],
+                    )
+                    shortlist = named_shortlist
+                    table_confidence = shortlist["table_confidence"]
+                    table_ambiguous = shortlist["table_ambiguous"]
+                    weak_retrieval = False
+
+            if weak_retrieval:
+                # Narrow the options to returns the query actually gave SOME
+                # signal for — a literal name mention first, else whichever
+                # return_ids the query's own (too-low-confidence-to-auto-
+                # proceed) embedding shortlist already surfaced. Only when
+                # neither found anything at all does this fall through to
+                # None, i.e. the full authorized-return list, as a last
+                # resort — see _build_return_clarification's docstring.
+                query_related_return_ids = list(named_return_ids)
+                if not query_related_return_ids:
+                    seen: set = set()
+                    for t in shortlist["tables"]:
+                        rid = t.get("return_id")
+                        if rid and rid not in seen:
+                            seen.add(rid)
+                            query_related_return_ids.append(rid)
+
+                logger.info(
+                    "[main] /variance/nlresolve | login_id=%s | query=%r | no usable table/return signal "
+                    "(table_confidence=%.3f, query_related_return_ids=%s) -> asking for return",
+                    login_id, query, table_confidence, query_related_return_ids,
+                )
+                return _build_return_clarification(
+                    query, login_id,
+                    restrict_to=query_related_return_ids or None,
+                )
+
+        if table_ambiguous or table_confidence < CONFIDENCE_AUTO_PROCEED:
+            logger.info(
+                "[main] /variance/nlresolve | login_id=%s | query=%r | table ambiguous "
+                "(confidence=%.3f, tied=%s) -> asking clarification",
+                login_id, query, table_confidence, table_ambiguous,
+            )
+            return _build_table_clarification(query, shortlist, table_confidence)
+
+    # Default to 1.0 for shortlists this route itself pinned down to exactly
+    # one table (_shortlist_for_return/_shortlist_for_table, or the "return"
+    # skip's best-effort guess) — those didn't go through the ambiguity
+    # scoring above, so there's no lower number to report here.
+    final_confidence = shortlist.get("table_confidence", 1.0)
 
     resolution = resolve_intent(query, shortlist)
     if resolution is None:
@@ -344,6 +752,7 @@ async def variance_nlresolve(
         "return_name":        found["return_name"],
         "report_freq":        report_freq,
         "table_mapping_path": found["table_mapping_path"],
+        "confidence":         round(final_confidence, 3),
     }
 
 

@@ -7,15 +7,12 @@
  * overlay) instead of a flat button list, keeping the toolbar compact while
  * still showing all matches.
  *
- * CHANGE: Reporting Date field now uses flatpickr instead of a plain text
- * input. The picker is initialized/torn down whenever Row 2 actually mounts
- * (i.e. when returnInfo becomes available), since this row doesn't exist in
- * the DOM until then — initializing on first component mount alone would
- * silently fail to attach, since the ref would still be null at that point.
+ * CHANGE: Reporting Date field is a dropdown of the actual submission dates
+ * on file for the selected return/table (fetched by LayoutContainer via
+ * GET /variance/dates), instead of a free calendar — the user picks a date
+ * guaranteed to have data rather than guessing one.
  */
 import { useEffect, useRef, useState } from 'react'
-import flatpickr from 'flatpickr'
-import 'flatpickr/dist/flatpickr.min.css'
 import { VARIANCE_STEPS, COMPARISON_MODES, freqLabel } from '../types.js'
 
 const SCORE_BADGE = (score) => {
@@ -129,54 +126,253 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
   )
 }
 
-// ── Reporting Date field (flatpickr-backed, single input, no future dates) ──
-function DateField({ dateStr, setDateStr, dateHint }) {
-  const inputRef = useRef(null)
-  const fpRef = useRef(null)
+// ── NLP "tell me more" clarification panel ───────────────────────────────────
+// Rendered directly below the NLP mini-bar when the return is known but the
+// specific table/section is unclear (dimension === "table") — see
+// LayoutContainer's handleNlpSearch / backend/main.py's needs_clarification
+// response. Deliberately does NOT list the candidate tables as pickable
+// options — those are internal schema names, not something to show a
+// business user. Instead it's always just a free-text box: whatever the
+// user types is folded into the original query and the whole thing is
+// re-resolved from scratch via onOthers (same mechanism as NlpReturnPicker's
+// "Others" box above), alongside a Skip that proceeds with the best-effort
+// RAG resolution immediately.
+function NlpClarificationPanel({ clarification, onSkip, onCancel, onOthers }) {
+  const [text, setText] = useState('')
+  const { question, skippable } = clarification
 
-  // Init/teardown flatpickr directly on the input itself (no wrap div needed).
-  // This component only mounts once returnInfo is set (see Row 2 below), so
-  // by the time this effect runs, inputRef.current is guaranteed to exist.
-  useEffect(() => {
-    if (inputRef.current && !fpRef.current) {
-      fpRef.current = flatpickr(inputRef.current, {
-        dateFormat: 'd-M-Y',
-        defaultDate: dateStr || null,
-        maxDate: 'today', // disallow picking a future date
-        onChange: (_selectedDates, selectedDate) => {
-          setDateStr(selectedDate)
-        },
-      })
-    }
-
-    return () => {
-      if (fpRef.current) {
-        fpRef.current.destroy()
-        fpRef.current = null
-      }
-    }
-  }, [])
-
-  // Keep the picker's internal display in sync if dateStr changes
-  // externally (e.g. handleReset clearing it back to '').
-  useEffect(() => {
-    if (fpRef.current) {
-      fpRef.current.setDate(dateStr || null, false)
-    }
-  }, [dateStr])
+  function handleSubmit() {
+    if (!text.trim()) return
+    onOthers(text)
+  }
 
   return (
-    <input
-      ref={inputRef}
-      type="text"
-      className="ctrl-input ctrl-input-date"
-      placeholder={dateHint.example || 'DD-MMM-YYYY'}
-      readOnly
-      title={
-        'Format: DD-MMM-YYYY' +
-        (dateHint.hint ? ' · ' + dateHint.hint : '')
+    <div className="nlp-clarify-panel">
+      <div className="nlp-clarify-question">{question}</div>
+      <div className="nlp-clarify-options">
+        <input
+          className="disambig-search-input"
+          placeholder="Describe the data you need…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+          autoFocus
+        />
+        <button
+          type="button"
+          className="disambig-others-submit-btn"
+          onClick={handleSubmit}
+          disabled={!text.trim()}
+          title="Submit"
+        >
+          &#8594;
+        </button>
+        {skippable && (
+          <button type="button" className="nlp-clarify-skip-btn" onClick={onSkip}>
+            Skip — best guess
+          </button>
+        )}
+        <button
+          type="button"
+          className="nlp-clarify-cancel-btn"
+          onClick={onCancel}
+          title="Cancel"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── NLP "which return" clarification panel ──────────────────────────────────
+// Rendered below the NLP mini-bar when the query gave no usable table/return
+// signal at all (dimension === "return"). Options are pre-narrowed by the
+// backend to just the returns the query itself gave some signal for (a named
+// mention, or its own low-confidence embedding shortlist) — see
+// backend/main.py's _build_return_clarification — so this is normally a
+// short list, not every authorized return; it only falls back to the full
+// list as a last resort when the query matched nothing at all. Reuses
+// DisambigDropdown's searchable trigger+menu structure/styles, generalized
+// to plain {id, label} items instead of return-shaped candidates with a
+// score badge.
+//
+// When `clarification.allowOther` is set, an "Others" row lets the user type
+// free-text extra detail instead of picking a listed return — submitting it
+// calls `onOthers(text)`, which the caller (LayoutContainer) folds into the
+// original query and re-resolves from scratch.
+function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }) {
+  const [open, setOpen] = useState(true)
+  const [filter, setFilter] = useState('')
+  const [showOthers, setShowOthers] = useState(false)
+  const [othersText, setOthersText] = useState('')
+  const dropRef = useRef(null)
+  const { question, options, skippable, allowOther } = clarification
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        setOpen(false)
+        onCancel()
       }
-    />
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open, onCancel])
+
+  const filtered = filter.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(filter.toLowerCase()))
+    : options
+
+  function handleSelect(opt) {
+    setOpen(false)
+    onSelect(opt)
+  }
+
+  function handleOthersSubmit() {
+    if (!othersText.trim()) return
+    setOpen(false)
+    onOthers(othersText)
+  }
+
+  return (
+    <div className="nlp-clarify-panel">
+      <div className="nlp-clarify-question">{question}</div>
+      <div className="disambig-dropdown-wrap" ref={dropRef}>
+        <button className="disambig-trigger" onClick={() => setOpen((o) => !o)} type="button">
+          <span className="disambig-trigger-icon">⚡</span>
+          <span className="disambig-trigger-label">
+            {options.length} return{options.length !== 1 ? 's' : ''} available
+          </span>
+          <span className="disambig-trigger-arrow">{open ? '▲' : '▼'}</span>
+        </button>
+
+        {open && (
+          <div className="disambig-menu">
+            <div className="disambig-search-row">
+              <input
+                className="disambig-search-input"
+                placeholder="Filter returns…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                autoFocus
+              />
+              {skippable && (
+                <button
+                  type="button"
+                  className="nlp-clarify-skip-btn"
+                  onClick={() => { setOpen(false); onSkip() }}
+                >
+                  Skip
+                </button>
+              )}
+              <button
+                className="disambig-cancel-btn"
+                onClick={() => { setOpen(false); onCancel() }}
+                title="Cancel"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="disambig-list">
+              {filtered.length === 0 ? (
+                <div className="disambig-empty">No matches for &ldquo;{filter}&rdquo;</div>
+              ) : (
+                filtered.map((opt) => (
+                  <button
+                    key={opt.id}
+                    className="disambig-item"
+                    onClick={() => handleSelect(opt)}
+                    type="button"
+                  >
+                    <span className="disambig-item-name">{opt.label}</span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="disambig-footer">
+              {filtered.length} of {options.length} shown
+            </div>
+
+            {allowOther && (
+              <div className="disambig-others-row">
+                {!showOthers ? (
+                  <button
+                    type="button"
+                    className="disambig-item disambig-others-toggle"
+                    onClick={() => setShowOthers(true)}
+                  >
+                    <span className="disambig-item-name">
+                      Others &mdash; none of these, let me describe it
+                    </span>
+                  </button>
+                ) : (
+                  <div className="disambig-others-input-row">
+                    <input
+                      className="disambig-search-input"
+                      placeholder="e.g. return name, section, or more detail…"
+                      value={othersText}
+                      onChange={(e) => setOthersText(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleOthersSubmit()}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="disambig-others-submit-btn"
+                      onClick={handleOthersSubmit}
+                      disabled={!othersText.trim()}
+                      title="Submit"
+                    >
+                      &#8594;
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Reporting Date field — dropdown of dates that actually have data ───────
+function DateField({ dateStr, setDateStr, availableDates, datesLoading }) {
+  if (datesLoading) {
+    return (
+      <select className="ctrl-select ctrl-input-date" disabled value="">
+        <option value="">Loading dates&hellip;</option>
+      </select>
+    )
+  }
+
+  if (!availableDates || availableDates.length === 0) {
+    return (
+      <select className="ctrl-select ctrl-input-date" disabled value="">
+        <option value="">No data found for this table</option>
+      </select>
+    )
+  }
+
+  return (
+    <select
+      className="ctrl-select ctrl-input-date"
+      value={dateStr}
+      onChange={(e) => setDateStr(e.target.value)}
+      title="Only dates with actual submitted data are listed"
+    >
+      <option value="" disabled>
+        Select a date&hellip;
+      </option>
+      {availableDates.map((d) => (
+        <option key={d} value={d}>
+          {d}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -191,7 +387,8 @@ export default function ControlBar({
   setTableName,
   dateStr,
   setDateStr,
-  dateHint,
+  availableDates,
+  datesLoading,
   periods,
   setPeriods,
   comparisonMode,
@@ -207,6 +404,11 @@ export default function ControlBar({
   setNlpQuery,
   handleNlpSearch,
   handleVoiceInput,
+  nlpClarification,
+  onClarificationSelect,
+  onClarificationSkip,
+  onClarificationCancel,
+  onClarificationOthers,
 }) {
   const canCompute = !!(
     returnInfo &&
@@ -254,6 +456,24 @@ export default function ControlBar({
           🔍
         </button>
       </div>
+
+      {nlpClarification && nlpClarification.dimension === 'return' && (
+        <NlpReturnPicker
+          clarification={nlpClarification}
+          onSelect={onClarificationSelect}
+          onSkip={onClarificationSkip}
+          onCancel={onClarificationCancel}
+          onOthers={onClarificationOthers}
+        />
+      )}
+      {nlpClarification && nlpClarification.dimension !== 'return' && (
+        <NlpClarificationPanel
+          clarification={nlpClarification}
+          onSkip={onClarificationSkip}
+          onCancel={onClarificationCancel}
+          onOthers={onClarificationOthers}
+        />
+      )}
 
       {/* Row 1: Return search */}
       <div className="ctrl-row">
@@ -341,7 +561,8 @@ export default function ControlBar({
           <DateField
             dateStr={dateStr}
             setDateStr={setDateStr}
-            dateHint={dateHint}
+            availableDates={availableDates}
+            datesLoading={datesLoading}
           />
 
           <div className="ctrl-sep" aria-hidden="true" />

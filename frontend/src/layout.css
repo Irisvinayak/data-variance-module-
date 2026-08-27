@@ -183,6 +183,75 @@
   .nlp-query-container { padding: 3px 4px 3px 8px; }
 }
 
+/* ── NLP clarification panel (rendered below .nlp-mini-bar) ─────────────────
+   A single free-text box (reuses .disambig-search-input) plus skip/cancel —
+   see ControlBar.jsx's NlpClarificationPanel; candidate table names are
+   deliberately never rendered here. */
+.nlp-clarify-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 7px;
+}
+
+.nlp-clarify-question {
+  font-size: 0.82rem;
+  color: #111111;
+}
+
+.nlp-clarify-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.nlp-clarify-skip-btn {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+.nlp-clarify-skip-btn:hover {
+  background: #e8e8e8;
+  border-color: #999999;
+}
+
+.nlp-clarify-cancel-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.nlp-clarify-cancel-btn:hover {
+  background: rgba(192, 57, 43, 0.08);
+  border-color: rgba(192, 57, 43, 0.35);
+  color: #a93226;
+}
+
 
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-LABELS] — ControlBar.jsx — labels, text inputs, date input, select
@@ -625,6 +694,46 @@
   color: rgba(0, 0, 0, 0.35);
   text-align: right;
   flex-shrink: 0;
+}
+
+/* ── "Others" row — NlpReturnPicker free-text fallback ─────────────────── */
+.disambig-others-row {
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  flex-shrink: 0;
+}
+.disambig-others-toggle .disambig-item-name {
+  font-weight: 500;
+  font-style: italic;
+  color: rgba(0, 0, 0, 0.6);
+}
+.disambig-others-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.disambig-others-submit-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  color: #111111;
+  font-size: 0.9rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
+}
+.disambig-others-submit-btn:hover:not(:disabled) {
+  background: #e2e2e2;
+  border-color: #999999;
+}
+.disambig-others-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 

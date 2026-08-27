@@ -74,6 +74,15 @@ QA_INDEX_PATH: str = os.path.join(INDEX_DIR, "qa_index.faiss")
 QA_META_PATH: str = os.path.join(INDEX_DIR, "qa_meta.pkl")
 QA_PREFILTER_TOP_N: int = int(os.getenv("DV_NLP_QA_PREFILTER_TOP_N", "20"))
 
+# ── Table-resolution confidence / ambiguity (backend/nlp/confidence.py) ────────
+# table_confidence >= AUTO_PROCEED  -> resolve automatically, exactly as today.
+# ASK_FLOOR <= table_confidence < AUTO_PROCEED (or a tie is detected even above
+# AUTO_PROCEED) -> ask the user a clarifying question instead of guessing.
+# table_confidence < ASK_FLOOR -> today's existing "no match" 404, unchanged.
+CONFIDENCE_AUTO_PROCEED: float = float(os.getenv("DV_NLP_CONFIDENCE_AUTO_PROCEED", "0.72"))
+CONFIDENCE_ASK_FLOOR: float = float(os.getenv("DV_NLP_CONFIDENCE_ASK_FLOOR", "0.35"))
+TIE_EPSILON: float = float(os.getenv("DV_NLP_TIE_EPSILON", "0.08"))
+
 # ── Ollama (LLM-assisted intent resolution + SQL generation) ──────────────────
 # Reuses the same self-hosted Ollama endpoint sql_agent already talks to.
 OLLAMA_URL: str = os.getenv(

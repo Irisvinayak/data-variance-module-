@@ -18,3 +18,14 @@ class VarianceComputeRequest(BaseModel):
 
 class NLResolveRequest(BaseModel):
     query: str
+    # All optional/additive — present only on a clarification follow-up
+    # request. `dimension` says which prior clarification is being answered
+    # ("return" or "table" — see the needs_clarification response's own
+    # `dimension` field), `clarification_answer` is the `id` of the option
+    # the user picked (or the "__skip__" sentinel — see backend/main.py),
+    # and `resolved_context` is echoed straight back from whatever the prior
+    # needs_clarification response sent, so no server-side session store is
+    # needed between requests.
+    dimension:            Optional[str] = None
+    clarification_answer: Optional[str] = None
+    resolved_context:     Optional[Dict[str, Any]] = None

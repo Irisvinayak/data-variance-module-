@@ -25,6 +25,7 @@ from .embedder import embed_query
 from .index_store import meta_by_table, search
 from .lexical_search import search_bm25, search_qa_strong_match
 from .query_normalizer import normalize_query
+from . import confidence as confidence_mod
 from .nlp_config import (
     BM25_INDEX_PATH,
     BM25_SIGNAL_WEIGHT,
@@ -43,6 +44,7 @@ from .nlp_config import (
     ROW_LABEL_META_PATH,
     TABLE_INDEX_PATH,
     TABLE_META_PATH,
+    TIE_EPSILON,
     TOP_K_COLUMNS,
     TOP_K_LABELS,
     TOP_K_TABLES,
@@ -198,6 +200,7 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
         if QA_STRONG_MATCH_THRESHOLD
         else None
     )
+    canonical_qa_table: str | None = None
     if qa_table:
         # qa_pairs.json's table names may differ in case from the FAISS/BM25
         # meta's table names (e.g. "CIMS_..." vs "cims_..." — different build
@@ -215,9 +218,21 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     # Tertiary signal: exact lexical term overlap — a small, bounded tie-breaker
     # (max contribution ~0.03, on par with one primary rrf hit) layered on top
     # of cosine similarity, not a replacement for it. See _lexical_overlap.
+    # Also kept per-table (not just folded into `scores`) since confidence.py
+    # reuses it as a small standalone signal on the winning candidate.
+    lexical_overlap_by_table: Dict[str, float] = {}
     for tbl in scores:
         overlap = _lexical_overlap(query_tokens, " ".join(texts_by_table.get(tbl, [])))
+        lexical_overlap_by_table[tbl] = overlap
         scores[tbl] += overlap * 0.03
+
+    # Snapshot the fused score with the QA strong-match bonus (+10.0) removed,
+    # for confidence scoring only — that bonus deliberately dwarfs every other
+    # signal so it can win the ranking below, but it would otherwise saturate
+    # confidence.table_confidence()'s normalization to a meaningless 0/1 split.
+    scores_for_confidence: Dict[str, float] = dict(scores)
+    if canonical_qa_table and canonical_qa_table in scores_for_confidence:
+        scores_for_confidence[canonical_qa_table] -= QA_STRONG_MATCH_BONUS
 
     # Dedupe backup/duplicate table copies (same section, "_bckup"/"_bkup"/"_BK"
     # suffix) down to their best-scoring variant BEFORE the top-K cutoff, so
@@ -230,6 +245,7 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
             canonical_best[canon] = tbl
     deduped_table_names = set(canonical_best.values())
     scores = {tbl: s for tbl, s in scores.items() if tbl in deduped_table_names}
+    scores_for_confidence = {tbl: s for tbl, s in scores_for_confidence.items() if tbl in deduped_table_names}
 
     ranked_tables = sorted(scores, key=scores.__getitem__, reverse=True)[:TOP_K_TABLES]
 
@@ -318,8 +334,27 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
             unique_labels.append(lbl)
     matched_labels = unique_labels[:TOP_K_LABELS]
 
-    logger.info(
-        "[nlp.retriever] query=%r | login_id=%r | %d authorized table(s), %d column(s), %d label(s)",
-        query, login_id, len(tables), len(columns), len(matched_labels),
+    # ── Table-resolution confidence (backend/nlp/confidence.py) ───────────────
+    # Ordered, authorized-only (table, score) pairs, QA bonus excluded — see
+    # scores_for_confidence above. Preserves ranked_tables' relative order.
+    authorized_ranked = [
+        (tbl, scores_for_confidence[tbl]) for tbl in ranked_tables if tbl in authorized_table_names
+    ]
+    qa_hit = bool(authorized_ranked) and canonical_qa_table == authorized_ranked[0][0]
+    table_confidence, table_ambiguous = confidence_mod.table_confidence(
+        authorized_ranked, qa_hit, lexical_overlap_by_table, TIE_EPSILON,
     )
-    return {"tables": tables, "columns": columns, "matched_labels": matched_labels}
+
+    logger.info(
+        "[nlp.retriever] query=%r | login_id=%r | %d authorized table(s), %d column(s), %d label(s) | "
+        "table_confidence=%.3f | table_ambiguous=%s",
+        query, login_id, len(tables), len(columns), len(matched_labels),
+        table_confidence, table_ambiguous,
+    )
+    return {
+        "tables": tables,
+        "columns": columns,
+        "matched_labels": matched_labels,
+        "table_confidence": table_confidence,
+        "table_ambiguous": table_ambiguous,
+    }
