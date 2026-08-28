@@ -17,6 +17,7 @@ from .config import (
     DP_TABLE_SCHEMA,
 )
 from .xml_loader import load_xml_tree
+from . import query_xml_lookup
 from .report_lookup import (
     find_matching_reports, _parse_returns, get_is_excel_by_return_code,
     search_returns_scored, AUTO_SELECT_THRESHOLD,
@@ -395,27 +396,46 @@ def _get_table_metadata(
     table_name: str,
 ) -> Dict[str, Any]:
     root, _ = _load_table_mapping(return_id, tbl_path)
-
-    if root is None:
-        raise FileNotFoundError("Table mapping not found")
-
     tname_up = table_name.strip().upper()
 
-    for el in root.findall("Row"):
-        xml_name = (el.attrib.get("TableName") or "").strip().upper()
-        if xml_name == tname_up:
-            comp       = el.attrib.get("CompFilterColName", "")
-            comp_cols  = [c.strip().upper() for c in comp.split("|") if c.strip()]
-            filter_col = (el.attrib.get("FilterColumn") or "").strip().upper()
-            return {
-                "filter_col":            filter_col,
-                "comp_filter_col_names": comp_cols,
-                "report_freq":           None,
-                "is_single":             el.attrib.get("IsSingle", "false").lower() == "true",
-                "return_code_col":       (el.attrib.get("ReturnCodeColumn") or "").upper() or None,
-                "freq_col":              (el.attrib.get("FreqColumn") or "").upper() or None,
-                "freq_val":              el.attrib.get("FreqValue"),
-            }
+    if root is not None:
+        for el in root.findall("Row"):
+            xml_name = (el.attrib.get("TableName") or "").strip().upper()
+            if xml_name == tname_up:
+                comp       = el.attrib.get("CompFilterColName", "")
+                comp_cols  = [c.strip().upper() for c in comp.split("|") if c.strip()]
+                filter_col = (el.attrib.get("FilterColumn") or "").strip().upper()
+                return {
+                    "filter_col":            filter_col,
+                    "comp_filter_col_names": comp_cols,
+                    "report_freq":           None,
+                    "is_single":             el.attrib.get("IsSingle", "false").lower() == "true",
+                    "return_code_col":       (el.attrib.get("ReturnCodeColumn") or "").upper() or None,
+                    "freq_col":              (el.attrib.get("FreqColumn") or "").upper() or None,
+                    "freq_val":              el.attrib.get("FreqValue"),
+                }
+
+    # ── Fallback: XML_Query.xml ───────────────────────────────────────────────
+    # Reached when the mapping file is missing entirely (root is None) OR it
+    # loaded but doesn't define this table — the latter is common because a
+    # number of returns ship mapping rows with empty TableName attributes
+    # (e.g. the CIMS_ALE returns). Those returns still describe their tables
+    # in XML_Query.xml's SELECT statements, which is where RptDtClmnName gives
+    # us the filter_col this function exists to provide. Without this, every
+    # such table 404'd out of /variance/dates and compute_variance.
+    fallback = query_xml_lookup.get_table_metadata(return_id, table_name)
+    if fallback is not None:
+        logger.info(
+            "[service] Table %r resolved via %s fallback (return_id=%s, filter_col=%s)",
+            table_name, query_xml_lookup.XML_QUERY_FILENAME, return_id, fallback["filter_col"],
+        )
+        return fallback
+
+    if root is None:
+        raise FileNotFoundError(
+            f"Table mapping not found for return {return_id}, and no "
+            f"{query_xml_lookup.XML_QUERY_FILENAME} entry for table '{table_name}'."
+        )
 
     available = [el.attrib.get("TableName", "") for el in root.findall("Row")]
     raise KeyError(

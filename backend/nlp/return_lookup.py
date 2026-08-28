@@ -20,6 +20,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
+from .. import query_xml_lookup
 from ..report_lookup import _parse_returns
 from ..service import _load_table_mapping
 
@@ -56,34 +57,65 @@ def _build_lookup() -> Dict[str, Dict[str, Any]]:
                 "[nlp.return_lookup] Skipping return_id=%s (%s) — _load_table_mapping raised: %s",
                 return_id, return_name, exc,
             )
-            continue
-        if root is None:
-            # File wasn't found OR was found but failed to parse — either way this
-            # return's tables silently drop out of get_return_for_table() lookups
-            # from here on, which downstream shows up as a confusing return_id=None
-            # 404 with no indication of which return/file actually failed. Log it
-            # at WARNING (not DEBUG) so it's visible in normal production logs.
-            logger.warning(
-                "[nlp.return_lookup] Skipping return_id=%s (%s) — table mapping not found/unparseable "
-                "(tbl_path=%r, tried resolving to %r). Every table under this return is now "
-                "unresolvable via get_return_for_table().",
-                return_id, return_name, tbl_path, resolved_path,
-            )
-            continue
+            root, resolved_path = None, None
 
-        for el in root.findall("Row"):
-            table_name = (el.attrib.get("TableName") or "").strip()
-            if not table_name:
-                continue
-            key = _strip_dp_suffix(table_name).upper()
-            comp_raw = el.attrib.get("CompFilterColName", "")
-            lookup[key] = {
-                "return_id": return_id,
-                "return_name": return_name,
-                "report_freq": report_freq,
-                "filter_col": el.attrib.get("FilterColumn", ""),
-                "comp_filter_col_names": [c.strip() for c in comp_raw.split("|") if c.strip()],
-            }
+        rows_registered = 0
+        if root is not None:
+            for el in root.findall("Row"):
+                table_name = (el.attrib.get("TableName") or "").strip()
+                if not table_name:
+                    continue
+                key = _strip_dp_suffix(table_name).upper()
+                comp_raw = el.attrib.get("CompFilterColName", "")
+                lookup[key] = {
+                    "return_id": return_id,
+                    "return_name": return_name,
+                    "report_freq": report_freq,
+                    "filter_col": el.attrib.get("FilterColumn", ""),
+                    "comp_filter_col_names": [c.strip() for c in comp_raw.split("|") if c.strip()],
+                }
+                rows_registered += 1
+
+        # ── Fallback: XML_Query.xml ───────────────────────────────────────────
+        # Registering ZERO tables means this return contributes nothing, and
+        # retriever.py unconditionally DROPS any table whose return_id won't
+        # resolve — so those tables become permanently unreachable by the NLP
+        # layer (empty shortlist -> the "which return?" prompt degrades to
+        # listing every return, plus a "Could not resolve this query to a
+        # known table/column" 404). Two distinct causes both land here: the
+        # mapping file is missing (root is None), or it parsed but every
+        # TableName attribute is empty (the CIMS_ALE returns). Either way the
+        # return's SELECT statements in XML_Query.xml still name its tables.
+        if rows_registered == 0:
+            for key, meta in query_xml_lookup.tables_for_return(return_id).items():
+                base_key = _strip_dp_suffix(key).upper()
+                # Never override a table another return already mapped
+                # properly — the mapping file stays authoritative.
+                if base_key in lookup:
+                    continue
+                lookup[base_key] = {
+                    "return_id": return_id,
+                    "return_name": return_name,
+                    "report_freq": report_freq,
+                    "filter_col": meta["filter_col"],
+                    "comp_filter_col_names": [],
+                }
+                rows_registered += 1
+            if rows_registered:
+                logger.info(
+                    "[nlp.return_lookup] return_id=%s (%s) — no usable table mapping "
+                    "(tbl_path=%r, tried %r); recovered %d table(s) from %s",
+                    return_id, return_name, tbl_path, resolved_path,
+                    rows_registered, query_xml_lookup.XML_QUERY_FILENAME,
+                )
+            else:
+                logger.warning(
+                    "[nlp.return_lookup] Skipping return_id=%s (%s) — no table mapping "
+                    "(tbl_path=%r, tried %r) and no %s fallback. Every table under this "
+                    "return is unresolvable via get_return_for_table().",
+                    return_id, return_name, tbl_path, resolved_path,
+                    query_xml_lookup.XML_QUERY_FILENAME,
+                )
 
     logger.info("[nlp.return_lookup] Built lookup for %d table(s) across returns", len(lookup))
     return lookup
