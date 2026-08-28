@@ -617,6 +617,28 @@ def _shortlist_for_table(table_name: str) -> dict | None:
     }
 
 
+# ── NLP stage instrumentation ─────────────────────────────────────────────────
+# /variance/nlresolve's NLP work (module imports, retrieval, intent
+# resolution) runs BEFORE the route's own try: block, so until now a failure
+# there produced a bare 500 with no indication of WHICH stage broke — the
+# request's own "POST /variance/nlresolve" line was the last thing in the log.
+# This logs one line on failure only: nothing extra on the success path, since
+# each stage already logs its own outcome (nlp.retriever, nlp.intent_resolver,
+# nlp.date_resolver). The exception is re-raised untouched so the existing
+# handlers still decide the status code.
+def _nlp_stage(stage: str, login_id: str, query: str, fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except HTTPException:
+        raise                       # a deliberate 404/400 — not a stage failure
+    except Exception as exc:
+        logger.error(
+            "[main] /variance/nlresolve | login_id=%s | query=%r | stage=%s FAILED | %s: %s",
+            login_id, query, stage, type(exc).__name__, exc, exc_info=True,
+        )
+        raise
+
+
 # ── POST /variance/nlresolve ───────────────────────────────────────────────────
 @app.post("/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_nlresolve(
@@ -635,10 +657,24 @@ async def variance_nlresolve(
     it — the same call /variance/compute makes — so the NLP bar shows a real
     computed result immediately, with no extra manual date entry/click.
     """
-    from .nlp.retriever import get_relevant_schema
-    from .nlp.intent_resolver import resolve_intent
-    from .nlp.date_resolver import resolve_reporting_date
-    from .nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
+    # Imported here rather than at module scope so the ~1.3GB embedding model
+    # and FAISS aren't pulled in by the non-NLP routes. The cost is that a
+    # missing NLP dependency surfaces per-request instead of at startup, so
+    # name the culprit explicitly — this is how a missing rank-bm25 /
+    # faiss-cpu / sentence-transformers on a fresh deployment shows up.
+    try:
+        from .nlp.retriever import get_relevant_schema
+        from .nlp.intent_resolver import resolve_intent
+        from .nlp.date_resolver import resolve_reporting_date
+        from .nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
+    except Exception as exc:
+        logger.error(
+            "[main] /variance/nlresolve | login_id=%s | NLP module import FAILED | %s: %s "
+            "| the NL path needs faiss-cpu, sentence-transformers and rank-bm25 "
+            "(pip install -r requirements.txt) — check GET /variance/nlp-health",
+            login_id, type(exc).__name__, exc, exc_info=True,
+        )
+        raise
 
     query = payload.query.strip()
     logger.info(
@@ -659,7 +695,7 @@ async def variance_nlresolve(
             # free-form retrieval found, even below the confidence floor
             # that originally triggered this prompt. If it found literally
             # nothing, there's nothing to guess with.
-            shortlist = get_relevant_schema(query, login_id)
+            shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id)
             if not shortlist["tables"]:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -685,7 +721,10 @@ async def variance_nlresolve(
             # No specific table picked — best-effort: let resolve_intent's
             # LLM choose freely from the (still-ambiguous) shortlist, scoped
             # to whichever return was already pinned if one was.
-            shortlist = _shortlist_for_return(pinned_return_id) if pinned_return_id else get_relevant_schema(query, login_id)
+            shortlist = (
+                _shortlist_for_return(pinned_return_id) if pinned_return_id
+                else _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id)
+            )
             if shortlist is None or not shortlist["tables"]:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -709,7 +748,7 @@ async def variance_nlresolve(
 
     else:
         # First pass for this query — no clarification answer yet.
-        shortlist = get_relevant_schema(query, login_id)
+        shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id)
         table_confidence = shortlist.get("table_confidence", 0.0)
         table_ambiguous = shortlist.get("table_ambiguous", False)
 
@@ -776,7 +815,7 @@ async def variance_nlresolve(
     # scoring above, so there's no lower number to report here.
     final_confidence = shortlist.get("table_confidence", 1.0)
 
-    resolution = resolve_intent(query, shortlist)
+    resolution = _nlp_stage("intent_resolution", login_id, query, resolve_intent, query, shortlist)
     if resolution is None:
         logger.warning("[main] 404 /variance/nlresolve | login_id=%s | query=%r | intent resolution failed", login_id, query)
         raise HTTPException(

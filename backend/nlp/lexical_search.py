@@ -30,6 +30,9 @@ _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 _bm25_cache: Dict[str, Tuple[float, Any, List[Dict[str, Any]]]] = {}
 _qa_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+# index_paths whose load already failed — keeps the warning above to one
+# line per path instead of one per NL query.
+_bm25_failed: set[str] = set()
 _cache_lock = threading.Lock()
 
 
@@ -47,12 +50,34 @@ def _load_bm25_cached(index_path: str) -> Tuple[Optional[Any], List[Dict[str, An
         if cached is not None and cached[0] == mtime:
             return cached[1], cached[2]
 
-    with open(index_path, "rb") as fh:
-        data = pickle.load(fh)
-    bm25, records = data["bm25"], data["records"]
+    # The pickle holds a rank_bm25.BM25Okapi instance, so unpickling it
+    # imports rank_bm25 — a missing package raises ModuleNotFoundError right
+    # here, from a file-exists path the isfile() guard above has already
+    # waved through. BM25 is an ADDITIVE signal (see this module's header and
+    # nlp_config's BM25_INDEX_PATH note): its absence is supposed to cost
+    # ranking quality, never the whole query. So any load failure degrades to
+    # the same silent no-op as an absent file, logged once per index_path so
+    # a genuinely broken deployment is still visible in the log.
+    try:
+        with open(index_path, "rb") as fh:
+            data = pickle.load(fh)
+        bm25, records = data["bm25"], data["records"]
+    except Exception as exc:
+        with _cache_lock:
+            already_warned = index_path in _bm25_failed
+            _bm25_failed.add(index_path)
+        if not already_warned:
+            logger.warning(
+                "[nlp.lexical_search] BM25 index %s could not be loaded "
+                "(%s: %s) — continuing without the BM25 signal. If this is a "
+                "missing package, install it: pip install rank-bm25",
+                index_path, type(exc).__name__, exc,
+            )
+        return None, []
 
     with _cache_lock:
         _bm25_cache[index_path] = (mtime, bm25, records)
+        _bm25_failed.discard(index_path)
     logger.info("[nlp.lexical_search] Loaded %d BM25 record(s) from %s", len(records), index_path)
     return bm25, records
 

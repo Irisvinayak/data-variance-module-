@@ -46,7 +46,19 @@ def _load_cached(index_path: str, meta_path: str) -> Tuple[faiss.Index, List[Dic
         if cached is not None and cached[0] == mtime:
             return cached[1], cached[2]
 
-    index, meta = load_index(index_path, meta_path)
+    # A present-but-unreadable index (truncated .faiss, a .pkl pickled
+    # against a package that isn't installed here, a dimension mismatch
+    # from a rebuild) raises from deep inside faiss/pickle with no mention
+    # of which file was at fault — and every caller above only ever logged
+    # the ABSENT case. Name the file, then re-raise unchanged.
+    try:
+        index, meta = load_index(index_path, meta_path)
+    except Exception as exc:
+        logger.error(
+            "[nlp.index_store] FAILED to load index=%s meta=%s | %s: %s",
+            index_path, meta_path, type(exc).__name__, exc,
+        )
+        raise
     with _cache_lock:
         _cache[key] = (mtime, index, meta)
     logger.info("[nlp.index_store] Loaded %d record(s) from %s (cached in memory)", len(meta), index_path)

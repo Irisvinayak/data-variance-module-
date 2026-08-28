@@ -283,12 +283,25 @@ def _load_table_mapping(return_id: str, tbl_path: str):
     fallback = os.path.normpath(
         os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path or "TableMapping.xml")
     )
-    logger.error(
+    # WARNING, not ERROR: a missing mapping file is an expected, handled
+    # condition for a large minority of returns — backend/nlp/return_lookup.py
+    # recovers their tables from XML_Query.xml and logs the real outcome
+    # per return. At ERROR, one NLP cache rebuild emitted ~60 of these plus
+    # ~60 duplicates from load_xml_tree below, burying genuine errors.
+    logger.warning(
         "[service] Mapping file not found after checking %d candidate(s). "
         "Using fallback=%s",
         len(deduped), fallback,
     )
-    root = load_xml_tree(fallback, label=f"Table mapping for return {return_id}")
+    # Skip the load when the fallback is a path we just probed and know is
+    # absent — load_xml_tree would only log its own ERROR for it and return
+    # None, which is exactly what we assign here. Still load it when the
+    # fallback wasn't among the candidates, so a present-but-malformed file
+    # keeps reporting itself.
+    if fallback in seen_paths:
+        root = None
+    else:
+        root = load_xml_tree(fallback, label=f"Table mapping for return {return_id}")
     with _mapping_cache_lock:
         _mapping_cache[cache_key] = (now, root, fallback)
     return root, fallback
