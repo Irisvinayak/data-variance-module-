@@ -843,14 +843,30 @@ async def variance_nlresolve(
         None,
     )
     if resolved_table is None:
-        logger.warning(
-            "[main] 404 /variance/nlresolve | login_id=%s | table=%r no longer in return's mapping",
-            login_id, resolution["table_name"],
+        # NOT an error: find_return_and_tables() derives its table list from
+        # the return's table-mapping XML, but backend/nlp/return_lookup.py
+        # deliberately also registers tables from XML_Query.xml for returns
+        # whose mapping file is missing or ships rows with empty TableName
+        # attributes (the CIMS_ALE family). Every table resolved through that
+        # fallback is absent from the mapping list BY DEFINITION, so gating on
+        # it here 404'd them unconditionally — measured at 21 of 25 tables
+        # reachable via the xml_query source.
+        #
+        # Nothing downstream actually needs the mapping row: only
+        # resolved_table["table_name"] is ever read, filter_col/report_freq
+        # come from the retrieval metadata above, and service's
+        # _get_table_metadata() carries the very same XML_Query.xml fallback
+        # (added when this bit /variance/dates and compute_variance). So
+        # carry the resolved name forward and let that fallback do its job —
+        # if it has no entry either, compute_variance raises FileNotFoundError
+        # and the existing handler turns it into a 404 with a real reason.
+        logger.info(
+            "[main] /variance/nlresolve | login_id=%s | table=%r not in return %s's "
+            "table mapping — proceeding via %s fallback",
+            login_id, resolution["table_name"], found["return_id"],
+            "XML_Query.xml",
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resolved table is no longer present in this return's table mapping.",
-        )
+        resolved_table = {"table_name": resolution["table_name"]}
 
     # filter_col/report_freq were already resolved live during retrieval
     # (backend/nlp/return_lookup.py) — reuse them rather than re-looking up.
