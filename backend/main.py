@@ -7,8 +7,9 @@ from __future__ import annotations
 import logging
 import re
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS
 from .logging_config import configure_logging
@@ -40,6 +41,119 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Catch-all exception handler ───────────────────────────────────────────────
+# Individual routes guard their own known failure modes, but several stages
+# deliberately run OUTSIDE those try blocks — notably /variance/nlresolve's
+# NLP stage (the function-level backend.nlp imports, get_relevant_schema,
+# resolve_intent), which happens before that route's own try:. Anything
+# raised there used to escape to Starlette's default handler, which replies
+# with plain-text "Internal Server Error" and NO JSON body. The frontend
+# reads `body.detail` (see frontend/src/api.js) and, finding none, could
+# only show a bare "NL resolve error (500)" — hiding the actual cause, which
+# on a fresh server deployment is usually a missing NLP dependency
+# (sentence-transformers / faiss-cpu / rank-bm25), an absent backend/output/
+# embedding index, or an embedding model that can't be downloaded.
+#
+# This handler makes every such crash self-reporting: the full traceback goes
+# to logs/<date>.log and the exception type/message reaches the client as a
+# normal JSON `detail`.
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "[main] 500 %s %s | unhandled exception", request.method, request.url.path,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": f"Unexpected server error: {type(exc).__name__}: {exc}"},
+    )
+
+
+# ── GET /variance/nlp-health ──────────────────────────────────────────────────
+# Deployment self-check for the NL query path, so diagnosing a 500 from
+# /variance/nlresolve doesn't require shell access to read the server log.
+# Reports each prerequisite separately: the three optional-but-required NLP
+# packages, the embedding index files the external build tool drops into
+# backend/output/, and whether the embedding model itself can actually load
+# (the expensive one — a ~1.3GB download on first use, so it is only probed
+# when ?check_model=true is passed).
+@app.get("/variance/nlp-health", tags=["Meta"])
+async def nlp_health(check_model: bool = False) -> dict:
+    import importlib
+    import os
+
+    from .nlp import nlp_config
+
+    packages: dict[str, str] = {}
+    for mod in ("faiss", "sentence_transformers", "rank_bm25", "numpy"):
+        try:
+            importlib.import_module(mod)
+            packages[mod] = "ok"
+        except Exception as exc:
+            packages[mod] = f"MISSING: {type(exc).__name__}: {exc}"
+
+    # Required vs optional mirrors each loader's own behavior: the FAISS
+    # table/column indexes are load-or-die, while the BM25/QA signals
+    # degrade to a silent no-op when absent (see lexical_search.py).
+    required_files = {
+        "table_index.faiss":  nlp_config.TABLE_INDEX_PATH,
+        "table_meta.pkl":     nlp_config.TABLE_META_PATH,
+        "column_index.faiss": nlp_config.COLUMN_INDEX_PATH,
+        "column_meta.pkl":    nlp_config.COLUMN_META_PATH,
+        "schema.json":        nlp_config.SCHEMA_JSON_PATH,
+    }
+    optional_files = {
+        "bm25_table_index.pkl":  nlp_config.BM25_INDEX_PATH,
+        "qa_pairs.json":         nlp_config.QA_PAIRS_PATH,
+        "qa_index.faiss":        nlp_config.QA_INDEX_PATH,
+        "qa_meta.pkl":           nlp_config.QA_META_PATH,
+        "row_label_index.faiss": nlp_config.ROW_LABEL_INDEX_PATH,
+        "row_label_meta.pkl":    nlp_config.ROW_LABEL_META_PATH,
+    }
+    index_files = {
+        name: ("ok" if os.path.isfile(path) else "MISSING")
+        for name, path in required_files.items()
+    }
+    index_files.update({
+        name: ("ok" if os.path.isfile(path) else "absent (optional)")
+        for name, path in optional_files.items()
+    })
+
+    # Import the retriever exactly the way /variance/nlresolve does — this is
+    # the import that fails first when a package above is missing.
+    try:
+        importlib.import_module("backend.nlp.retriever")
+        retriever_import = "ok"
+    except Exception as exc:
+        retriever_import = f"FAILED: {type(exc).__name__}: {exc}"
+
+    embed_model = "not checked (pass ?check_model=true)"
+    if check_model:
+        try:
+            from .nlp.embedder import embed_query
+            embed_query("health check")
+            embed_model = "ok"
+        except Exception as exc:
+            embed_model = f"FAILED: {type(exc).__name__}: {exc}"
+
+    problems = (
+        [f"package {k}: {v}" for k, v in packages.items() if v != "ok"]
+        + [f"index file {k}: {v}" for k, v in index_files.items() if v == "MISSING"]
+        + ([f"retriever import: {retriever_import}"] if retriever_import != "ok" else [])
+        + ([f"embedding model: {embed_model}"] if embed_model.startswith("FAILED") else [])
+    )
+
+    return {
+        "status":           "ok" if not problems else "degraded",
+        "problems":         problems,
+        "index_dir":        nlp_config.INDEX_DIR,
+        "embed_model_name": nlp_config.EMBED_MODEL,
+        "packages":         packages,
+        "index_files":      index_files,
+        "retriever_import": retriever_import,
+        "embed_model":      embed_model,
+    }
 
 
 # ── Health check (no auth — used by infra/monitoring probes) ──────────────────
@@ -471,15 +585,26 @@ def _shortlist_for_table(table_name: str) -> dict | None:
     return_id/report_freq when it's needed but wasn't already in scope."""
     from .nlp import return_lookup
     from .nlp.index_store import meta_by_table
-    from .nlp.nlp_config import COLUMN_INDEX_PATH, COLUMN_META_PATH
-
-    ret = return_lookup.get_return_for_table(table_name)
-    if not ret or not ret.get("return_id"):
-        return None
+    from .nlp.nlp_config import (
+        COLUMN_INDEX_PATH, COLUMN_META_PATH, TABLE_INDEX_PATH, TABLE_META_PATH,
+    )
 
     # Case-normalized lookup + record rewrite, same reason as
     # _shortlist_for_return above (`table_name` may be XML-cased).
     grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+
+    # Resolve the return WITH the table's own index metadata as a hint —
+    # table names are not unique across returns, and without the hint a
+    # shared table (e.g. one used by both the Quarterly and Annual variant of
+    # a return) resolves by fallback rules to whichever claimant sorts first,
+    # which can carry the wrong report_freq into compute_variance. Same call
+    # shape retriever.py uses. See return_lookup._select_candidate.
+    hint_records = meta_by_table(TABLE_INDEX_PATH, TABLE_META_PATH).get(table_name.upper(), [])
+    hint_text = " ".join(r.get("text", "") for r in hint_records) or None
+
+    ret = return_lookup.get_return_for_table(table_name, hint_text=hint_text)
+    if not ret or not ret.get("return_id"):
+        return None
     return {
         "tables": [{"table": table_name, **ret}],
         "columns": [

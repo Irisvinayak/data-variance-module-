@@ -18,7 +18,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .. import query_xml_lookup
 from ..report_lookup import _parse_returns
@@ -37,10 +37,29 @@ def _strip_dp_suffix(table_name: str) -> str:
     return table_name[:-3] if table_name.upper().endswith("_DP") else table_name
 
 
-def _build_lookup() -> Dict[str, Dict[str, Any]]:
-    """Walk every <Return> in Returns.xml, load its table-mapping XML, and
-    build {UPPERCASE base table name (no _DP suffix): return metadata}."""
-    lookup: Dict[str, Dict[str, Any]] = {}
+def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
+    """Walk every <Return> in Returns.xml and build
+    {UPPERCASE base table name (no _DP suffix): [candidate return metadata, ...]}.
+
+    A table name is NOT unique across returns — 96 names in this dataset are
+    claimed by more than one return (52 of them by returns with DIFFERENT
+    RepFreq), because the same physical table is shared by e.g. the Monthly /
+    Quarterly / Annual variants of a return, and because a query may JOIN a
+    table that another return owns. This used to store a single dict per name,
+    so the last (or, on the XML_Query path, the first) writer silently won and
+    the winner depended on document order in Returns.xml.
+
+    That was not cosmetic: report_freq rides on this resolution and drives
+    calculate_variance.get_previous_dates(), so a table resolving to the
+    Annual variant of its return computed comparison periods a YEAR apart on
+    quarterly data — wrong numbers, no error. The return_id is also what
+    retriever.py auth-checks against, so a wrong winner could both wrongly
+    grant and wrongly deny access.
+
+    Every claimant is therefore kept here, and the choice is deferred to
+    get_return_for_table(), which can use the caller's hint text to pick
+    correctly. See _select_candidate()."""
+    lookup: Dict[str, List[Dict[str, Any]]] = {}
 
     for ret in _parse_returns():
         return_id = ret.get("Id")
@@ -67,13 +86,18 @@ def _build_lookup() -> Dict[str, Dict[str, Any]]:
                     continue
                 key = _strip_dp_suffix(table_name).upper()
                 comp_raw = el.attrib.get("CompFilterColName", "")
-                lookup[key] = {
+                # A mapping-file row is an explicit ownership declaration, so
+                # it always counts as primary (unlike an XML_Query FROM/JOIN
+                # reference, which may just be a lookup join).
+                lookup.setdefault(key, []).append({
                     "return_id": return_id,
                     "return_name": return_name,
                     "report_freq": report_freq,
                     "filter_col": el.attrib.get("FilterColumn", ""),
                     "comp_filter_col_names": [c.strip() for c in comp_raw.split("|") if c.strip()],
-                }
+                    "source": "mapping",
+                    "is_primary": True,
+                })
                 rows_registered += 1
 
         # ── Fallback: XML_Query.xml ───────────────────────────────────────────
@@ -89,17 +113,23 @@ def _build_lookup() -> Dict[str, Dict[str, Any]]:
         if rows_registered == 0:
             for key, meta in query_xml_lookup.tables_for_return(return_id).items():
                 base_key = _strip_dp_suffix(key).upper()
-                # Never override a table another return already mapped
-                # properly — the mapping file stays authoritative.
-                if base_key in lookup:
-                    continue
-                lookup[base_key] = {
+                # Recorded as one more CANDIDATE rather than skipped-if-present:
+                # the old "if base_key in lookup: continue" made this path
+                # first-writer-wins while the mapping path above was
+                # last-writer-wins, so ownership flipped depending on which
+                # code path a return happened to take. _select_candidate()
+                # now weighs mapping vs XML_Query explicitly.
+                lookup.setdefault(base_key, []).append({
                     "return_id": return_id,
                     "return_name": return_name,
                     "report_freq": report_freq,
                     "filter_col": meta["filter_col"],
                     "comp_filter_col_names": [],
-                }
+                    "source": "xml_query",
+                    # False => the table was only JOINed by this return's
+                    # queries, i.e. someone else almost certainly owns it.
+                    "is_primary": bool(meta.get("is_primary")),
+                })
                 rows_registered += 1
             if rows_registered:
                 logger.info(
@@ -117,7 +147,18 @@ def _build_lookup() -> Dict[str, Dict[str, Any]]:
                     query_xml_lookup.XML_QUERY_FILENAME,
                 )
 
-    logger.info("[nlp.return_lookup] Built lookup for %d table(s) across returns", len(lookup))
+    contested = {k: v for k, v in lookup.items() if len(v) > 1}
+    logger.info(
+        "[nlp.return_lookup] Built lookup for %d table(s) across returns "
+        "(%d claimed by more than one return)",
+        len(lookup), len(contested),
+    )
+    if contested:
+        sample = list(contested.items())[:5]
+        logger.info(
+            "[nlp.return_lookup] Contested table names (sample): %s",
+            {k: [(c["return_id"], c["report_freq"], c["source"]) for c in v] for k, v in sample},
+        )
     return lookup
 
 
@@ -138,7 +179,7 @@ def _rebuild_in_background() -> None:
             _rebuild_in_progress = False
 
 
-def _get_lookup() -> Dict[str, Dict[str, Any]]:
+def _get_lookup() -> Dict[str, List[Dict[str, Any]]]:
     """As the number of returns grows, _build_lookup()'s O(returns) XML
     read+parse cost grows with it. Rebuilding synchronously on whichever
     user's request happens to land right after the TTL expires — the
@@ -170,12 +211,88 @@ def _get_lookup() -> Dict[str, Dict[str, Any]]:
     return _cache
 
 
-def get_return_for_table(table_name: str) -> Optional[Dict[str, Any]]:
+def _select_candidate(
+    table_name: str,
+    candidates: List[Dict[str, Any]],
+    hint_text: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Pick which claiming return actually owns `table_name`.
+
+    `hint_text` is any text the caller already associates with this table —
+    in practice the embedding index's own metadata text, which embeds the
+    return name it was built for (e.g. a table record reads
+    "cims_raq_q_sec1_part_a_dom | CIMS_RAQ(Quarterly) | ..."). That is the
+    strongest available signal, because it states what the vectors were
+    actually built against, and it is what makes the difference between
+    resolving CIMS_RAQ tables to 2041 (Quarterly) rather than 2065
+    (Annually) — the latter silently produced year-apart comparison periods
+    on quarterly data.
+
+    Order of preference:
+      1. a candidate whose return_name appears verbatim in `hint_text`
+      2. a "primary" claim (mapping-file row, or the FROM target of an
+         XML_Query SELECT) over a mere JOIN reference
+      3. a mapping-file claim over an XML_Query-derived one
+      4. lowest return_id — arbitrary, but STABLE. The previous behaviour
+         depended on Returns.xml document order, so adding an unrelated
+         return could silently re-own existing tables.
+    """
+    if len(candidates) == 1:
+        return candidates[0]
+
+    if hint_text:
+        haystack = hint_text.lower()
+        named = [
+            c for c in candidates
+            if c.get("return_name") and c["return_name"].strip().lower() in haystack
+        ]
+        if len(named) == 1:
+            return named[0]
+        if named:
+            candidates = named  # narrowed, still tied — fall through to the rest
+
+    ranked = sorted(
+        candidates,
+        key=lambda c: (
+            not c.get("is_primary"),           # primary first
+            c.get("source") != "mapping",      # mapping first
+            str(c.get("return_id") or ""),     # stable tie-break
+        ),
+    )
+    winner = ranked[0]
+    if len(ranked) > 1:
+        logger.warning(
+            "[nlp.return_lookup] Table %r is claimed by %d returns %s — resolved to "
+            "return_id=%s (freq=%s) by fallback rules%s. If this is wrong, the "
+            "embedding metadata for this table should name its return.",
+            table_name, len(ranked),
+            [(c["return_id"], c["report_freq"], c["source"]) for c in ranked],
+            winner["return_id"], winner["report_freq"],
+            "" if hint_text else " (no hint_text supplied by caller)",
+        )
+    return winner
+
+
+def get_return_for_table(
+    table_name: str, hint_text: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """Return {"return_id", "return_name", "report_freq", "filter_col",
     "comp_filter_col_names"} for `table_name`, or None if it isn't tied to
-    any known return."""
+    any known return.
+
+    Pass `hint_text` whenever the caller has text associated with the table
+    (e.g. its embedding-index metadata) — table names are not unique across
+    returns and the hint is what disambiguates them. See _select_candidate."""
     key = _strip_dp_suffix(table_name).upper()
-    return _get_lookup().get(key)
+    candidates = _get_lookup().get(key)
+    if not candidates:
+        return None
+    return _select_candidate(table_name, candidates, hint_text)
+
+
+def candidates_for_table(table_name: str) -> List[Dict[str, Any]]:
+    """Every return claiming `table_name` (diagnostics / ambiguity reports)."""
+    return list(_get_lookup().get(_strip_dp_suffix(table_name).upper(), []))
 
 
 def invalidate() -> None:

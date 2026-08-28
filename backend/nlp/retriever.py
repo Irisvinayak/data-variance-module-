@@ -247,13 +247,31 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     scores = {tbl: s for tbl, s in scores.items() if tbl in deduped_table_names}
     scores_for_confidence = {tbl: s for tbl, s in scores_for_confidence.items() if tbl in deduped_table_names}
 
-    ranked_tables = sorted(scores, key=scores.__getitem__, reverse=True)[:TOP_K_TABLES]
+    # NOTE: deliberately NOT truncated to TOP_K_TABLES yet. return_id
+    # resolution and the authorization filter both run over the FULL scored
+    # candidate pool first, and only what survives is cut to top-K below.
+    #
+    # Truncating first (the previous behaviour) is the classic post-filtering
+    # anti-pattern: with many returns indexed, a user entitled to a handful of
+    # them would get a top-5 composed entirely of tables they cannot see, the
+    # filter would empty it, and the request surfaced as "I couldn't tell which
+    # return your query is about" — indistinguishable from a genuine no-match
+    # even though the right content had been retrieved. The pool here is
+    # bounded by the per-signal hit budgets (~108 tables) regardless of corpus
+    # size, and get_return_for_table is an O(1) lookup into a cached dict, so
+    # resolving the whole pool is cheap.
+    ranked_candidates = sorted(scores, key=scores.__getitem__, reverse=True)
 
     # ── Resolve return_id live via this app's own XML — never trust whatever
     # (if anything) the embedding metadata itself carries for return_id/name.
-    for tbl in ranked_tables:
+    # The metadata TEXT is still passed as a disambiguation hint: table names
+    # are not unique across returns, and the index text names the return it
+    # was built for, which is what stops e.g. a CIMS_RAQ(Quarterly) table
+    # resolving to CIMS_RAQ(Annually). See return_lookup._select_candidate.
+    for tbl in ranked_candidates:
         meta = all_table_meta[tbl]
-        ret = return_lookup.get_return_for_table(tbl)
+        hint = " ".join(texts_by_table.get(tbl, []))
+        ret = return_lookup.get_return_for_table(tbl, hint_text=hint or None)
         if ret:
             meta.update(ret)
         else:
@@ -267,21 +285,22 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     # never reach intent_resolver as a candidate — this matters especially with
     # AUTH_ENABLED=false, where the auth filter below is skipped entirely and would
     # otherwise let an unusable table through untouched.
-    unresolved = [tbl for tbl in ranked_tables if all_table_meta[tbl].get("return_id") is None]
+    unresolved = [tbl for tbl in ranked_candidates if all_table_meta[tbl].get("return_id") is None]
     if unresolved:
         logger.warning(
             "[nlp.retriever] query=%r | dropping %d table(s) with unresolved return_id: %s",
-            query, len(unresolved), unresolved,
+            query, len(unresolved), unresolved[:10],
         )
-    ranked_tables = [tbl for tbl in ranked_tables if tbl not in unresolved]
+    ranked_candidates = [tbl for tbl in ranked_candidates if tbl not in unresolved]
 
     # ── Authorization filter — reuse the existing, untouched auth function ────
+    # Runs over the whole candidate pool, BEFORE the top-K cut below.
     if not AUTH_ENABLED:
         logger.warning(
             "[nlp.retriever] AUTH_DISABLED — skipping return-access filtering for query=%r",
             query,
         )
-        tables = [all_table_meta[tbl] for tbl in ranked_tables]
+        authorized_candidates = list(ranked_candidates)
     else:
         allowed_returns = get_allowed_form_ids(login_id) or set()
 
@@ -289,14 +308,23 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
             rid = table_meta.get("return_id")
             return rid is not None and str(rid) in allowed_returns
 
-        tables = [all_table_meta[tbl] for tbl in ranked_tables if _is_authorized(all_table_meta[tbl])]
-    authorized_table_names = {t["table"] for t in tables}
+        authorized_candidates = [
+            tbl for tbl in ranked_candidates if _is_authorized(all_table_meta[tbl])
+        ]
 
-    if len(tables) < len(ranked_tables):
+    if len(authorized_candidates) < len(ranked_candidates):
         logger.info(
-            "[nlp.retriever] login_id=%r | dropped %d unauthorized table(s) from shortlist",
-            login_id, len(ranked_tables) - len(tables),
+            "[nlp.retriever] login_id=%r | dropped %d unauthorized table(s) from the "
+            "candidate pool (%d remain before top-%d cut)",
+            login_id, len(ranked_candidates) - len(authorized_candidates),
+            len(authorized_candidates), TOP_K_TABLES,
         )
+
+    # ── Top-K cut, applied last so it selects among tables the user can
+    # actually access rather than being spent on ones they cannot.
+    ranked_tables = authorized_candidates[:TOP_K_TABLES]
+    tables = [all_table_meta[tbl] for tbl in ranked_tables]
+    authorized_table_names = {t["table"] for t in tables}
 
     columns = [c for _, c in col_hits if c["table"] in authorized_table_names]
     seen_cols = set()
