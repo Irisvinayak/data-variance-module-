@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
+import threading
+import time
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import (
     TABLE_MAPPING_BASE_DIR,
@@ -104,7 +106,34 @@ def _run_table_diagnostics(
 # Table-mapping loader
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Table-mapping resolution cache ──────────────────────────────────────────
+# _load_table_mapping() below does a lot of expensive work per call — it
+# probes a dozen+ candidate paths and, if none hit, walks/lists whole
+# directory trees looking for a "*mapping*.xml" file — every one of those is
+# a filesystem (often network-share) round trip. Every OTHER lookup module in
+# this codebase caches its equivalent expensive file resolution (index_store.
+# py's FAISS indices, lexical_search.py's BM25/QA files, report_lookup.py's
+# Returns.xml parse, return_lookup.py's per-table mapping build) — this one
+# was the exception, and it's called at least twice per single
+# /variance/nlresolve request (main.py's find_return_and_tables, then again
+# inside compute_variance's _get_table_metadata), so every request re-did the
+# full candidate/directory-scan dance from scratch. TTL-cached here the same
+# way report_lookup.py caches Returns.xml itself, keyed by (return_id,
+# tbl_path) since a given return's mapping file/location essentially never
+# changes between deploys.
+_TABLE_MAPPING_TTL = float(os.getenv("DV_TABLE_MAPPING_TTL_SEC", "3600"))
+_mapping_cache: Dict[Tuple[str, str], Tuple[float, Any, str]] = {}
+_mapping_cache_lock = threading.Lock()
+
+
 def _load_table_mapping(return_id: str, tbl_path: str):
+    cache_key = (str(return_id), tbl_path or "")
+    now = time.monotonic()
+    with _mapping_cache_lock:
+        cached = _mapping_cache.get(cache_key)
+    if cached is not None and (now - cached[0]) < _TABLE_MAPPING_TTL:
+        return cached[1], cached[2]
+
     # ── Startup diagnostics (verbose — only useful when actively debugging a
     # missing table-mapping file, not on every normal call) ───────────────────
     logger.debug("[service] _load_table_mapping called")
@@ -245,6 +274,8 @@ def _load_table_mapping(return_id: str, tbl_path: str):
         if exists:
             logger.debug("[service] Found mapping=%s", norm)
             root = load_xml_tree(norm, label=f"Table mapping for return {return_id}")
+            with _mapping_cache_lock:
+                _mapping_cache[cache_key] = (now, root, norm)
             return root, norm
 
     # ── Nothing found — fall back to the canonical path (will log an error) ───
@@ -257,6 +288,8 @@ def _load_table_mapping(return_id: str, tbl_path: str):
         len(deduped), fallback,
     )
     root = load_xml_tree(fallback, label=f"Table mapping for return {return_id}")
+    with _mapping_cache_lock:
+        _mapping_cache[cache_key] = (now, root, fallback)
     return root, fallback
 
 

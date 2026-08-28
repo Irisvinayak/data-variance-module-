@@ -438,15 +438,21 @@ def _shortlist_for_return(return_id: str) -> dict | None:
     if not tables:
         return None
 
+    # meta_by_table() keys are uppercased; `tables` here come from the
+    # table-mapping XML, and each record's own "table" value is index-cased
+    # (lowercase), so it's rewritten to the XML name — otherwise every
+    # downstream `c["table"] == t["table"]` comparison (_build_prompt,
+    # _resolve_deterministic, _validate_grounding) misses and the shortlist
+    # looks column-less. See meta_by_table's docstring.
     grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
     seen_cols: set = set()
     columns: list = []
     for t in tables:
-        for c in grouped_columns.get(t["table"], []):
-            key = (c["table"], c["column"])
+        for c in grouped_columns.get(t["table"].upper(), []):
+            key = (t["table"], c["column"])
             if key not in seen_cols:
                 seen_cols.add(key)
-                columns.append(c)
+                columns.append({**c, "table": t["table"]})
 
     ambiguous = len(tables) > 1
     return {
@@ -471,10 +477,15 @@ def _shortlist_for_table(table_name: str) -> dict | None:
     if not ret or not ret.get("return_id"):
         return None
 
+    # Case-normalized lookup + record rewrite, same reason as
+    # _shortlist_for_return above (`table_name` may be XML-cased).
     grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
     return {
         "tables": [{"table": table_name, **ret}],
-        "columns": grouped_columns.get(table_name, []),
+        "columns": [
+            {**c, "table": table_name}
+            for c in grouped_columns.get(table_name.upper(), [])
+        ],
         "matched_labels": [],
         "table_confidence": 1.0,
         "table_ambiguous": False,

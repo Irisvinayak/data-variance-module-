@@ -318,7 +318,11 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     if tables_missing_columns:
         grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
         for tbl in tables_missing_columns:
-            for c in grouped_columns.get(tbl, []):
+            # .upper() — meta_by_table's keys are uppercased. `tbl` here is
+            # already index-cased so the records' own "table" value matches
+            # it as-is (no rewrite needed, unlike main.py's XML-derived
+            # callers). See meta_by_table's docstring.
+            for c in grouped_columns.get(tbl.upper(), []):
                 key = (c["table"], c["column"])
                 if key not in seen_cols:
                     seen_cols.add(key)

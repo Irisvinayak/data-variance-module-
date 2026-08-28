@@ -74,7 +74,21 @@ def meta_by_table(index_path: str, meta_path: str) -> Dict[str, List[Dict[str, A
     an O(total corpus size) linear scan on EVERY triggering query, regardless
     of how few tables were actually being looked up. Grouping once (still
     O(n), but cached) turns every subsequent lookup into an O(1) dict get,
-    so this stops scaling with total corpus size."""
+    so this stops scaling with total corpus size.
+
+    KEYS ARE UPPERCASED — always look up with `table_name.upper()`. The
+    externally-built index stores table names lowercased
+    (e.g. "cims_raq_q_sec1_part_a_dom") while this app's own table-mapping
+    XML uses uppercase (TableName="CIMS_RAQ_Q_SEC1_PART_A_DOM"), so a
+    caller holding an XML-derived name silently got zero columns back from
+    a case-sensitive lookup — which downstream surfaced as
+    "Could not resolve this query to a known table/column". Normalizing the
+    key here makes the two naming conventions interoperable for every
+    caller instead of each having to remember to fold case.
+
+    NOTE the records themselves still carry their ORIGINAL (index-cased)
+    "table" value. A caller that compares `record["table"]` against its own
+    canonical name must rewrite it — see main.py's _shortlist_for_return."""
     if not os.path.isfile(index_path) or not os.path.isfile(meta_path):
         return {}
 
@@ -88,7 +102,7 @@ def meta_by_table(index_path: str, meta_path: str) -> Dict[str, List[Dict[str, A
     _, meta = _load_cached(index_path, meta_path)
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     for record in meta:
-        grouped.setdefault(record["table"], []).append(record)
+        grouped.setdefault(record["table"].upper(), []).append(record)
 
     with _cache_lock:
         _grouped_cache[key] = (mtime, grouped)

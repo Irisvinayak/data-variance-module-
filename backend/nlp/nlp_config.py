@@ -111,6 +111,36 @@ OLLAMA_TIMEOUT_SEC: int = int(os.getenv("DV_NLP_OLLAMA_TIMEOUT_SEC", "60"))
 # the closing brace instead of stopping cleanly.
 INTENT_NUM_PREDICT: int = int(os.getenv("DV_NLP_INTENT_NUM_PREDICT", "200"))
 
+# Intent resolution gets its OWN (much tighter) timeout, separate from
+# OLLAMA_TIMEOUT_SEC which sql_generator.py still uses. Rationale: intent
+# resolution emits ~100 chars of JSON (INTENT_NUM_PREDICT above), so a
+# healthy call returns in a couple of seconds — a 60s ceiling only ever
+# gets hit when the endpoint is unreachable/overloaded, and since
+# resolve_intent() now has an instant deterministic fallback (see
+# intent_resolver._resolve_deterministic), waiting a full minute to
+# discover that buys nothing but a very slow request.
+INTENT_TIMEOUT_SEC: int = int(os.getenv("DV_NLP_INTENT_TIMEOUT_SEC", "20"))
+
+# Circuit breaker: after a TRANSPORT failure (timeout/connection refused —
+# not a merely-badly-formatted answer), skip the LLM entirely for this many
+# seconds and go straight to the deterministic resolver. Without this, an
+# Ollama outage costs every single request the full INTENT_TIMEOUT_SEC
+# before falling back, turning a working-but-degraded endpoint into a
+# uniformly slow one.
+INTENT_FAILURE_COOLDOWN_SEC: float = float(
+    os.getenv("DV_NLP_INTENT_FAILURE_COOLDOWN_SEC", "60")
+)
+
+# Cap on candidate columns listed per table in the intent prompt.
+# retriever.py's backfill deliberately injects a table's COMPLETE column
+# list when none of its own columns made the top-k search, so a handful of
+# wide tables can balloon the prompt into thousands of tokens — which is
+# paid for twice over in generation latency. Columns arrive similarity-
+# ranked, so the tail is the least likely to be the answer anyway.
+# Validation still accepts any column in the full shortlist, so this only
+# narrows what the model is shown, never what it's allowed to pick.
+INTENT_MAX_COLS_PER_TABLE: int = int(os.getenv("DV_NLP_INTENT_MAX_COLS_PER_TABLE", "40"))
+
 # Per-model prompt/behavior profile — ported from sql_agent/src/config.py's
 # MODEL_PROFILES so switching DV_NLP_OLLAMA_MODEL picks the right prompt style.
 MODEL_PROFILES: dict[str, dict] = {
