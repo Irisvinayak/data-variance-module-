@@ -7,7 +7,7 @@ from __future__ import annotations
 import calendar
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
 from typing import Callable, List, Dict, Any, Optional
@@ -95,7 +95,21 @@ def _label_score(col: str, rows: List[Dict]) -> float:
     return max(score, 0.0)
 
 
-def _pick_label_columns(all_cols: List[str], comp_cols: List[str], rows: Optional[List[Dict]] = None) -> List[str]:
+def _is_datetime_col(col: str, rows: List[Dict]) -> bool:
+    """True if this column holds date/datetime values."""
+    for row in rows:
+        value = row.get(col)
+        if value is not None:
+            return isinstance(value, (datetime, date))
+    return False
+
+
+def _pick_label_columns(
+    all_cols: List[str],
+    comp_cols: List[str],
+    rows: Optional[List[Dict]] = None,
+    filter_col: Optional[str] = None,
+) -> List[str]:
     """
     Pick the best column(s) to use as a human-readable row label.
 
@@ -105,13 +119,32 @@ def _pick_label_columns(all_cols: List[str], comp_cols: List[str], rows: Optiona
        by how description-like its actual values are, and pick the highest-scoring
        one (if its score is above a minimum threshold).
     3. Fall back to comp_cols so there is always *something* to show.
+
+    `filter_col` (the reporting-date column) is EXCLUDED from consideration, and
+    so is any other date-valued column. This is structural, not a heuristic
+    preference: the filter column has the same value on every row of a period by
+    definition, so it cannot possibly distinguish one row from another.
+
+    That exclusion exists because it was actively going wrong. On
+    CIMS_RAQ_Q_SEC1_PART_A_DOM, pass 2 scored RDATE at 0.673 and made
+    "2025-03-31 00:00:00" the label of every single row — the identifier column
+    of the results table, and the x-axis of the chart, became one repeated date.
+    A datetime's string form games every signal _label_score looks for: 19
+    characters reads as "long", and the space between date and time reads as
+    "multi-word prose". Meanwhile the genuinely descriptive column on that table
+    (PERIOD_DELINQUENCY: "i) Current", "ii.a.1 Overdue less than 30 days
+    (SMA -0)") was ineligible for pass 2 because it had been auto-detected as
+    the identifier — so pass 3 would have returned exactly the right answer, had
+    pass 2 not claimed the slot first with a date.
     """
     upper_comp = {c.upper() for c in comp_cols}
+    upper_fc = (filter_col or "").upper()
 
     # ── Pass 1: name-hint match ───────────────────────────────────────────────
     hinted = [
         c for c in all_cols
         if c.upper() not in upper_comp
+        and c.upper() != upper_fc
         and any(h in c.upper() for h in _LABEL_HINT_WORDS)
     ]
     if hinted:
@@ -122,8 +155,14 @@ def _pick_label_columns(all_cols: List[str], comp_cols: List[str], rows: Optiona
         candidates = [
             c for c in all_cols
             if c.upper() not in upper_comp
+            and c.upper() != upper_fc
             and not _is_excluded_value_col(c)
             and not _is_numeric_col(c, rows)
+            # A date is never a row description. _is_numeric_col does not catch
+            # these — a datetime object isn't parseable as a Decimal — so a
+            # date column would otherwise reach _label_score and win on the
+            # strength of its own formatting.
+            and not _is_datetime_col(c, rows)
         ]
         if candidates:
             scored = [(c, _label_score(c, rows)) for c in candidates]
@@ -412,11 +451,21 @@ def calculate_variance(
     reporting_period: int = 1,
     selected_columns: Optional[List[str]] = None,
     comparison_mode: str = "vs_current",
+    comparison_dates: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    """`comparison_dates`, when given, REPLACES the derived comparison periods:
+    the caller has named the exact reporting dates to compare (the manual UI's
+    date checkboxes — see ControlBar's DateField). `reporting_period` is then
+    ignored entirely, since the period count IS the list length.
+
+    Everything downstream of prev_dates is unchanged — this function has always
+    worked from an (rdate, prev_dates) pair, and reporting_period was only ever
+    an input to computing prev_dates. So explicit dates slot in at exactly that
+    seam and produce an identically-shaped result."""
 
     logger.info(
-        "[variance] START | table=%s | date=%s | periods=%s",
-        table_name, reporting_date, reporting_period,
+        "[variance] START | table=%s | date=%s | periods=%s | explicit_dates=%s",
+        table_name, reporting_date, reporting_period, comparison_dates,
     )
 
     try:
@@ -428,14 +477,50 @@ def calculate_variance(
     metadata    = get_table_metadata_fn(return_code, table_name, is_non_xbrl)
     report_freq = metadata.get("report_freq", "M")
 
-    if not validate_reporting_date(rdate, report_freq):
-        logger.warning(
-            "[variance] Reporting date fails frequency validation | table=%s | date=%s | freq=%s",
-            table_name, reporting_date, report_freq,
-        )
-        return {"error": "Invalid Reporting Date According To Frequency."}
+    explicit_dates: Optional[List[datetime]] = None
+    if comparison_dates:
+        try:
+            explicit_dates = sorted(
+                {datetime.strptime(d.strip().upper(), "%d-%b-%Y") for d in comparison_dates},
+                reverse=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[variance] Invalid comparison date format | table=%s | value=%r | %s",
+                table_name, comparison_dates, exc,
+            )
+            return {"error": f"Invalid comparison date format: {exc}"}
 
-    prev_dates = get_previous_dates(rdate, report_freq, reporting_period)
+    if explicit_dates:
+        # The newest selected date is the CURRENT period and the rest are its
+        # comparisons — the same shape the derived path produces, so the result
+        # renders identically. Deliberately overrides `reporting_date` rather
+        # than requiring the caller to keep the two in sync: with checkbox
+        # selection there is no separate "current date" for the user to pick.
+        rdate = explicit_dates[0]
+        prev_dates = explicit_dates[1:]
+        reporting_date = rdate.strftime("%d-%b-%Y").upper()
+        logger.info(
+            "[variance] Using caller-supplied comparison dates | table=%s | current=%s | previous=%s",
+            table_name, reporting_date,
+            [d.strftime("%d-%b-%Y").upper() for d in prev_dates],
+        )
+        # Frequency validation is deliberately SKIPPED here. It exists to stop
+        # a hand-typed date that can't be a valid period end (e.g. 15-Mar for a
+        # quarterly return) — but these dates came from get_available_dates(),
+        # i.e. they are dates the table demonstrably HAS data for. A return
+        # filed off-cycle (30-Nov on a quarterly table) fails the frequency
+        # check while being a perfectly real submission, and rejecting a date
+        # the user just picked from the list would be indefensible.
+    else:
+        if not validate_reporting_date(rdate, report_freq):
+            logger.warning(
+                "[variance] Reporting date fails frequency validation | table=%s | date=%s | freq=%s",
+                table_name, reporting_date, report_freq,
+            )
+            return {"error": "Invalid Reporting Date According To Frequency."}
+
+        prev_dates = get_previous_dates(rdate, report_freq, reporting_period)
 
     query = build_query(
         table_name, metadata, rdate, prev_dates, return_code, selected_columns
@@ -546,7 +631,9 @@ def calculate_variance(
     logger.info("[row_match] Identifier columns: %s", comp_cols)
 
     # ── Build display-label columns (best-effort human-readable label) ────
-    label_cols = _pick_label_columns(list(all_rows[0].keys()), comp_cols, rows=all_rows)
+    label_cols = _pick_label_columns(
+        list(all_rows[0].keys()), comp_cols, rows=all_rows, filter_col=fc,
+    )
     logger.info("[variance] Display-label columns: %s", label_cols)
 
     # Exclude hint-based label columns from display_columns — they are already

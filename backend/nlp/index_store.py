@@ -17,7 +17,7 @@ import logging
 import os
 import pickle
 import threading
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import faiss
 import numpy as np
@@ -119,6 +119,120 @@ def meta_by_table(index_path: str, meta_path: str) -> Dict[str, List[Dict[str, A
     with _cache_lock:
         _grouped_cache[key] = (mtime, grouped)
     return grouped
+
+
+class _NotReconstructable(RuntimeError):
+    """The index isn't a flat one, so its raw vectors can't be read back."""
+
+
+# Reconstructed vector matrices, keyed and invalidated exactly like _cache /
+# _grouped_cache above.  {index_path: (mtime, matrix, {TABLE_UPPER: [rows]})}
+_vector_cache: Dict[str, Tuple[float, "np.ndarray", Dict[str, List[int]]]] = {}
+
+
+def _load_vectors_cached(index_path: str, meta_path: str):
+    """The index's raw vectors as one (ntotal, d) float32 matrix, plus a
+    table -> row-indices map.
+
+    Only works for flat indices (IndexFlat*), which is what this project's
+    external build tool currently produces — all three indices are IndexFlatIP
+    holding normalized vectors, so an inner product IS the cosine similarity.
+    Raises _NotReconstructable for anything else so the caller can fall back.
+    """
+    mtime = max(os.path.getmtime(index_path), os.path.getmtime(meta_path))
+    with _cache_lock:
+        cached = _vector_cache.get(index_path)
+        if cached is not None and cached[0] == mtime:
+            return cached[1], cached[2]
+
+    index, meta = _load_cached(index_path, meta_path)
+    if not isinstance(index, faiss.IndexFlat):
+        raise _NotReconstructable(f"{type(index).__name__} is not a flat index")
+
+    matrix = index.reconstruct_n(0, index.ntotal).astype("float32", copy=False)
+    rows_by_table: Dict[str, List[int]] = {}
+    for i, record in enumerate(meta):
+        rows_by_table.setdefault(record["table"].upper(), []).append(i)
+
+    with _cache_lock:
+        _vector_cache[index_path] = (mtime, matrix, rows_by_table)
+    logger.info(
+        "[nlp.index_store] Reconstructed %d vector(s) from %s for subset search",
+        len(matrix), index_path,
+    )
+    return matrix, rows_by_table
+
+
+def subset_search(
+    index_path: str,
+    meta_path: str,
+    query_vector: np.ndarray,
+    table_names: Iterable[str],
+    k: Optional[int] = None,
+    min_score: float = 0.0,
+) -> List[Tuple[float, Dict[str, Any]]]:
+    """Exact similarity search RESTRICTED to records belonging to `table_names`.
+
+    search() cannot express this. FAISS has no per-query id filter on a flat
+    index, so the only way through search() is k=ntotal followed by a
+    post-filter — which pays for the full scan anyway, AND applies min_score
+    *inside*, where the caller can no longer tell "not in my scope" apart from
+    "below the threshold". This matters because the scoped caller
+    (scoped_retriever.py) needs the COMPLETE column list of its tables: that
+    list is what intent_resolver validates against, so a silently dropped
+    column becomes unselectable rather than merely low-ranked.
+
+    Since the indices are flat and their vectors normalized, the restricted
+    ranking is exactly `subset_matrix @ q` — a ~2MB matvec for the largest
+    (527x1024) index. Cost scales with the SCOPE, not the corpus, which is what
+    keeps this viable as the corpus grows past today's 51 tables.
+
+    Table names are matched case-insensitively: the externally-built index
+    stores them lowercase while this app's XML uses uppercase (see
+    meta_by_table). `k=None` means "return every matching record".
+    """
+    if not os.path.isfile(index_path) or not os.path.isfile(meta_path):
+        logger.warning("[nlp.index_store] Index not found: %s", index_path)
+        return []
+
+    wanted = {str(t).upper() for t in table_names}
+    if not wanted:
+        return []
+
+    _, meta = _load_cached(index_path, meta_path)
+    if not meta:
+        return []
+
+    try:
+        matrix, rows_by_table = _load_vectors_cached(index_path, meta_path)
+    except _NotReconstructable as exc:
+        # A future rebuild as IVF/PQ/HNSW lands here: degrade to the slow path
+        # rather than breaking retrieval outright.
+        logger.warning(
+            "[nlp.index_store] %s — falling back to full search + post-filter for %s",
+            exc, index_path,
+        )
+        hits = search(index_path, meta_path, query_vector, len(meta), min_score=min_score)
+        filtered = [(sc, rec) for sc, rec in hits if rec["table"].upper() in wanted]
+        return filtered[:k] if k else filtered
+
+    rows: List[int] = []
+    for name in wanted:
+        rows.extend(rows_by_table.get(name, []))
+    if not rows:
+        return []
+
+    rows.sort()
+    q = np.asarray(query_vector, dtype="float32").reshape(-1)
+    sims = matrix[rows] @ q
+
+    scored = [
+        (float(score), meta[row])
+        for score, row in zip(sims, rows)
+        if score >= min_score
+    ]
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return scored[:k] if k else scored
 
 
 def search(

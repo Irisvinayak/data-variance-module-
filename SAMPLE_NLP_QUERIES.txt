@@ -1,0 +1,314 @@
+================================================================================
+SAMPLE QUERIES — Data Variance Module ("Ask..." NLP bar)
+================================================================================
+
+Every query below is grounded in data that actually exists in this deployment:
+the metric names come from schema.json's column descriptions, the row labels
+from row_label_meta.pkl, and the dates from real submissions in the database.
+They are not invented examples.
+
+--------------------------------------------------------------------------------
+READ THIS FIRST — what the NLP bar can and cannot answer
+--------------------------------------------------------------------------------
+
+The NLP bar can only answer questions about returns that have been EMBEDDED.
+Today that is 3 of the 281 returns in Returns.xml:
+
+    2041  CIMS_RAQ(Quarterly)            26 tables
+    2057  CIMS_ALE_Domestic(Quarterly)   22 tables
+    2033  CIMS_ALE Oversease(Quarterly)   3 tables
+
+Anything else — CIMS_ROR, CRILC, DNBS, RCA3, ... — CANNOT be answered by the
+Ask bar no matter how it is phrased. Use the manual Return/Table/Date controls
+for those. Section 8 covers this deliberately.
+
+Reporting dates that exist (use these; others return "no data"):
+
+    2041  31-MAR-2025, 31-DEC-2024, 30-NOV-2024, 30-JUN-2024, 31-MAR-2024, 31-MAR-2023
+    2057  31-MAR-2025, 31-DEC-2024, 30-SEP-2024, 30-JUN-2024, 31-MAR-2024
+    2033  31-MAR-2025, 31-DEC-2024, 30-SEP-2024, 30-JUN-2024, 31-MAR-2024
+
+Note 30-NOV-2024 on return 2041: an OFF-CYCLE filing on a quarterly return.
+It is deliberately included below because it exercises a real edge case.
+
+Relative phrases ("last quarter") are resolved against the LATEST SUBMISSION
+IN THE DATA, not against today's calendar date. With data ending 31-MAR-2025,
+"last quarter" means the quarter before 31-MAR-2025.
+
+
+================================================================================
+1. SIMPLE METRIC LOOKUPS — the everyday case
+================================================================================
+No return named, no date. Should resolve straight to a table and answer,
+defaulting to the latest submission with one comparison period.
+
+    total loan assets
+    term loan
+    loans and advances to banks
+    commercial paper
+    funded exposure
+    non-funded exposure
+    loss provisions held
+    amount outstanding funded
+    gross advances
+    food credit
+    debit entries amount
+    credit entries amount
+    notional principal total
+    negative MTM value
+
+CHECK: the "Understood as" chips name a metric in business language
+("Total Loan Assets"), never a column identifier ("TOTAL_LOAN_ASSETS").
+
+
+================================================================================
+2. NAMING THE RETURN — the scoped path
+================================================================================
+When the query names a return, resolution is restricted to THAT return's
+tables. It must never answer from a different return.
+
+    total loan assets for CIMS_RAQ
+    show me total loan from cims raq
+    CIMS_RAQ gross advances
+    accounts with banks in India for CIMS_ALE domestic
+    CIMS_ALE overseas notional principal
+    cims ale domestic debit entries amount
+    RAQ loss provisions held
+
+CHECK: the Return chip shows the named return, and the answer's table belongs
+to it. In logs/<date>.log look for a [nlp.scoped_retriever] line reporting
+scope=26 (RAQ) or scope=22 / scope=3 (ALE) — that is the scoped path running.
+
+Ambiguous mention — "ALE" alone matches both the Domestic and the Overseas
+variant, so these should ask which one rather than guessing:
+
+    CIMS_ALE
+    cims ale last 3 quarters
+    ALE notional principal
+
+CHECK: you are asked to choose, and the choice offered is between the two ALE
+returns only — not a list of all 281. Picking one must then produce an answer;
+until recently this path 404'd with "Selected return is no longer available".
+
+
+================================================================================
+3. DATES AND PERIODS
+================================================================================
+
+--- explicit single date ---
+    total loan assets as of 31-MAR-2025
+    gross advances on 31-DEC-2024
+    debit entries amount 30-JUN-2024
+    term loan as of 31-MAR-2024
+
+--- off-cycle date (quarterly return filed 30-NOV) ---
+    total loan assets as of 30-NOV-2024
+CHECK: this must NOT be rejected as "Invalid Reporting Date According To
+Frequency" — it is a real submission on a quarterly return.
+
+--- two dates compared ---
+    total loan assets 31-MAR-2025 vs 31-DEC-2024
+    gross advances 31-MAR-2025 versus 31-MAR-2024
+    term loan 31-DEC-2024 to 31-MAR-2025
+
+--- relative periods ---
+    total loan assets last 2 quarters
+    gross advances last 3 quarters
+    term loan previous quarter
+    debit entries amount past 2 periods
+
+--- finance shorthand ---
+    total loan assets QoQ
+    gross advances YoY
+    term loan quarter over quarter
+    total loan assets same quarter last year
+
+--- Indian financial-year quarter notation ---
+    total loan assets Q1FY25
+    gross advances Q4 FY2025
+    term loan FY25 Q3
+
+--- open-ended range ---
+    total loan assets since March 2024
+    gross advances since Q1FY25
+
+CHECK: the Period chip shows the RESOLVED date and period count
+("31-MAR-2025 + 2 prior"), not the raw phrase you typed.
+
+
+================================================================================
+4. DOMESTIC / OVERSEAS SCOPE
+================================================================================
+Scope words steer column selection (_DOM vs _OVE) and, where a return has
+both variants, which return is used.
+
+    total loan assets domestic
+    total loan assets overseas
+    term loan domestic operations
+    gross advances global
+    accounts with banks in India
+    accounts with banks outside India
+    loss provision for accounts with banks overseas
+
+CHECK: the Scope chip reads Domestic / Overseas / Global.
+Note "total staff domestic vs overseas" must NOT be read as naming the
+CIMS_ALE_Domestic return — "domestic" there is scoping a metric.
+
+
+================================================================================
+5. ROW-LABEL QUERIES — asking by the label of a ROW, not a column
+================================================================================
+These tables store categories down the rows. The text below is a real row
+label, so the query should find the table that HAS that row.
+
+    with banks in India
+    with banks outside India
+    micro enterprises
+    small enterprises
+    medium enterprises
+    overdue less than 30 days SMA-0
+    overdue for 30 to 60 days SMA-1
+    overdue for 60 to 90 days SMA-2
+    loans and advances where 90 day norms is applicable as per IRAC
+    loss provision made for inter branch adjustments
+
+
+================================================================================
+6. NATURAL, CONVERSATIONAL PHRASING
+================================================================================
+Boilerplate ("show me", "what is the variance in") is stripped before search.
+These should behave identically to their bare-metric equivalents in section 1.
+
+    show me the total loan assets
+    what is the variance in gross advances
+    can you show me term loan for the last 2 quarters
+    I want to see loss provisions held
+    give me the debit entries amount for CIMS_ALE domestic as of 31-MAR-2025
+    what was the total loan assets in March 2025
+    display commercial paper QoQ
+
+Typos and abbreviations are normalised — these should still work:
+
+    total loan assets last 3 perids
+    gross npa last 2 quaters
+    o/s amount for std assets
+    exposer domestic
+
+
+================================================================================
+7. VAGUE QUERIES — known weak spot, please report what you see
+================================================================================
+These are too vague to identify one table honestly.
+
+    total
+    amount
+    show me the data
+    provisions
+    exposure
+    give me the numbers for last quarter
+
+KNOWN ISSUE: several of these currently ANSWER instead of asking. Measured:
+"total" resolves at confidence 0.72 and "amount" at 0.69, both above the
+auto-proceed threshold, because a one-word query still lands close to some
+column somewhere. The confidence score measures "is one candidate clearly
+ahead of the others", which it can be even when the query says almost nothing.
+
+When you test these, note WHICH ones answered and whether the answer was
+plausible. That is the evidence needed to decide whether short/low-content
+queries should be gated separately from the confidence score.
+
+
+================================================================================
+8. NEGATIVE CASES — must fail HONESTLY, not answer from the wrong place
+================================================================================
+None of these can be answered, because the return is not embedded. The
+failure must be explicit, never a confident answer from an unrelated return.
+
+    total number of staff for CIMS_ROR          (CIMS_ROR is not indexed)
+    CIMS_ROR table 4 as of 30-JUN-2025
+    CRILC borrower details
+    DNBS03 asset classification
+    RCA3 capital adequacy
+    show me the ATM transaction declines
+
+CHECK: each must come back with
+    "<NAME> has not been indexed for natural-language search yet, so I can't
+     answer questions about it here."
+plus the list of the 3 returns that CAN be asked about.
+
+This was a real bug found while writing this file: before it was fixed,
+"total number of staff for CIMS_ROR" answered from CIMS_RAQ at confidence
+0.94, and "CRILC borrower details" from CIMS_RAQ at 0.90 — confidently, about
+an entirely different return. The confidence gate cannot catch that class,
+because the score is genuinely high, just high about the wrong thing. If you
+ever see one of these produce a table, that is a regression — report it.
+
+Also check a date with no data:
+
+    total loan assets as of 31-DEC-2099
+
+
+================================================================================
+9. MANUAL SECTION — Return / Table / Date controls
+================================================================================
+The manual path is independent of the Ask bar and works for ALL returns.
+
+  9.1 Search a return          : type "cims raq" -> Search
+  9.2 Pick a table             : choose from the Table dropdown
+  9.3 Single date + periods    : tick ONE date; the Periods chips (1/2/3) and
+                                 the Compare toggle stay visible
+  9.4 Multiple dates           : tick TWO or THREE dates; Periods and Compare
+                                 disappear — the ticked dates ARE the periods,
+                                 newest treated as the current one
+  9.5 Max 3                    : tick a fourth date; unticked boxes go disabled
+  9.6 Non-consecutive dates    : on return 2041 tick 31-MAR-2025, 30-NOV-2024
+                                 and 31-MAR-2023 — a gap-filled comparison the
+                                 Periods path cannot express
+  9.7 Off-cycle date           : tick 30-NOV-2024 alone on quarterly 2041; it
+                                 must compute, not be rejected on frequency
+  9.8 Column hide/show         : open "Columns n/n", untick a value column and
+                                 an info column; header and body must stay
+                                 aligned. Hover a column header for the x.
+  9.9 Hide all columns         : expect the "All columns are hidden" message
+  9.10 Chart follows           : hide the charted column; the COLUMN dropdown
+                                 drops it and the chart falls back
+  9.11 Persistence             : hide a column, switch tables, switch back —
+                                 your choice returns (stored per table)
+  9.12 Sequential mode         : 2+ periods -> Compare "Seq"; check header and
+                                 body alignment in that layout too
+
+
+================================================================================
+10. THINGS TO VERIFY ON EVERY ANSWER
+================================================================================
+  [ ] IDENTIFIER column shows a business label ("i) Current", "ii) Overdue"),
+      NEVER a repeated date like "2025-03-31 00:00:00"
+  [ ] Chart x-axis labels match those row labels, and are not all identical
+  [ ] The "Understood as" chips describe the query you actually typed, and are
+      cleared when a manual Compute replaces the table
+  [ ] The Matched chip names a metric in business language, not a column id
+  [ ] The resolved return is one you named, if you named one
+  [ ] Typing a NEW question clears the previous table and chart before it runs
+      — you should never be looking at an old answer while a new one resolves,
+      or after one fails
+  [ ] Comparison columns show real deltas; 0.00% on every row usually means the
+      two periods hold identical data (check the DB before filing a bug —
+      31-MAR-2025 and 31-DEC-2024 on cims_raq_q_sec1_part_a_dom are genuinely
+      identical in this database)
+
+
+================================================================================
+11. RUNNING THE AUTOMATED CHECKS
+================================================================================
+Neither needs Ollama or Oracle — they read the FAISS indices and XML only.
+
+    backend/.venv/Scripts/python.exe scripts/eval_retrieval.py
+        Global retrieval (no return known). Hand-written cases.
+
+    backend/.venv/Scripts/python.exe scripts/eval_scoped_retrieval.py --sample 150
+        Return-scoped retrieval, graded on cases generated from the index's own
+        column descriptions. Reports table/column top-1, MRR, how often a
+        non-metric column wins, and confidence separation.
+
+Last measured (150 cases): table top-1 76%, top-3 96%; column top-1 87%,
+MRR 0.893; non-metric column ranked first 0%.

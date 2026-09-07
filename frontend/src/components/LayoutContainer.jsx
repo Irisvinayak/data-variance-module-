@@ -15,7 +15,7 @@
  *   TOP    : ControlBar — compact two-row toolbar, always visible
  *   BOTTOM : Analysis area — hidden until first compute succeeds.
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
 import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery, getAvailableDates, SKIP_ANSWER } from '../api.js'
@@ -25,6 +25,50 @@ import ControlBar         from './ControlBar.jsx'
 import TablePanel         from './TablePanel.jsx'
 import VisualizationPanel from './VisualizationPanel.jsx'
 import NoticeToast        from './NoticeToast.jsx'
+
+// Stable identity, so the "no hidden columns" case hands the same array down
+// on every render instead of a fresh literal.
+const EMPTY_COLS = []
+
+// ─── Hidden-column persistence ──────────────────────────────────────────────
+// Keyed on table name so a hidden set survives switching tables and reloading,
+// versioned so the stored shape can change later. Every access is wrapped: a
+// private window, disabled site data, or a hand-corrupted value must degrade to
+// "nothing hidden", never blank the results panel.
+const COL_VIS_KEY = (tableName) => `dvm.hiddenCols.v1:${tableName}`
+
+function loadHiddenCols(tableName, availableCols) {
+  if (!tableName) return EMPTY_COLS
+  try {
+    const raw = localStorage.getItem(COL_VIS_KEY(tableName))
+    if (!raw) return EMPTY_COLS
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return EMPTY_COLS
+    // Intersected with the columns this result actually has: a stored name from
+    // an older schema would otherwise sit in the hidden set forever, invisibly
+    // inflating the "n hidden" count against a column that no longer exists.
+    const available = new Set(availableCols.map((c) => c.toUpperCase()))
+    const kept = parsed.filter((c) => typeof c === 'string' && available.has(c.toUpperCase()))
+    return kept.length ? kept : EMPTY_COLS
+  } catch {
+    return EMPTY_COLS
+  }
+}
+
+function saveHiddenCols(tableName, hidden) {
+  if (!tableName) return
+  try {
+    if (hidden.length) {
+      localStorage.setItem(COL_VIS_KEY(tableName), JSON.stringify(hidden))
+    } else {
+      // Removed rather than stored as [] so keys don't accumulate for every
+      // table the user has merely looked at.
+      localStorage.removeItem(COL_VIS_KEY(tableName))
+    }
+  } catch {
+    /* storage unavailable — visibility still works for this session */
+  }
+}
 
 export default function LayoutContainer({ loginId = '', uid = '' }) {
 
@@ -46,6 +90,12 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   // independent of the manual wizard's step/candidates (same reasoning as
   // nlpQuery/nlColumns above — the NLP flow must stay independent).
   const [nlpClarification, setNlpClarification] = useState(null)
+  // What the backend understood the query to mean (return/metric/date/scope) —
+  // shown back to the user under the NLP bar (ControlBar's NlpInterpretation)
+  // so a wrong resolution is visible rather than only inferable from whether
+  // the resulting numbers look right. Present on BOTH clarification and result
+  // responses, so it stays on screen across a clarification round-trip.
+  const [nlpInterpretation, setNlpInterpretation] = useState(null)
 
   // ─── Wizard state ────────────────────────────────────────────────────────
   const [step,       setStep]       = useState(VARIANCE_STEPS.RETURN_NAME)
@@ -53,12 +103,26 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const [returnInfo, setReturnInfo] = useState(null)
   const [candidates, setCandidates] = useState(null)
   const [tableName,  setTableName]  = useState('')
-  const [dateStr,    setDateStr]    = useState('')
+  // Reporting dates ticked in the manual Date checkbox list (ControlBar's
+  // DateField), newest first, at most 3. The newest is the current period and
+  // the rest are compared against it — the backend applies the same rule (see
+  // calculate_variance's comparison_dates). Replaces the old single dateStr:
+  // one date is just a selection of length 1, so there is no second source of
+  // truth to keep in sync.
+  const [selectedDates, setSelectedDates] = useState([])
   const [availableDates, setAvailableDates] = useState([])
   const [datesLoading,   setDatesLoading]   = useState(false)
   const [periods,    setPeriods]    = useState(1)
   const [comparisonMode, setComparisonMode] = useState(COMPARISON_MODES.VS_CURRENT)
   const [result,     setResult]     = useState(null)
+  // ─── Column visibility ───────────────────────────────────────────────────
+  // Signature and hidden list are stored TOGETHER on purpose. `result` is
+  // replaced wholesale in three places (handleCompute, handleReset, the NLP
+  // handler), and resetting the hidden set from a useEffect would render one
+  // frame with the previous table's hidden columns applied to the new table's
+  // schema. Comparing the stored signature during render instead makes a stale
+  // set unreachable, with no reset code at any setResult call site to forget.
+  const [colVis, setColVis] = useState({ sig: null, hidden: EMPTY_COLS })
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState('')
   const [notice,     setNotice]     = useState('')
@@ -74,6 +138,77 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   const tables = (returnInfo?.tables || []).filter(
     (t, i, arr) => t.table_name && arr.findIndex((x) => x.table_name === t.table_name) === i
   )
+
+  // ─── Column visibility, derived ──────────────────────────────────────────
+  // The signature includes the column list, not just the table name, so any
+  // change to the column universe (a vs_current/sequential switch, the NLP
+  // path's own column trim, a schema change) self-heals. A recompute of the
+  // same table with the same columns keeps the signature — and therefore keeps
+  // the user's hidden set — which is what makes changing dates non-destructive.
+  const resultDisplayCols = result?.display_columns ?? result?.columns ?? EMPTY_COLS
+  const colSig = result && !result.error
+    ? `${result.table_name}|${result.comparison_mode ?? 'vs_current'}|${resultDisplayCols.join(',')}`
+    : null
+  // Reading straight from localStorage when the signature doesn't match is
+  // what makes a NEW result arrive with its own stored preferences already
+  // applied, on the very first render, with no flash of the wrong set.
+  //
+  // Memoized because this branch stays live until the user's FIRST toggle on a
+  // result: without it, every unrelated re-render would re-read storage,
+  // re-parse the JSON and hand children a brand-new array identity.
+  const storedHidden = useMemo(
+    () => loadHiddenCols(result?.table_name, resultDisplayCols),
+    // colSig covers both inputs — it is built from the table name and the
+    // column list — so it is the whole dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [colSig]
+  )
+  const hiddenCols = colSig && colVis.sig === colSig ? colVis.hidden : storedHidden
+
+  // Every handler stamps the CURRENT signature, so a write can never be
+  // attributed to a result it wasn't made against.
+  const commitHidden = useCallback(
+    (next) => {
+      if (!colSig) return
+      saveHiddenCols(result?.table_name, next)
+      setColVis({ sig: colSig, hidden: next.length ? next : EMPTY_COLS })
+    },
+    [colSig, result?.table_name]
+  )
+
+  const handleToggleCol = useCallback(
+    (col) => {
+      const upper = col.toUpperCase()
+      const isHidden = hiddenCols.some((c) => c.toUpperCase() === upper)
+      commitHidden(
+        isHidden
+          ? hiddenCols.filter((c) => c.toUpperCase() !== upper)
+          // Kept in the result's own column order rather than click order, so
+          // the stored list stays readable and stable.
+          : resultDisplayCols.filter(
+              (c) => c.toUpperCase() === upper || hiddenCols.some((h) => h.toUpperCase() === c.toUpperCase())
+            )
+      )
+    },
+    [commitHidden, hiddenCols, resultDisplayCols]
+  )
+
+  // Idempotent — the header × can be clicked on an already-hidden column only
+  // via a race, but this keeps the set from growing duplicates either way.
+  const handleHideCol = useCallback(
+    (col) => {
+      const upper = col.toUpperCase()
+      if (hiddenCols.some((c) => c.toUpperCase() === upper)) return
+      handleToggleCol(col)
+    },
+    [handleToggleCol, hiddenCols]
+  )
+
+  const handleShowAllCols = useCallback(() => commitHidden(EMPTY_COLS), [commitHidden])
+  const handleHideAllCols = useCallback(
+    () => commitHidden([...resultDisplayCols]),
+    [commitHidden, resultDisplayCols]
+  )
   // ─── Fetch available dates whenever the selected table changes ──────────
   // Feeds the manual Date dropdown (ControlBar's DateField) with the real
   // submission dates on file, instead of a free calendar where most picks
@@ -86,7 +221,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
 
     let cancelled = false
     setDatesLoading(true)
-    setDateStr('') // stale date from a previous table must not linger
+    setSelectedDates([]) // stale dates from a previous table must not linger
 
     getAvailableDates(returnInfo.return_id, returnInfo.table_mapping_path, tableName, loginId)
       .then((data) => {
@@ -258,7 +393,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   }
 
   const handleCompute = async () => {
-    if (!returnInfo || !tableName || !dateStr) return
+    if (!returnInfo || !tableName || selectedDates.length === 0) return
     setLoading(true)
     setError('')
     try {
@@ -271,12 +406,24 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         return_id:          returnInfo.return_id,
         table_mapping_path: returnInfo.table_mapping_path,
         table_name:         tableName,
-        reporting_date:     dateStr.trim(),
+        // The newest ticked date. Sent alongside comparison_dates (which the
+        // backend treats as authoritative and re-derives this from) so the
+        // request is still valid against the unchanged required field.
+        reporting_date:     selectedDates[0],
+        // With ONE ticked date this is the unchanged derived path: walk back
+        // `periods` periods from that date. With several, comparison_dates
+        // takes over and the backend ignores reporting_period entirely.
         reporting_period:   periods,
+        comparison_dates:   selectedDates.length > 1 ? selectedDates : undefined,
         selected_columns:   selectedColumns,
         comparison_mode:    comparisonMode,
       }, loginId)
       setResult(res)
+      // A manual compute replaces the table on screen, so the "Understood as"
+      // chips from an earlier NLP query would now be describing a different
+      // result. Clearing them keeps the attribution honest — the chips are the
+      // only thing marking a result as inferred rather than chosen.
+      setNlpInterpretation(null)
       applyMissingPeriodsNotice(res)
       setStep(VARIANCE_STEPS.RESULT)
       setTableState('normal')
@@ -294,7 +441,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setReturnName('')
     setReturnInfo(null)
     setTableName('')
-    setDateStr('')
+    setSelectedDates([])
     setPeriods(1)
     setComparisonMode(COMPARISON_MODES.VS_CURRENT)
     setResult(null)
@@ -303,6 +450,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setCandidates(null)
     setNlColumns(null)
     setNlpClarification(null)
+    setNlpInterpretation(null)
     setVizOpen(false)
     setTableState('normal')
     setVizState('normal')
@@ -314,7 +462,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
   // real data -> compute_variance) and returns a result shaped exactly like
   // /variance/compute's response. This is a display-only path: it feeds the
   // result straight into the table/visualization panels and deliberately
-  // does NOT touch returnName/returnInfo/tableName/dateStr/periods — those
+  // does NOT touch returnName/returnInfo/tableName/selectedDates/periods — those
   // belong to the manual return/table/date wizard and must stay independent
   // of whatever the NLP bar resolved, so neither flow overrides the other.
   // `clarificationOverride` lets a caller force which (if any) clarification
@@ -332,11 +480,32 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
       return
     }
 
-    setLoading(true)
-    setError('')
-
     const activeClarification =
       clarificationOverride !== undefined ? clarificationOverride : nlpClarification
+
+    // A brand-new question clears the page before it runs.
+    //
+    // Without this, the previous answer's table and chart stay on screen for
+    // the whole round-trip and — if the new query ends in a clarification, a
+    // refusal, or an error — they stay there indefinitely, silently
+    // mislabelled as the response to the question just typed. Nothing on the
+    // table itself says which query produced it, so a stale result is
+    // indistinguishable from a fresh one.
+    //
+    // Answering a pending clarification is NOT a new question: it is the
+    // second half of the one already in flight, so its state is left alone.
+    if (!activeClarification) {
+      setResult(null)
+      setNotice('')
+      setNlpClarification(null)
+      setNlpInterpretation(null)
+      setVizOpen(false)
+      setTableState('normal')
+      setVizState('normal')
+    }
+
+    setLoading(true)
+    setError('')
 
     try {
       const res = await resolveNlQuery(trimmed, loginId, {
@@ -344,6 +513,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         clarificationAnswer:  selectedOption?.id,
         resolvedContext:      activeClarification?.resolvedContext,
       })
+
+      // Set before the clarification early-return so the chips render on a
+      // clarification round too — that's exactly when knowing what was
+      // understood so far is most useful to the user answering the question.
+      setNlpInterpretation(res.interpretation ?? null)
 
       if (res.needs_clarification) {
         setNlpClarification({
@@ -501,7 +675,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         returnName={returnName}   setReturnName={setReturnName}
         returnInfo={returnInfo}   tables={tables}
         tableName={tableName}     setTableName={setTableName}
-        dateStr={dateStr}         setDateStr={setDateStr}
+        selectedDates={selectedDates} setSelectedDates={setSelectedDates}
         availableDates={availableDates} datesLoading={datesLoading}
         periods={periods}         setPeriods={setPeriods}
         comparisonMode={comparisonMode} setComparisonMode={setComparisonMode}
@@ -518,6 +692,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         handleNlpSearch={handleNlpSearch}
         handleVoiceInput={handleVoiceInput}
         nlpClarification={nlpClarification}
+        nlpInterpretation={nlpInterpretation}
         onClarificationSelect={handleClarificationSelect}
         onClarificationSkip={handleClarificationSkip}
         onClarificationCancel={handleClarificationCancel}
@@ -564,6 +739,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
             >
               <TablePanel
                 result={result}
+                hiddenCols={hiddenCols}
+                onToggleCol={handleToggleCol}
+                onHideCol={handleHideCol}
+                onShowAllCols={handleShowAllCols}
+                onHideAllCols={handleHideAllCols}
                 tableState={tableState}
                 onExpand={handleTableExpand}
                 onMinimize={handleTableMinimize}
@@ -599,6 +779,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
             >
               <VisualizationPanel
                 result={result}
+                hiddenCols={hiddenCols}
                 vizState={vizState}
                 vizOpen={vizOpen}
                 onExpand={handleVizExpand}

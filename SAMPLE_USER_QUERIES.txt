@@ -1,0 +1,326 @@
+================================================================================
+SAMPLE USER QUERIES — Data Variance Module, NLP ("Ask...") bar
+================================================================================
+
+Full, copy-paste-ready questions phrased the way a user would actually type
+them. Companion to SAMPLE_NLP_QUERIES.txt, which is a structured checklist of
+short fragments plus the manual-section tests; this file is the natural-language
+set.
+
+EVERY QUERY BELOW HAS BEEN RUN. The "-> " line under each one records what the
+pipeline ACTUALLY did, not what it was hoped to do. Those lines are the
+expectations to test against; if you see something different, that is a change
+worth reporting.
+
+Legend for the recorded outcome:
+   ANSWER      resolved confidently and computed a result with no extra prompt
+   ASK-table   resolved to a return but asks you to describe the data further
+   ASK-return  too weak to resolve; asks which return you mean
+   REFUSED     the query names a return that has no embeddings; declines and
+               says so, rather than answering from a different return
+
+Measured over the 62 queries in this file:
+   ANSWER 45   ASK-table 7   ASK-return 4   REFUSED 6
+
+Coverage: only 3 of 281 returns are embedded and therefore askable —
+   2041 CIMS_RAQ(Quarterly)  |  2057 CIMS_ALE_Domestic(Quarterly)  |
+   2033 CIMS_ALE Oversease(Quarterly)
+Everything else must be reached through the manual Return/Table/Date controls.
+
+Dates that exist:
+   2041  31-MAR-2025, 31-DEC-2024, 30-NOV-2024, 30-JUN-2024, 31-MAR-2024, 31-MAR-2023
+   2057  31-MAR-2025, 31-DEC-2024, 30-SEP-2024, 30-JUN-2024, 31-MAR-2024
+   2033  31-MAR-2025, 31-DEC-2024, 30-SEP-2024, 30-JUN-2024, 31-MAR-2024
+
+Relative phrases ("last 2 quarters") resolve against the LATEST SUBMISSION in
+the data, not today's calendar date.
+
+
+================================================================================
+1. EVERYDAY QUESTIONS — no return, no date
+================================================================================
+
+Show me the total loan assets
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom
+
+What is the total loan assets for the latest quarter?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom
+
+I want to see the gross advances
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4
+
+Can you show me the loss provisions held?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec10
+
+Give me the debit entries amount
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_2
+
+What are the credit entries for the current period?
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_2
+
+Show me the funded exposure
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec10
+
+Display the non-funded exposure
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec10
+
+What is the commercial paper outstanding?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_b_dom
+
+Show me the term loan figures
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom
+
+Give me the food credit numbers
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec8_sec_credit
+
+What is the notional principal total?
+    -> ASK-return  |  resolves to 2057 cims_ale_q_sec2_e1
+
+================================================================================
+2. NAMING THE RETURN
+================================================================================
+
+Show me the total loan assets for CIMS_RAQ
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  return=CIMS_RAQ
+
+What is the gross advances in CIMS_RAQ quarterly?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  return=CIMS_RAQ
+
+Show me the accounts with banks in India for CIMS_ALE domestic
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_1_a  |  return=CIMS_ALE_Domestic; scope=DOM
+
+Give me the debit entries amount from CIMS_ALE domestic
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_2  |  return=CIMS_ALE_Domestic; scope=DOM
+
+What is the notional principal in CIMS_ALE overseas?
+    -> ASK-return  |  resolves to 2033 cims_ale_q_sec2_e2  |  return=CIMS_ALE Oversease; scope=OVE
+
+Show me loss provisions held for the RAQ return
+    -> ASK-table  |  resolves to 2041 cims_raq_q_sec10  |  return=CIMS_RAQ
+
+================================================================================
+3. AMBIGUOUS RETURN MENTION — should ask which variant
+================================================================================
+
+Show me the notional principal for CIMS_ALE
+    -> ASK-return  |  resolves to 2057 cims_ale_q_sec2_f1  |  return=CIMS_ALE Oversease/CIMS_ALE_Domestic
+
+What is the data in CIMS_ALE for the last 3 quarters?
+    -> ANSWER  |  resolves to 2057 cims_ale_q_gen_info  |  return=CIMS_ALE Oversease/CIMS_ALE_Domestic; date='last 3 quarters'
+
+================================================================================
+4. DATES AND PERIODS
+================================================================================
+
+Show me the total loan assets as of 31-MAR-2025
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='as of 31-MAR-2025'
+
+What was the gross advances on 31-DEC-2024?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  date='on 31-DEC-2024'
+
+Give me the term loan as of 31-MAR-2024
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='as of 31-MAR-2024'
+
+Compare total loan assets between 31-MAR-2025 and 31-DEC-2024
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='31-MAR-2025 31-DEC-2024'
+
+What is the gross advances for 31-MAR-2025 versus 31-MAR-2024?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  date='for 31-MAR-2025 31-MAR-2024'
+
+Show me the total loan assets for the last 2 quarters
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='last 2 quarters'
+
+Give me the gross advances over the previous 3 quarters
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  date='previous 3 quarters'
+
+What is the term loan compared to the previous quarter?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='previous quarter'
+
+Show me the total loan assets quarter over quarter
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='quarter over quarter'
+
+What is the gross advances year over year?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  date='year over year'
+
+Show me the total loan assets for Q1FY25
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='Q1FY25'
+
+What was the gross advances in Q4 FY2025?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  date='Q4 FY2025'
+
+Show me the total loan assets since March 2024
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='since March 2024'
+
+================================================================================
+5. OFF-CYCLE DATE — a quarterly return filed on 30-NOV
+================================================================================
+
+Show me the total loan assets as of 30-NOV-2024
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='as of 30-NOV-2024'
+
+================================================================================
+6. DOMESTIC / OVERSEAS / GLOBAL SCOPE
+================================================================================
+
+Show me the total loan assets for domestic operations
+    -> ASK-table  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  scope=DOM
+
+What is the total loan assets for overseas operations?
+    -> ANSWER  |  resolves to 2057 cims_ale_q_sec_1a  |  scope=OVE
+
+Give me the global gross advances
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  scope=GLOBAL
+
+Show me the accounts with banks outside India
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_1_b  |  scope=DOM
+
+What is the loss provision for accounts with banks overseas?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec2_part_a  |  scope=OVE
+
+================================================================================
+7. ASKING BY ROW LABEL
+================================================================================
+
+Show me the balances with banks in India
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_1_bal  |  scope=DOM
+
+What is the amount for micro enterprises?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec10
+
+Give me the figures for small enterprises
+    -> ASK-table  |  resolves to 2041 cims_raq_q_sec10
+
+Show me the overdue less than 30 days SMA-0
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec8_infra_brkup
+
+What is outstanding for loans where 90 day norms is applicable as per IRAC?
+    -> ASK-return  |  resolves to 2041 cims_raq_q_sec1_part_a_dom
+
+================================================================================
+8. EVERYTHING AT ONCE — return + metric + scope + date
+================================================================================
+
+Show me the total loan assets for CIMS_RAQ domestic as of 31-MAR-2025
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  return=CIMS_RAQ; date='as of 31-MAR-2025'; scope=DOM
+
+What is the variance in gross advances for CIMS_RAQ over the last 2 quarters?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec_12_misc_t4  |  return=CIMS_RAQ; date='last 2 quarters'
+
+Give me the debit entries amount for CIMS_ALE domestic as of 31-MAR-2025
+    -> ANSWER  |  resolves to 2057 cims_ale_q_anx_2  |  return=CIMS_ALE_Domestic; date='as of 31-MAR-2025'; scope=DOM
+
+Show me the notional principal for CIMS_ALE overseas for Q4 FY2025
+    -> ASK-table  |  resolves to 2033 cims_ale_q_sec2_e2  |  return=CIMS_ALE Oversease; date='Q4 FY2025'; scope=OVE
+
+================================================================================
+9. TYPOS AND ABBREVIATIONS
+================================================================================
+
+Show me the total loan assets for the last 3 perids
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec1_part_a_dom  |  date='last 3 periods'
+
+What is the gross npa for the last 2 quaters?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec2_part_a_npa  |  date='last 2 quarters'
+
+Give me the o/s amount for std assets
+    -> ANSWER  |  resolves to 2057 cims_ale_q_sec_1a
+
+Show me the exposer for domestic operations
+    -> ASK-table  |  resolves to 2041 cims_raq_q_sec9_sensec_partb  |  scope=DOM
+
+================================================================================
+10. VAGUE QUESTIONS — known weak spot
+================================================================================
+
+Show me the total
+    -> ANSWER  |  resolves to 2033 cims_ale_q_sec2_e2
+
+What is the amount?
+    -> ANSWER  |  resolves to 2041 cims_raq_q_sec2_part_a_memo
+
+Give me the numbers for the last quarter
+    -> ASK-table  |  resolves to 2041 cims_raq_q_sec4_part_a  |  date='last quarter'
+
+Show me the data
+    -> ASK-table  |  resolves to 2041 cims_raq_q_sec4_part_b
+
+================================================================================
+11. MUST BE REFUSED — return not indexed
+================================================================================
+
+Show me the total number of staff for CIMS_ROR
+    -> REFUSED  |  names CIMS_ROR (not indexed)
+
+What is the CIMS_ROR data as of 30-JUN-2025?
+    -> REFUSED  |  names CIMS_ROR (not indexed)
+
+Give me the borrower details from CRILC
+    -> REFUSED  |  names CRILC (not indexed)
+
+Show me the capital adequacy in RCA3
+    -> REFUSED  |  names CIMS_RCA3(Standalone) (not indexed)
+
+What is the asset classification in DNBS03?
+    -> REFUSED  |  names CIMS_DNBS03 (not indexed)
+
+Show me the NRD-CSR statement figures
+    -> REFUSED  |  names CIMS_NRD-CSR (not indexed)
+
+================================================================================
+12. WHAT TO VERIFY ON EVERY ANSWER
+================================================================================
+  [ ] The IDENTIFIER column shows a business label ("i) Current",
+      "ii) Overdue [ii.a + ii.b]"), NEVER a repeated date like
+      "2025-03-31 00:00:00"
+  [ ] The chart x-axis matches those labels and they are not all identical
+  [ ] The "Understood as" chips describe the question you typed, and name a
+      metric in business language ("Total Loan Assets"), not a column
+      identifier ("TOTAL_LOAN_ASSETS")
+  [ ] The Period chip shows the RESOLVED date and count
+      ("31-MAR-2025 + 2 prior"), not the raw phrase you typed
+  [ ] If you named a return, the answer came from that return
+  [ ] Typing a NEW question clears the previous table and chart BEFORE it runs
+  [ ] Running a manual Compute clears the stale "Understood as" chips
+  [ ] 0.00% on every row is usually identical data, not a bug — 31-MAR-2025 and
+      31-DEC-2024 on cims_raq_q_sec1_part_a_dom are genuinely identical in this
+      database. Confirm in the DB before filing.
+
+================================================================================
+13. MANUAL SECTION — works for ALL returns, not just the 3 indexed ones
+================================================================================
+See SAMPLE_NLP_QUERIES.txt section 9 for the full manual checklist. The
+essentials:
+
+  Return search   : "cims raq", "cims ror", "cims nrd-csr", "rca3"
+  Dates           : tick ONE date -> Periods chips (1/2/3) stay visible
+                    tick TWO or THREE -> Periods disappears; ticked dates ARE
+                    the periods, newest treated as current
+                    a fourth tick is blocked (max 3)
+  Non-consecutive : on 2041 tick 31-MAR-2025 + 30-NOV-2024 + 31-MAR-2023
+  Columns         : "Columns n/n" menu; untick a value column and an info
+                    column; hover a header for the x; hide-all shows a message
+  Chart follows   : hide the charted column -> dropdown drops it, chart falls
+                    back to the first visible one
+
+Returns whose Table dropdown was empty until recently and should now populate:
+  2007 CIMS_NRD-CSR (3)          2044 CIMS_RCA3(Standalone) (29)
+  2064 CIMS_RCA3(Consolidated)   2035 CIMS_ALE_Oversease(Monthly) (25)
+  2058 CIMS_ALE_Domestic(Monthly) (22)   2009 CIMS_RLC (8)
+  ...20 returns in total. If any of these shows an empty Table dropdown, that
+  is a regression.
+
+Returns that still have NO tables anywhere (config gap, not a bug — neither the
+mapping file nor XML_Query.xml declares them):
+  4037, 2001, 2002, 2053, 2020, 2013, 2073, 4033, 2008, 2107, 2072, 4011,
+  2039, 2047 and 2 others.
+
+================================================================================
+14. AUTOMATED CHECKS
+================================================================================
+Neither needs Ollama or Oracle.
+
+    backend/.venv/Scripts/python.exe scripts/eval_retrieval.py
+    backend/.venv/Scripts/python.exe scripts/eval_scoped_retrieval.py --sample 150
+
+Last measured on the scoped path (150 cases): table top-1 76%, top-3 96%;
+column top-1 87%, MRR 0.893; non-metric column ranked first 0%.

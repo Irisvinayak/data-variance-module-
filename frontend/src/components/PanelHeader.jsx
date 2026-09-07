@@ -3,14 +3,23 @@
  * Shows Expand / Minimize when in normal state.
  * Shows a single Restore button when expanded or minimized.
  */
-export default function PanelHeader({ title, icon, onExpand, onMinimize, isExpanded, isMinimized }) {
+/**
+ * `titleContent` replaces the plain `title` text with arbitrary content in the
+ * same row — used by TablePanel to put the table name and its period badges in
+ * the header rather than on a second line beneath it. `title` is still used
+ * for the collapsed-panel label and the a11y name, so it must be supplied
+ * either way.
+ */
+export default function PanelHeader({
+  title, titleContent, icon, onExpand, onMinimize, isExpanded, isMinimized,
+}) {
   const isNormal = !isExpanded && !isMinimized
 
   return (
-    <div className="ph-root">
+    <div className={'ph-root' + (titleContent ? ' ph-root-rich' : '')}>
       <div className="ph-title">
         {icon && <span className="ph-icon">{icon}</span>}
-        <span>{title}</span>
+        {titleContent ?? <span>{title}</span>}
         {isExpanded  && <span className="ph-state-badge">Expanded</span>}
         {isMinimized && <span className="ph-state-badge">Minimized</span>}
       </div>

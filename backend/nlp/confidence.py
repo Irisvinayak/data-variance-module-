@@ -15,7 +15,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Set, Tuple
+
+from .nlp_config import MARGIN_FULL_SEPARATION
 
 
 def normalize_scores(scores: Dict[str, float]) -> Dict[str, float]:
@@ -37,12 +39,17 @@ def table_confidence(
     qa_hit: bool,
     lexical_overlaps: Dict[str, float],
     tie_epsilon: float,
+    signal_leaders: Optional[Set[str]] = None,
 ) -> Tuple[float, bool]:
     """`ranked` is the authorized table shortlist as (table_name, score)
     pairs, already sorted descending, with the QA strong-match bonus
     EXCLUDED from `score` (the caller is responsible for stripping it — see
     retriever.py) so a near-verified QA match doesn't inflate the fused
     number this function normalizes over.
+
+    `signal_leaders` is the set of tables holding the #1 hit in at least one
+    individual retrieval signal (column / row-label / table-description /
+    BM25). See retriever.py where it is built, and the rationale below.
 
     Returns (confidence, is_tied). `is_tied` is a belt-and-suspenders flag,
     independent of the continuous score, for when >=2 candidates land within
@@ -60,28 +67,59 @@ def table_confidence(
 
     normalized = normalize_scores(dict(ranked))
     norm_top1 = normalized[top1_name]
-    norm_top2 = normalized[ranked[1][0]] if len(ranked) >= 2 else None
 
-    score_gap = 1.0 if norm_top2 is None else (norm_top1 - norm_top2)
+    # ── Signal 1: relative margin over the runner-up ────────────────────────
+    # Scale-free: (top1 - top2) / top1 asks "how much better is the winner
+    # than the next best", which is meaningful regardless of the absolute
+    # fused magnitude. Saturating at MARGIN_FULL_SEPARATION because real
+    # margins are small even for clear winners (measured mean 0.18 on correct
+    # answers over the benchmark in nlp_config.RRF_K) — without the scaling
+    # this term would contribute a rounding error.
+    top1_score = ranked[0][1]
+    if len(ranked) < 2 or top1_score <= 1e-9:
+        margin = 1.0
+    else:
+        margin = max(0.0, (top1_score - ranked[1][1]) / top1_score)
+    margin_term = min(1.0, margin / MARGIN_FULL_SEPARATION) if MARGIN_FULL_SEPARATION > 0 else 0.0
+
+    # ── Signal 2: does the winner OWN a signal? ─────────────────────────────
+    # The strongest predictor available, measured over the benchmark:
+    #   leads >=1 signal -> 81% correct (n=57);  leads none -> 0% (n=3).
+    # A table that never ranked first in ANY signal won the fused sum purely
+    # by accumulating mediocre placements across several of them, which
+    # measurement showed is a NEGATIVE indicator (present in 4 signals: 62%
+    # correct, vs 3 signals: 90%) — generic date/code/"total" tables surface
+    # everywhere without ever being the best answer to anything. Weighted
+    # heavily, and its absence is what keeps such a candidate below the ask
+    # floor instead of auto-proceeding on a wrong table.
+    # None means the caller didn't compute this (it is an optional argument, so
+    # a future/other caller can omit it) -> treated as NEUTRAL rather than as
+    # "leads nothing". Scoring an unknown the same as a known-absent would
+    # silently cap such a caller at 0.55 and make auto-proceed unreachable for
+    # them — which is the exact failure this rewrite exists to remove. An empty
+    # SET is different: it means the caller looked and this table leads
+    # nothing, which is the strongly negative case.
+    if signal_leaders is None:
+        leader_term = 0.5
+    else:
+        leader_term = 1.0 if top1_name in signal_leaders else 0.0
+
     overlap_top1 = lexical_overlaps.get(top1_name, 0.0)
 
-    # top1_share: the winner's share of the TOTAL fused score across the
-    # whole shortlist. Unlike min-max normalization (norm_top1 above, used
-    # only for score_gap/tie detection), this actually varies: several
-    # roughly-equal candidates split the mass and yield a low share (no
-    # clear winner -> ask), while one dominant match yields a share near
-    # 1.0 (confident -> proceed). Note norm_top1 itself is NOT usable as a
-    # confidence signal here -- min-max always maps the top (by definition
-    # the max) to exactly 1.0, so it carries no information on its own.
-    total_score = sum(score for _, score in ranked)
-    if total_score > 1e-9:
-        top1_share = ranked[0][1] / total_score
-    else:
-        top1_share = 1.0 if len(ranked) == 1 else 0.0
-
+    # Replaces the previous 0.50*top1_share term, which was structurally
+    # incapable of doing its job: top1_share is the winner's fraction of the
+    # summed shortlist score, and because RRF (at any k) produces similar
+    # magnitudes across the top-K, that fraction sits near 1/K almost
+    # regardless of how good the match is. With K=5 the whole formula could
+    # not exceed ~0.65 in the typical case against a 0.72 auto-proceed
+    # threshold, so NO query ever auto-proceeded — every single one fell
+    # through to a clarifying question (confirmed: 0/60 on the benchmark, and
+    # in the production logs). It also rewarded the same breadth pathology
+    # described above, since a table scored by more signals has a larger
+    # share.
     confidence = (
-        0.50 * top1_share
-        + 0.35 * score_gap
+        0.45 * leader_term
+        + 0.40 * margin_term
         + 0.15 * overlap_top1
     )
     confidence = max(0.0, min(1.0, confidence))

@@ -22,7 +22,7 @@ from .report_lookup import (
     find_matching_reports, _parse_returns, get_is_excel_by_return_code,
     search_returns_scored, AUTO_SELECT_THRESHOLD,
 )
-from .calculate_variance import calculate_variance
+from .calculate_variance import calculate_variance, validate_reporting_date
 
 logger = logging.getLogger(__name__)
 
@@ -373,25 +373,84 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
     # fallbacks and directory scan, so we no longer hard-stop here.
     root, resolved_path = _load_table_mapping(return_id, tbl_path)
 
-    if root is None:
-        return {
-            "error": (
-                f"Return '{r.get('Name', return_input)}' (Id={return_id}): "
-                f"table mapping file not found. "
-                f"Checked TblPath={tbl_path!r} and standard fallback locations "
-                f"under {TABLE_MAPPING_BASE_DIR}."
-            )
-        }
-
     tables = []
-    for el in root.findall("Row"):
-        tables.append({
-            "table_name":            el.attrib.get("TableName"),
-            "filter_col":            el.attrib.get("FilterColumn"),
-            "primary_column":        el.attrib.get("PrimaryColumn"),
-            "comp_filter_col_name":  el.attrib.get("CompFilterColName"),
-            **el.attrib,
-        })
+    if root is not None:
+        for el in root.findall("Row"):
+            tables.append({
+                "table_name":            el.attrib.get("TableName"),
+                "filter_col":            el.attrib.get("FilterColumn"),
+                "primary_column":        el.attrib.get("PrimaryColumn"),
+                "comp_filter_col_name":  el.attrib.get("CompFilterColName"),
+                **el.attrib,
+            })
+
+    # ── Fallback: parse the return's XML_Query.xml ───────────────────────────
+    # Covers BOTH ways a return can end up with no usable table list, because
+    # both produce the same symptom — an empty Table dropdown:
+    #
+    #   (a) the mapping file loaded but declares no TableName anywhere. When
+    #       Returns.xml carries no TblPath, resolution lands on Mapping_1.xml,
+    #       whose <Row> elements are CELL mappings (Cell, ClmnUnitId, Code,
+    #       DataType, Dim, ...) with no TableName attribute at all.
+    #   (b) no mapping file exists anywhere for the return, which used to be a
+    #       hard error returned from this function before anything else was
+    #       tried.
+    #
+    # XML_Query.xml describes a return's tables in its SELECT statements: every
+    # FROM/JOIN target is a table, and RptDtClmnName gives the reporting-date
+    # column. See query_xml_lookup._build.
+    #
+    # This is not a new mechanism — backend/nlp/return_lookup.py and
+    # _get_table_metadata() below already carry exactly this fallback, and
+    # _get_table_metadata explicitly handles root-is-None the same way. This
+    # function was the one place that gave up first. Measured on the current
+    # deployment: 36 returns load a mapping that declares no TableName, and
+    # this recovers the real tables for 20 of them (2007 CIMS_NRD-CSR -> 3,
+    # 2044/2064 CIMS_RCA3 -> 29 each, 2035/2058 CIMS_ALE monthly -> 25/22).
+    # Case (b) currently recovers nothing, because the 239 returns with no
+    # mapping file have no XML_Query.xml either — it is handled for symmetry,
+    # so a deployment that ships one without the other works.
+    if not any(t.get("table_name") for t in tables):
+        recovered = query_xml_lookup.tables_for_return(return_id)
+        if recovered:
+            tables = [
+                {
+                    "table_name":           name,
+                    "filter_col":           meta.get("filter_col"),
+                    "primary_column":       None,
+                    "comp_filter_col_name": None,
+                    "source":               query_xml_lookup.XML_QUERY_FILENAME,
+                }
+                for name, meta in recovered.items()
+            ]
+            logger.info(
+                "[service] return_id=%s (%s) — %s; recovered %d table(s) from %s",
+                return_id, r.get("Name"),
+                "no table-mapping file" if root is None
+                else f"mapping file {resolved_path} declares no TableName attributes",
+                len(tables), query_xml_lookup.XML_QUERY_FILENAME,
+            )
+        elif root is None:
+            # Nothing anywhere describes this return's tables. Only NOW is it
+            # an error — and the message names both files that were tried, so
+            # whoever fixes the config knows where to put the data.
+            return {
+                "error": (
+                    f"Return '{r.get('Name', return_input)}' (Id={return_id}): "
+                    f"no table mapping file and no {query_xml_lookup.XML_QUERY_FILENAME}. "
+                    f"Checked TblPath={tbl_path!r} and standard fallback locations "
+                    f"under {TABLE_MAPPING_BASE_DIR}, plus "
+                    f"{query_xml_lookup._xml_query_path(return_id)}."
+                )
+            }
+        else:
+            logger.warning(
+                "[service] return_id=%s (%s) — mapping file %s declares no TableName "
+                "attributes and %s has no fallback either. The table dropdown for "
+                "this return will be empty.",
+                return_id, r.get("Name"), resolved_path,
+                query_xml_lookup.XML_QUERY_FILENAME,
+            )
 
     return {
         "return_id":          return_id,
@@ -484,10 +543,35 @@ def get_available_dates(
     execute_query_fn: Callable,
 ) -> List[str]:
     """List every distinct value of the table's filter (date) column that
-    actually has data, newest first — lets the manual UI offer a dropdown of
-    real submission dates instead of a free calendar where most picks return
-    zero rows (see service._run_table_diagnostics, which today only surfaces
-    this after the fact via logs).
+    actually has data AND is a canonical period-end for the return's OWN
+    reporting frequency, newest first.
+
+    Why the frequency filter matters: the physical table a return maps to is
+    often SHARED across several returns/variants that file the same table on
+    different schedules — e.g. CIMS_RAQ_Q_GEN_INFO is filed into by both
+    CIMS_RAQ(Quarterly) (RepFreq=Q) and CIMS_RAQ(Annually) (RepFreq=A). A plain
+    DISTINCT over the column mixes their submission dates, so selecting the
+    Annually return's own table used to offer 28-FEB-2025 and 31-JAN-2025 in
+    its date dropdown — dates that return can never legitimately report on.
+    Restricting to dates validate_reporting_date() accepts for THIS return's
+    RepFreq removes that cross-return noise, so a return reporting Quarterly
+    shows at most 4 dates/year, Annually shows only 31-Mar, Monthly shows up
+    to 12/year, matching how the return actually files.
+
+    This is also what makes the "Invalid Reporting Date According To
+    Frequency" rejection effectively unreachable through ordinary UI use: the
+    dropdown/checkbox list this feeds (ControlBar's DateField) can no longer
+    offer a date validate_reporting_date() would reject. The check itself
+    stays in calculate_variance as defense-in-depth for direct API calls; this
+    function's job is to keep the ordinary path from ever hitting it.
+
+    A return with no declared RepFreq (68 of them in this deployment) skips
+    the filter entirely and always sees the unfiltered list — there is no
+    frequency to validate against. For a return that DOES declare one, if
+    filtering would remove every date (its real submissions genuinely never
+    land on a canonical one), the unfiltered list is used instead — so an
+    unusual return degrades to today's exact behaviour rather than leaving the
+    wizard with an empty, dead-ended dropdown.
 
     Raises FileNotFoundError/KeyError exactly like compute_variance does when
     the table mapping or table itself can't be resolved. Returns [] (not an
@@ -514,13 +598,33 @@ def get_available_dates(
         if err:
             raise RuntimeError(f"{err} | table_queried={resolved_table_name}")
 
-    dates: List[str] = []
-    for row in rows:
-        value = row[0]
-        if value is None:
-            continue
-        dates.append(value.strftime("%d-%b-%Y").upper())
-    return dates
+    values = [row[0] for row in rows if row[0] is not None]
+
+    # Same lookup compute_variance() itself uses to decide report_freq for this
+    # return — one source of truth, not a second copy of the RepFreq census.
+    return_meta = next((r for r in _parse_returns() if r.get("Id") == str(return_id)), None)
+    report_freq = ((return_meta.get("RepFreq") or "").strip().upper() if return_meta else "")
+
+    if report_freq:
+        canonical = [v for v in values if validate_reporting_date(v, report_freq)]
+        if canonical:
+            dropped = len(values) - len(canonical)
+            if dropped:
+                logger.info(
+                    "[service] get_available_dates | return_id=%s (freq=%s) | table=%s | "
+                    "dropped %d non-canonical date(s) not valid for this frequency",
+                    return_id, report_freq, table_name, dropped,
+                )
+            values = canonical
+        else:
+            logger.warning(
+                "[service] get_available_dates | return_id=%s (freq=%s) | table=%s | "
+                "NONE of its %d submission date(s) are canonical for this frequency — "
+                "showing the unfiltered list rather than an empty dropdown",
+                return_id, report_freq, table_name, len(values),
+            )
+
+    return [v.strftime("%d-%b-%Y").upper() for v in values]
 
 
 def compute_variance(
@@ -533,8 +637,14 @@ def compute_variance(
     connection_string: Optional[str] = None,
     selected_columns: Optional[List[str]] = None,
     comparison_mode: str = "vs_current",
+    comparison_dates: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Orchestrate full variance computation for one table."""
+    """Orchestrate full variance computation for one table.
+
+    `comparison_dates` (optional) names the exact reporting dates to compare
+    instead of deriving them from `reporting_period` — see
+    calculate_variance()'s docstring. Passed straight through; this layer makes
+    no decisions about it."""
     logger.info("[service] compute_variance started")
 
     parsed      = _parse_returns()
@@ -620,4 +730,5 @@ def compute_variance(
         reporting_period=reporting_period,
         selected_columns=selected_columns,
         comparison_mode=comparison_mode,
+        comparison_dates=comparison_dates,
     )

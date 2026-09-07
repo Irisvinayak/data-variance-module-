@@ -25,7 +25,9 @@ from .embedder import embed_query
 from .index_store import meta_by_table, search
 from .lexical_search import search_bm25, search_qa_strong_match
 from .query_normalizer import normalize_query
+from .query_analyzer import QueryAnalysis, analyze_query
 from . import confidence as confidence_mod
+from . import ranking
 from .nlp_config import (
     BM25_INDEX_PATH,
     BM25_SIGNAL_WEIGHT,
@@ -40,6 +42,7 @@ from .nlp_config import (
     QA_PREFILTER_TOP_N,
     QA_STRONG_MATCH_BONUS,
     QA_STRONG_MATCH_THRESHOLD,
+    RRF_K,
     ROW_LABEL_INDEX_PATH,
     ROW_LABEL_META_PATH,
     TABLE_INDEX_PATH,
@@ -57,32 +60,18 @@ logger = logging.getLogger(__name__)
 # eat shortlist slots that should go to genuinely different candidates.
 _BACKUP_SUFFIX_RE = re.compile(r"_(bckup|bkup|bk)$", re.IGNORECASE)
 
-_TOKEN_RE = re.compile(r"[a-z0-9]+")
+# Moved to backend/nlp/ranking.py so scoped_retriever.py can reuse the exact
+# same fusion arithmetic rather than growing a second copy that drifts. Aliased
+# here (rather than call sites rewritten wholesale) so every existing reference
+# in this file — and anything importing them — keeps working unchanged.
+_rrf = ranking.rrf
+_tokens = ranking.tokens
+_lexical_overlap = ranking.lexical_overlap
 
 
-def _rrf(rank: int, k: int = 60) -> float:
-    return 1.0 / (k + rank + 1)
-
-
-def _tokens(text: str) -> set:
-    return set(_TOKEN_RE.findall(text.lower()))
-
-
-def _lexical_overlap(query_tokens: set, text: str) -> float:
-    """Fraction of query tokens also present in `text` — a cheap lexical
-    signal layered on top of cosine similarity. Pure embedding similarity
-    can't tell "TOT_EXPO_DOM" (literal term match) apart from a merely
-    topic-adjacent column at nearly the same cosine score; exact word overlap
-    is a cheap, precise tie-breaker for exactly that situation."""
-    if not query_tokens:
-        return 0.0
-    text_tokens = _tokens(text)
-    if not text_tokens:
-        return 0.0
-    return len(query_tokens & text_tokens) / len(query_tokens)
-
-
-def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, Any]]]:
+def get_relevant_schema(
+    query: str, login_id: str, analysis: "QueryAnalysis | None" = None,
+) -> Dict[str, List[Dict[str, Any]]]:
     """Embed `query`, search the table/column FAISS indices, RRF-fuse them into
     a ranked table shortlist, then filter that shortlist down to only tables
     belonging to return_ids `login_id`'s department is allowed to access
@@ -103,9 +92,24 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     # vector in the wrong neighborhood. The ORIGINAL query is still what's
     # logged/shown/sent to intent_resolver; only the text fed to the embedder
     # and the lexical-overlap check below is normalized.
-    normalized_query = normalize_query(query)
+    # `analysis` is the end-to-end query read (backend/nlp/query_analyzer.py):
+    # it has already pulled the return name, the date/period phrase and the
+    # request boilerplate OUT of the query, leaving metric_text — just the
+    # words that describe the DATA. That is what gets embedded and BM25'd,
+    # because the removed parts actively hurt retrieval: a date matches table
+    # descriptions that happen to cite a year, and the return name matches
+    # every table under that return equally (they all embed it), so both add
+    # score without discriminating. Callers that don't supply one get the old
+    # behavior — normalize the whole query and search that.
+    if analysis is None:
+        analysis = analyze_query(query)
+
+    normalized_query = analysis.metric_text
     if normalized_query != query:
-        logger.info("[nlp.retriever] query normalized: %r -> %r", query, normalized_query)
+        logger.info(
+            "[nlp.retriever] search text: %r -> %r (return=%s, date=%r stripped)",
+            query, normalized_query, analysis.return_names or None, analysis.date_text,
+        )
     query_tokens = _tokens(normalized_query)
 
     q_vec = embed_query(normalized_query)
@@ -127,6 +131,24 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     all_table_meta: Dict[str, Dict[str, Any]] = {}
     scores: Dict[str, float] = {}
 
+    # The table holding the #1 hit in each individual signal. This turned out
+    # to be the single strongest predictor of a correct answer, and it is NOT
+    # what the fused sum measures:
+    #
+    #   measured over the 60-query benchmark (see nlp_config.RRF_K) --
+    #     table leads >= 1 signal   -> 81% correct  (n=57)
+    #     table leads no signal     ->  0% correct  (n=3)
+    #     table present in 3 signals -> 90% correct (n=31)
+    #     table present in 4 signals -> 62% correct (n=29)
+    #
+    # i.e. BREADTH across signals is a NEGATIVE indicator — a generic table
+    # (dates, codes, "total" columns) surfaces in every signal at mediocre rank
+    # and accumulates score without ever being the best answer to anything,
+    # while the genuinely right table often owns exactly one signal decisively.
+    # Summed RRF rewards the former, so confidence.py is given the leader set
+    # explicitly rather than trying to infer evidence quality from the sum.
+    signal_leaders: set = set()
+
     # Primary signal #1: matching columns. Score by each table's BEST-ranked
     # column hit only (first occurrence in the already-sorted hit list) — NOT
     # summed across every column that table happens to have in the results.
@@ -134,32 +156,26 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     # risk/finance column names all embedding "close enough") out-accumulate
     # a table with a single, precisely-matching column, which is backwards:
     # depth of one exact match should beat breadth of several mediocre ones.
-    col_tables_scored: set = set()
-    for rank, (_, c) in enumerate(col_hits):
-        tbl = c["table"]
-        all_table_meta.setdefault(tbl, {"table": tbl})
-        if tbl in col_tables_scored:
-            continue
-        col_tables_scored.add(tbl)
-        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * 2.0
+    ranking.fuse_best_hit_per_table(
+        col_hits, 2.0, scores,
+        all_table_meta=all_table_meta, signal_leaders=signal_leaders,
+    )
 
     # Primary signal #2: matching row-label values (e.g. RISK_CATEGORY="Standard") —
     # weighted equally with columns since a value match is just as strong evidence
     # of the right table as a column-name match. Same best-hit-only rule applies.
-    label_tables_scored: set = set()
-    for rank, (_, lbl) in enumerate(label_hits):
-        tbl = lbl["table"]
-        all_table_meta.setdefault(tbl, {"table": tbl})
-        if tbl in label_tables_scored:
-            continue
-        label_tables_scored.add(tbl)
-        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * 2.0
+    ranking.fuse_best_hit_per_table(
+        label_hits, 2.0, scores,
+        all_table_meta=all_table_meta, signal_leaders=signal_leaders,
+    )
 
     # Secondary/supporting signal: table description similarity — breaks ties
     # and surfaces tables whose only good match is the description, but no
     # longer dominates over an actual column/value hit.
     texts_by_table: Dict[str, List[str]] = {}
     for rank, (_, t) in enumerate(table_hits):
+        if rank == 0:
+            signal_leaders.add(t["table"])   # best table-description hit
         all_table_meta[t["table"]] = {**all_table_meta.get(t["table"], {}), **t}
         scores[t["table"]] = scores.get(t["table"], 0.0) + _rrf(rank) * 1.0
         texts_by_table.setdefault(t["table"], []).append(t.get("text", ""))
@@ -175,15 +191,11 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     # isn't on cosine's scale (0-1) — comparing them directly would let BM25
     # dominate or vanish depending on corpus size. Same best-hit-only-per-
     # table rule as columns/labels above.
-    bm25_tables_scored: set = set()
-    for rank, (_, bt) in enumerate(bm25_hits):
-        tbl = bt["table"]
-        all_table_meta.setdefault(tbl, {"table": tbl})
-        texts_by_table.setdefault(tbl, []).append(bt.get("text", ""))
-        if tbl in bm25_tables_scored:
-            continue
-        bm25_tables_scored.add(tbl)
-        scores[tbl] = scores.get(tbl, 0.0) + _rrf(rank) * BM25_SIGNAL_WEIGHT
+    ranking.fuse_best_hit_per_table(
+        bm25_hits, BM25_SIGNAL_WEIGHT, scores,
+        all_table_meta=all_table_meta, signal_leaders=signal_leaders,
+        texts_by_table=texts_by_table,
+    )
 
     # Signal: QA strong-match — if this question is a near-duplicate of a
     # known verified example, pin its table. The bonus (10.0) dwarfs any
@@ -191,11 +203,19 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     # without a separate "force to front" code path. If it turns out
     # unauthorized/return-id-unresolved, the existing drop/auth logic further
     # down removes it exactly like any other candidate — no special-casing.
+    # NOTE the vector passed here is of the FULL normalized question, not
+    # metric_text. QA pairs are whole questions ("what is the total loan
+    # exposure as of March 2025?"), so the strong-match comparison — and the
+    # embedding prefilter that narrows which pairs get compared — must see the
+    # whole question too. Prefiltering on the stripped metric text could push
+    # the one genuinely-matching pair out of the top-N before difflib ever
+    # scored it. Only paid for when the analyzer actually stripped something.
+    qa_vec = q_vec if analysis.metric_text == analysis.normalized else embed_query(analysis.normalized)
     qa_table = (
         search_qa_strong_match(
             QA_PAIRS_PATH, query, QA_STRONG_MATCH_THRESHOLD,
             qa_index_path=QA_INDEX_PATH, qa_meta_path=QA_META_PATH,
-            query_vector=q_vec, prefilter_top_n=QA_PREFILTER_TOP_N,
+            query_vector=qa_vec, prefilter_top_n=QA_PREFILTER_TOP_N,
         )
         if QA_STRONG_MATCH_THRESHOLD
         else None
@@ -293,6 +313,39 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
         )
     ranked_candidates = [tbl for tbl in ranked_candidates if tbl not in unresolved]
 
+    # ── Named-return scope ────────────────────────────────────────────────────
+    # The query named a return outright (see query_analyzer._match_named_returns).
+    # That is an EXACT statement of intent, strictly stronger than any
+    # similarity score, so tables from other returns are dropped rather than
+    # merely out-ranked — otherwise a high-scoring table from an unrelated
+    # return can still win the top-K and answer a question the user explicitly
+    # scoped elsewhere. Applied AFTER return_id resolution (that's what gives
+    # each table a return_id to compare) and BEFORE the auth filter and top-K
+    # cut, so the K slots are spent inside the named return.
+    #
+    # Skipped when it would empty the pool: the query naming a return does not
+    # guarantee that return holds the metric asked for, and a degraded
+    # cross-return answer beats no answer at all — the confidence gate in
+    # main.py still decides whether that's good enough to auto-proceed.
+    named_return_ids = set(analysis.return_ids)
+    if named_return_ids:
+        scoped = [
+            tbl for tbl in ranked_candidates
+            if str(all_table_meta[tbl].get("return_id")) in named_return_ids
+        ]
+        if scoped:
+            logger.info(
+                "[nlp.retriever] query=%r names return(s) %s -> scoping %d candidate(s) to %d",
+                query, sorted(named_return_ids), len(ranked_candidates), len(scoped),
+            )
+            ranked_candidates = scoped
+        else:
+            logger.warning(
+                "[nlp.retriever] query=%r names return(s) %s but no retrieved table belongs "
+                "to them — searching across all returns instead",
+                query, sorted(named_return_ids),
+            )
+
     # ── Authorization filter — reuse the existing, untouched auth function ────
     # Runs over the whole candidate pool, BEFORE the top-K cut below.
     if not AUTH_ENABLED:
@@ -375,13 +428,16 @@ def get_relevant_schema(query: str, login_id: str) -> Dict[str, List[Dict[str, A
     qa_hit = bool(authorized_ranked) and canonical_qa_table == authorized_ranked[0][0]
     table_confidence, table_ambiguous = confidence_mod.table_confidence(
         authorized_ranked, qa_hit, lexical_overlap_by_table, TIE_EPSILON,
+        signal_leaders=signal_leaders,
     )
 
     logger.info(
         "[nlp.retriever] query=%r | login_id=%r | %d authorized table(s), %d column(s), %d label(s) | "
-        "table_confidence=%.3f | table_ambiguous=%s",
+        "table_confidence=%.3f | table_ambiguous=%s | top=%s | leads_a_signal=%s",
         query, login_id, len(tables), len(columns), len(matched_labels),
         table_confidence, table_ambiguous,
+        tables[0]["table"] if tables else None,
+        bool(tables) and tables[0]["table"] in signal_leaders,
     )
     return {
         "tables": tables,

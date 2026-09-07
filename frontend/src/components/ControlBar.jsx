@@ -126,6 +126,78 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
   )
 }
 
+// ── NLP "here's what I understood" chips ─────────────────────────────────────
+// Rendered under the NLP bar after any resolve (result OR clarification),
+// from the `interpretation` object /variance/nlresolve now returns — see
+// backend/nlp/query_analyzer.QueryAnalysis.to_interpretation().
+//
+// Why this is here at all: the NLP path silently makes four consequential
+// decisions — which return, which table/column, which reporting date, and how
+// many comparison periods — and until now the ONLY evidence the user had that
+// any of them were right was whether the numbers on screen looked plausible.
+// A query for domestic data answered from the overseas return, or a "last 2
+// quarters" read as a single period, renders as a perfectly normal-looking
+// table. Showing the interpretation makes a wrong resolution visible
+// immediately, at the moment the user can still correct it by rephrasing.
+function NlpInterpretation({ interpretation }) {
+  if (!interpretation) return null
+
+  const {
+    metric_text: metric,
+    return_names: returnNames,
+    date_text: dateText,
+    scope,
+    resolved_columns: resolvedColumns,
+    resolved_column_labels: resolvedColumnLabels,
+    reporting_date: reportingDate,
+    comparison_periods: comparisonPeriods,
+  } = interpretation
+
+  const SCOPE_LABELS = { DOM: 'Domestic', OVE: 'Overseas', GLOBAL: 'Global' }
+
+  const chips = [
+    returnNames?.length && { key: 'return', label: 'Return', value: returnNames.join(' / ') },
+    metric && { key: 'metric', label: 'Looking for', value: metric },
+    // Prefer the human labels from schema.json over the raw column
+    // identifiers: "Total Loan Assets" is what the user asked for, whereas
+    // TOTAL_LOAN_ASSETS is a schema detail they have no way to interpret.
+    (resolvedColumnLabels?.length || resolvedColumns?.length) && {
+      key: 'columns',
+      label: 'Matched',
+      value: (resolvedColumnLabels?.length ? resolvedColumnLabels : resolvedColumns).join(', '),
+    },
+    scope && { key: 'scope', label: 'Scope', value: SCOPE_LABELS[scope] || scope },
+    // Prefer the RESOLVED date over the raw phrase: "last 2 quarters" is what
+    // the user typed, "30-JUN-2025, 2 periods" is what it actually became
+    // after being resolved against the data that exists. The raw phrase is
+    // only shown when resolution hasn't happened yet (a clarification round).
+    reportingDate
+      ? {
+          key: 'date',
+          label: 'Period',
+          value:
+            comparisonPeriods > 1
+              ? `${reportingDate} + ${comparisonPeriods} prior`
+              : reportingDate,
+        }
+      : dateText && { key: 'date', label: 'Period', value: dateText },
+  ].filter(Boolean)
+
+  if (chips.length === 0) return null
+
+  return (
+    <div className="nlp-interpretation" title="How your question was understood">
+      <span className="nlp-interpretation-lead">Understood as</span>
+      {chips.map((c) => (
+        <span key={c.key} className="nlp-interpretation-chip">
+          <span className="nlp-interpretation-chip-label">{c.label}</span>
+          <span className="nlp-interpretation-chip-value">{c.value}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 // ── NLP "tell me more" clarification panel ───────────────────────────────────
 // Rendered directly below the NLP mini-bar when the return is known but the
 // specific table/section is unclear (dimension === "table") — see
@@ -339,40 +411,145 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
   )
 }
 
-// ── Reporting Date field — dropdown of dates that actually have data ───────
-function DateField({ dateStr, setDateStr, availableDates, datesLoading }) {
+// ── Reporting Date field — checkbox list of dates that actually have data ──
+// Multi-select, capped at MAX_DATES. Selecting dates here is a DIFFERENT
+// question from the Periods chips, not an addition to them:
+//   • Periods = "start at this date and walk back N periods by the calendar"
+//   • Checkboxes = "compare exactly these dates"
+// The second is what a user wants when a return was filed off-cycle, or when
+// the periods of interest aren't consecutive. The two cannot both apply, so
+// ControlBar hides the Periods/Compare controls entirely once any box is
+// ticked (see the `usingDateSelection` branch below) rather than showing a
+// control that silently has no effect.
+//
+// The newest ticked date is the current period and the rest are its
+// comparisons — the same shape the Periods path produces, so the result table
+// is unchanged. That's stated in the summary line so it isn't a hidden rule.
+const MAX_DATES = 3
+
+function DateField({ selectedDates, setSelectedDates, availableDates, datesLoading }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
   if (datesLoading) {
     return (
-      <select className="ctrl-select ctrl-input-date" disabled value="">
-        <option value="">Loading dates&hellip;</option>
-      </select>
+      <button className="ctrl-select ctrl-input-date" disabled type="button">
+        Loading dates&hellip;
+      </button>
     )
   }
 
   if (!availableDates || availableDates.length === 0) {
     return (
-      <select className="ctrl-select ctrl-input-date" disabled value="">
-        <option value="">No data found for this table</option>
-      </select>
+      <button className="ctrl-select ctrl-input-date" disabled type="button">
+        No data found for this table
+      </button>
     )
   }
 
+  const atLimit = selectedDates.length >= MAX_DATES
+
+  function toggle(d) {
+    setSelectedDates((prev) => {
+      if (prev.includes(d)) return prev.filter((x) => x !== d)
+      // Silently ignoring the click at the cap would look like a broken
+      // checkbox; the input is disabled instead (see `disabled` below), so
+      // this guard is only a safety net for keyboard/programmatic paths.
+      if (prev.length >= MAX_DATES) return prev
+      // Kept in availableDates' own order (newest first, as
+      // GET /variance/dates returns them) rather than click order, so the
+      // summary line and the backend's "newest is current" rule agree with
+      // what the user sees in the list.
+      return availableDates.filter((x) => x === d || prev.includes(x))
+    })
+  }
+
+  const summary =
+    selectedDates.length === 0
+      ? 'Select date(s)…'
+      : selectedDates.length === 1
+        ? selectedDates[0]
+        : `${selectedDates[0]} +${selectedDates.length - 1} to compare`
+
   return (
-    <select
-      className="ctrl-select ctrl-input-date"
-      value={dateStr}
-      onChange={(e) => setDateStr(e.target.value)}
-      title="Only dates with actual submitted data are listed"
-    >
-      <option value="" disabled>
-        Select a date&hellip;
-      </option>
-      {availableDates.map((d) => (
-        <option key={d} value={d}>
-          {d}
-        </option>
-      ))}
-    </select>
+    <div className="ctrl-date-wrap" ref={wrapRef}>
+      <button
+        type="button"
+        className={'ctrl-select ctrl-input-date' + (selectedDates.length ? ' ctrl-input-date-on' : '')}
+        onClick={() => setOpen((o) => !o)}
+        title={
+          selectedDates.length > 1
+            ? `Newest (${selectedDates[0]}) is the current period; the rest are compared against it`
+            : 'Only dates with actual submitted data are listed'
+        }
+      >
+        <span className="ctrl-date-summary">{summary}</span>
+        <span className="ctrl-date-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="ctrl-date-menu">
+          <div className="ctrl-date-menu-head">
+            <span>
+              {selectedDates.length}/{MAX_DATES} selected
+            </span>
+            {selectedDates.length > 0 && (
+              <button
+                type="button"
+                className="ctrl-date-clear"
+                onClick={() => setSelectedDates([])}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="ctrl-date-list">
+            {availableDates.map((d) => {
+              const checked = selectedDates.includes(d)
+              return (
+                <label
+                  key={d}
+                  className={
+                    'ctrl-date-item' +
+                    (checked ? ' ctrl-date-item-on' : '') +
+                    (!checked && atLimit ? ' ctrl-date-item-disabled' : '')
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={!checked && atLimit}
+                    onChange={() => toggle(d)}
+                  />
+                  <span>{d}</span>
+                </label>
+              )
+            })}
+          </div>
+
+          {selectedDates.length > 1 && (
+            <div className="ctrl-date-note">
+              <strong>{selectedDates[0]}</strong> is the current period; the other{' '}
+              {selectedDates.length - 1 === 1 ? 'date is' : 'dates are'} compared against it.
+            </div>
+          )}
+          {atLimit && (
+            <div className="ctrl-date-note">
+              Maximum {MAX_DATES} dates — untick one to choose another.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -385,8 +562,8 @@ export default function ControlBar({
   tables,
   tableName,
   setTableName,
-  dateStr,
-  setDateStr,
+  selectedDates,
+  setSelectedDates,
   availableDates,
   datesLoading,
   periods,
@@ -405,15 +582,22 @@ export default function ControlBar({
   handleNlpSearch,
   handleVoiceInput,
   nlpClarification,
+  nlpInterpretation,
   onClarificationSelect,
   onClarificationSkip,
   onClarificationCancel,
   onClarificationOthers,
 }) {
+  // TWO OR MORE ticked dates means the user has named the exact periods to
+  // compare, so the Periods/Compare controls come off screen (see the JSX
+  // below) — they would have no effect. A single ticked date is the ordinary
+  // case and behaves exactly as before: it is the starting point that Periods
+  // walks back from, so those controls stay.
+  const usingDateSelection = selectedDates.length > 1
   const canCompute = !!(
     returnInfo &&
     tableName &&
-    dateStr.trim() &&
+    selectedDates.length > 0 &&
     !loading
   )
 
@@ -456,6 +640,8 @@ export default function ControlBar({
           🔍
         </button>
       </div>
+
+      <NlpInterpretation interpretation={nlpInterpretation} />
 
       {nlpClarification && nlpClarification.dimension === 'return' && (
         <NlpReturnPicker
@@ -559,12 +745,18 @@ export default function ControlBar({
 
           <span className="ctrl-label">Date</span>
           <DateField
-            dateStr={dateStr}
-            setDateStr={setDateStr}
+            selectedDates={selectedDates}
+            setSelectedDates={setSelectedDates}
             availableDates={availableDates}
             datesLoading={datesLoading}
           />
 
+          {/* Periods/Compare are hidden — not merely ignored — once dates are
+              ticked: the checkbox selection already states exactly which
+              periods to compare, so a visible "walk back N periods" control
+              that has no effect would be worse than no control at all. */}
+          {!usingDateSelection && (
+          <>
           <div className="ctrl-sep" aria-hidden="true" />
 
           <span className="ctrl-label">Periods</span>
@@ -604,6 +796,8 @@ export default function ControlBar({
                 </button>
               </div>
             </>
+          )}
+          </>
           )}
 
           <div className="ctrl-sep" aria-hidden="true" />

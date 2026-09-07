@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -217,6 +218,15 @@ async def variance_find(
 
 
 # ── POST /variance/compute ─────────────────────────────────────────────────────
+# The manual UI offers 1-3 comparison periods (ControlBar's Periods chips), and
+# the result table renders one column group per period — a longer list would
+# push the table past what fits on screen. Explicitly named comparison dates
+# are held to the same ceiling, and it is enforced HERE rather than only in the
+# UI: the endpoint is reachable directly, and each extra date adds a full
+# period's worth of rows to the query and the response.
+MAX_COMPARISON_DATES = 3
+
+
 @app.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_compute(
     payload: VarianceComputeRequest,
@@ -229,13 +239,38 @@ async def variance_compute(
       2. require_return_access — confirms user's dept has this return in Forms/NXForms
     """
     logger.info(
-        "[main] POST /variance/compute | login_id=%s | return_id=%s | table=%s | date=%s | periods=%s",
+        "[main] POST /variance/compute | login_id=%s | return_id=%s | table=%s | date=%s | "
+        "periods=%s | comparison_dates=%s",
         login_id, payload.return_id, payload.table_name,
-        payload.reporting_date, payload.reporting_period,
+        payload.reporting_date, payload.reporting_period, payload.comparison_dates,
     )
 
     # ── Step 2: check this specific return is in the user's allowed set ────────
     require_return_access(login_id, payload.return_id)
+
+    comparison_dates = [d.strip().upper() for d in (payload.comparison_dates or []) if d and d.strip()]
+    if comparison_dates:
+        # Deduped BEFORE the cap so picking the same date twice can't consume a
+        # slot (calculate_variance dedupes too, but rejecting 4 dates that are
+        # really 3 would be wrong).
+        unique_dates = list(dict.fromkeys(comparison_dates))
+        if len(unique_dates) > MAX_COMPARISON_DATES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"At most {MAX_COMPARISON_DATES} comparison dates may be selected "
+                    f"(got {len(unique_dates)})."
+                ),
+            )
+        for value in unique_dates:
+            try:
+                datetime.strptime(value, "%d-%b-%Y")
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid comparison date {value!r} — expected DD-MON-YYYY.",
+                ) from exc
+        comparison_dates = unique_dates
 
     try:
         res = service.compute_variance(
@@ -248,6 +283,7 @@ async def variance_compute(
             connection_string=None,
             selected_columns=payload.selected_columns,
             comparison_mode=payload.comparison_mode,
+            comparison_dates=comparison_dates or None,
         )
         logger.info(
             "[main] compute_variance SUCCESS | login_id=%s | return_id=%s | table=%s",
@@ -378,37 +414,36 @@ def _tokens(text: str) -> set:
 
 
 def _find_named_return_ids(query: str, login_id: str) -> list:
-    """Literal name-mention check, layered in FRONT of the embedding-
-    confidence gate below: does the query text itself contain a
-    recognizable, non-generic word from any authorized return's Name (e.g.
-    the user typed "CRILC" or "DNBS01")? This catches the case a pure
-    embedding-similarity score can miss/get lucky on, and lets us skip the
-    "which return?" prompt entirely when the answer is already spelled out
-    in the query.
+    """Does the query text itself name a return (e.g. the user typed "CIMS_RAQ"
+    or "ALE domestic quarterly")? Returns the matching return_ids — empty if it
+    names none, one if it's specific, several if the mention is ambiguous
+    between variants (which the caller turns into a clarification rather than a
+    guess).
 
-    Returns the list of matching return_ids (authorized only) — empty if
-    the query names no known return at all, exactly one if it's specific,
-    more than one if several returns share the mentioned word."""
+    Delegates to backend/nlp/query_analyzer.analyze_query(), which does this as
+    part of one end-to-end read of the query and — critically — matches ONLY
+    against returns the embedding index actually covers. Matching against every
+    return in Returns.xml (the previous behavior) could pin a return with no
+    vectors at all: _shortlist_for_return() would then hand intent_resolver a
+    shortlist with tables but zero candidate columns, and the user's explicit,
+    correctly-spelled return name would produce an untrimmed whole-table dump
+    or a bare "Could not resolve this query" 404.
+
+    Scoring also changed from "shares any non-generic word" to "shares the
+    largest fraction of the return's DISTINCTIVE name tokens" — with
+    distinctiveness measured against the actual corpus rather than a
+    hand-maintained stopword list. In this dataset every return name starts
+    with "CIMS", so the old rule matched all 281 of them on that token alone.
+    """
     from .auth_service import get_allowed_form_ids
     from .config import AUTH_ENABLED
+    from .nlp.query_analyzer import analyze_query
 
-    query_tokens = _tokens(query) - _GENERIC_NAME_TOKENS
-    if not query_tokens:
-        return []
-
-    returns = list(_parse_returns())
-    if AUTH_ENABLED:
-        allowed = get_allowed_form_ids(login_id) or set()
-        returns = [r for r in returns if str(r.get("Id")) in allowed]
-
-    matches = []
-    for r in returns:
-        if not r.get("Id") or not r.get("Name"):
-            continue
-        name_tokens = _tokens(r["Name"]) - _GENERIC_NAME_TOKENS
-        if name_tokens and (query_tokens & name_tokens):
-            matches.append(r["Id"])
-    return matches
+    # None (not an empty set) when auth is bypassed — analyze_query treats
+    # None as "no auth scoping", whereas an empty set means "this user may
+    # access nothing", and those must not be confused.
+    allowed = (get_allowed_form_ids(login_id) or set()) if AUTH_ENABLED else None
+    return analyze_query(query, allowed_return_ids=allowed).return_ids
 
 
 def _build_return_clarification(query: str, login_id: str, restrict_to: list | None = None) -> dict:
@@ -432,10 +467,23 @@ def _build_return_clarification(query: str, login_id: str, restrict_to: list | N
     from .auth_service import get_allowed_form_ids
     from .config import AUTH_ENABLED
 
+    from .nlp import indexed_returns
+
     returns = list(_parse_returns())
     if AUTH_ENABLED:
         allowed = get_allowed_form_ids(login_id) or set()
         returns = [r for r in returns if str(r.get("Id")) in allowed]
+
+    # Only offer returns the embedding index actually covers. Every option in
+    # this list is a promise that picking it produces an answer, and a return
+    # with no vectors cannot keep that promise: _shortlist_for_return() builds
+    # its column candidates from the embedding index, so an uncovered return
+    # yields tables with zero columns and intent_resolver falls through to an
+    # untrimmed whole-table result. Listing all 281 authorized returns when 3
+    # are indexed made picking a dud the overwhelmingly likely outcome.
+    # (No-op when coverage can't be determined — see indexed_returns.)
+    returns = indexed_returns.filter_returns(returns)
+
     if restrict_to:
         restrict_set = set(restrict_to)
         returns = [r for r in returns if r.get("Id") in restrict_set]
@@ -452,6 +500,15 @@ def _build_return_clarification(query: str, login_id: str, restrict_to: list | N
         if restrict_to
         else "I couldn't tell which return your query is about. Which one did you mean?"
     )
+    if not options:
+        # Coverage is known and nothing the user can access is in it. Say so
+        # plainly rather than rendering an empty picker the user can only
+        # cancel out of.
+        question = (
+            "None of the returns you have access to have been indexed for "
+            "natural-language search yet. Please use the manual return/table "
+            "selection above."
+        )
     return {
         "needs_clarification": True,
         "dimension": "return",
@@ -518,80 +575,121 @@ def _build_table_clarification(
     }
 
 
-def _shortlist_for_return(return_id: str) -> dict | None:
-    """Build a minimal shortlist scoped to every table under one specific
-    return, for when the user has explicitly named the return (either via
-    the "return" clarification, or in a future phase directly in the
-    query) but the query itself gave no table-level signal to rank among
-    them. Column candidates are pulled straight from the embedding index's
-    per-table grouping (same helper retriever.py's own backfill logic
-    uses) rather than re-running a query-scoped FAISS search, since there's
-    no query signal to search with here — intent_resolver still needs a
-    full column list to pick from."""
+def _shortlist_for_return(
+    return_id: str,
+    query: str,
+    login_id: str,
+    *,
+    analysis=None,
+) -> dict | None:
+    """Stage 2 of return-scoped resolution: the return is already decided
+    (named in the query, or picked from the "which return?" clarification), so
+    rank ITS tables and their columns against what the query actually asks for.
+
+    `query` and `login_id` are REQUIRED, not optional. This function used to
+    take only `return_id` and ignore the query entirely — tables in
+    table-mapping-XML order, every column of every table in raw index order,
+    and a confidence hardcoded to 0.5/1.0. Downstream, intent_resolver shows
+    the LLM only the first INTENT_MAX_COLS_PER_TABLE columns while validating
+    against the full list, so a correct column past that cap in an arbitrary
+    order was unreachable, not merely deprioritised. Making the query a
+    required parameter is what stops that shape being reintroduced.
+
+    Tables come from indexed_returns, NOT from service.find_return_and_tables.
+    That distinction is load-bearing: find_return_and_tables resolves all three
+    returns that currently have embeddings (CIMS_RAQ(Quarterly),
+    CIMS_ALE_Domestic/Oversease(Quarterly)) to a Mapping_1.xml whose rows carry
+    no TableName attribute at all, so its table list came back EMPTY and this
+    function returned None — which the callers turn into
+    "Selected return is no longer available." (main.py's 404 at the
+    dimension=="return" branch). In other words, answering the "which return?"
+    question was guaranteed to fail for exactly the returns the NLP layer can
+    serve. return_lookup, which indexed_returns is built from, carries the
+    XML_Query.xml fallback that recovers those tables — 26 for CIMS_RAQ where
+    find_return_and_tables finds 0.
+
+    find_return_and_tables is still called, but only for `table_mapping_path`,
+    which compute_variance needs and which it does resolve correctly.
+    """
+    from .nlp import indexed_returns, return_lookup
     from .nlp.index_store import meta_by_table
-    from .nlp.nlp_config import COLUMN_INDEX_PATH, COLUMN_META_PATH
+    from .nlp.nlp_config import SCOPED_RETRIEVAL_ENABLED, TABLE_INDEX_PATH, TABLE_META_PATH
+    from .nlp.scoped_retriever import rank_within_tables
 
     return_row = next((r for r in _parse_returns() if r.get("Id") == return_id), None)
     if return_row is None:
         return None
 
-    found = service.find_return_and_tables(return_row.get("Name", ""))
-    if found.get("error") or found.get("candidates") or not found.get("table_mapping_path"):
+    table_names = indexed_returns.tables_for_return(return_id)
+    if not table_names:
+        logger.warning(
+            "[main] _shortlist_for_return | return_id=%s | the embedding index covers "
+            "none of this return's tables — nothing to resolve against",
+            return_id,
+        )
         return None
 
-    tables = [
-        {
-            "table":        t["table_name"],
-            "return_id":    found["return_id"],
-            "return_name":  found["return_name"],
-            "filter_col":   t.get("filter_col") or "RDATE",
-            "report_freq":  found.get("report_freq") or "M",
-        }
-        for t in found.get("tables", []) if t.get("table_name")
-    ]
-    if not tables:
-        return None
+    # Per-table metadata (filter_col / report_freq) resolved the same way
+    # retriever.py resolves it, with the index text as the disambiguation hint
+    # — table names are not unique across returns and the hint is what stops a
+    # Quarterly table resolving to its Annually sibling, which would compute
+    # comparison periods a year apart on quarterly data.
+    hint_records = meta_by_table(TABLE_INDEX_PATH, TABLE_META_PATH)
+    tables: list = []
+    for name in table_names:
+        hint = " ".join(r.get("text", "") for r in hint_records.get(name.upper(), [])) or None
+        ret = return_lookup.get_return_for_table(name, hint_text=hint) or {}
+        tables.append({
+            "table":       name,
+            "return_id":   return_id,
+            "return_name": return_row.get("Name", ""),
+            "filter_col":  ret.get("filter_col") or "RDATE",
+            "report_freq": ret.get("report_freq") or return_row.get("RepFreq") or "M",
+        })
 
-    # meta_by_table() keys are uppercased; `tables` here come from the
-    # table-mapping XML, and each record's own "table" value is index-cased
-    # (lowercase), so it's rewritten to the XML name — otherwise every
-    # downstream `c["table"] == t["table"]` comparison (_build_prompt,
-    # _resolve_deterministic, _validate_grounding) misses and the shortlist
-    # looks column-less. See meta_by_table's docstring.
-    grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
-    seen_cols: set = set()
-    columns: list = []
-    for t in tables:
-        for c in grouped_columns.get(t["table"].upper(), []):
-            key = (t["table"], c["column"])
-            if key not in seen_cols:
-                seen_cols.add(key)
-                columns.append({**c, "table": t["table"]})
+    if not SCOPED_RETRIEVAL_ENABLED:
+        return _unranked_shortlist(tables)
 
+    return rank_within_tables(query, tables, login_id, analysis=analysis)
+
+
+def _unranked_shortlist(tables: list) -> dict:
+    """The pre-ranking shortlist shape: tables in whatever order they arrived,
+    no column candidates, and a confidence that is a table COUNT rather than a
+    measurement. Retained only as the DV_NLP_SCOPED_RETRIEVAL=false escape
+    hatch, so scoped ranking can be switched off without a deploy."""
     ambiguous = len(tables) > 1
     return {
         "tables": tables,
-        "columns": columns,
+        "columns": [],
         "matched_labels": [],
         "table_confidence": 0.5 if ambiguous else 1.0,
         "table_ambiguous": ambiguous,
     }
 
 
-def _shortlist_for_table(table_name: str) -> dict | None:
-    """Build a minimal single-table shortlist once the user has picked (or
-    a prior step pinned) one specific table by name — used both for the
-    "table" clarification's non-skip answer and to re-derive a table's
-    return_id/report_freq when it's needed but wasn't already in scope."""
+def _shortlist_for_table(
+    table_name: str,
+    query: str,
+    login_id: str,
+    *,
+    analysis=None,
+) -> dict | None:
+    """Single-table shortlist, once the user has picked (or a prior step
+    pinned) one specific table by name.
+
+    The table choice is settled here, so ranking has nothing to choose between
+    — but the COLUMNS still do, and they used to come back as the table's whole
+    column list in raw index order. That is the list intent_resolver truncates
+    to INTENT_MAX_COLS_PER_TABLE before showing the LLM, so ordering them by
+    the query is what makes the right column reachable at all.
+    """
     from .nlp import return_lookup
     from .nlp.index_store import meta_by_table
     from .nlp.nlp_config import (
-        COLUMN_INDEX_PATH, COLUMN_META_PATH, TABLE_INDEX_PATH, TABLE_META_PATH,
+        SCOPED_RETRIEVAL_ENABLED, TABLE_INDEX_PATH, TABLE_META_PATH,
     )
-
-    # Case-normalized lookup + record rewrite, same reason as
-    # _shortlist_for_return above (`table_name` may be XML-cased).
-    grouped_columns = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+    from .nlp.scoped_retriever import rank_within_tables
 
     # Resolve the return WITH the table's own index metadata as a hint —
     # table names are not unique across returns, and without the hint a
@@ -605,16 +703,22 @@ def _shortlist_for_table(table_name: str) -> dict | None:
     ret = return_lookup.get_return_for_table(table_name, hint_text=hint_text)
     if not ret or not ret.get("return_id"):
         return None
-    return {
-        "tables": [{"table": table_name, **ret}],
-        "columns": [
-            {**c, "table": table_name}
-            for c in grouped_columns.get(table_name.upper(), [])
-        ],
-        "matched_labels": [],
-        "table_confidence": 1.0,
-        "table_ambiguous": False,
-    }
+
+    tables = [{"table": table_name, **ret}]
+    if not SCOPED_RETRIEVAL_ENABLED:
+        shortlist = _unranked_shortlist(tables)
+    else:
+        shortlist = rank_within_tables(query, tables, login_id, analysis=analysis)
+
+    # One pinned table is not ambiguous by construction — the user, or a prior
+    # stage, named it. Overriding the computed confidence is deliberate and
+    # asymmetric with _shortlist_for_return: with a single candidate the score
+    # would be measuring "does the query match this table", a question nobody
+    # downstream is asking, and a low answer could only turn an explicit choice
+    # back into another question.
+    shortlist["table_confidence"] = 1.0
+    shortlist["table_ambiguous"] = False
+    return shortlist
 
 
 # ── NLP stage instrumentation ─────────────────────────────────────────────────
@@ -663,9 +767,11 @@ async def variance_nlresolve(
     # name the culprit explicitly — this is how a missing rank-bm25 /
     # faiss-cpu / sentence-transformers on a fresh deployment shows up.
     try:
+        from .nlp import schema_info
         from .nlp.retriever import get_relevant_schema
         from .nlp.intent_resolver import resolve_intent
         from .nlp.date_resolver import resolve_reporting_date
+        from .nlp.query_analyzer import analyze_query
         from .nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
     except Exception as exc:
         logger.error(
@@ -685,6 +791,56 @@ async def variance_nlresolve(
     if not query:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="query must not be empty.")
 
+    # ── One end-to-end read of the query, up front ────────────────────────────
+    # Everything the query STATES is pulled out here once and reused by every
+    # stage below, instead of each stage re-scanning the raw string with its
+    # own rules: which return it names (matched only against returns the
+    # embedding index covers), the date/period phrase, the domestic/overseas
+    # scope, and — what's left — the text that actually describes the metric.
+    # Retrieval embeds that leftover rather than the whole sentence, so
+    # "show me the variance in total loan assets for CIMS_RAQ as of 31-Mar-2025"
+    # searches for "total loan assets" and treats the return and the date as
+    # the exact facts they are. See backend/nlp/query_analyzer.py.
+    from .auth_service import get_allowed_form_ids as _get_allowed
+    from .config import AUTH_ENABLED as _auth_on
+
+    analysis = _nlp_stage(
+        "query_analysis", login_id, query, analyze_query, query,
+        allowed_return_ids=((_get_allowed(login_id) or set()) if _auth_on else None),
+    )
+    interpretation = analysis.to_interpretation()
+
+    # ── The query names a return this pipeline cannot answer ─────────────────
+    # Refuse, rather than falling through to unscoped retrieval. Measured
+    # before this guard existed: "total number of staff for CIMS_ROR" answered
+    # from CIMS_RAQ at confidence 0.94, and "CRILC borrower details" from
+    # CIMS_RAQ at 0.90 — confidently, about a completely different return. The
+    # confidence gate cannot catch that class: the score is genuinely high, it
+    # is just high about the wrong thing. Naming a return is an exact statement
+    # of intent, so the only honest answers are "here it is" or "I can't".
+    if analysis.unindexed_return_names and not analysis.return_ids:
+        named = analysis.unindexed_return_names[0]
+        logger.info(
+            "[main] /variance/nlresolve | login_id=%s | query=%r | names return %r which has "
+            "no embeddings -> refusing rather than answering from another return",
+            login_id, query, named,
+        )
+        return {
+            "needs_clarification": True,
+            "dimension": "return",
+            "question": (
+                f"{named} has not been indexed for natural-language search yet, so I "
+                f"can't answer questions about it here. Use the Return/Table/Date "
+                f"controls above for {named}, or ask me about one of these instead:"
+            ),
+            "options": _build_return_clarification(query, login_id)["options"],
+            "skippable": False,
+            "allow_other": False,
+            "confidence": 0.0,
+            "resolved_context": {"query": query},
+            "interpretation": interpretation,
+        }
+
     resolved_context = payload.resolved_context or {}
     pinned_return_id = resolved_context.get("return_id")
     answer = payload.clarification_answer
@@ -695,7 +851,7 @@ async def variance_nlresolve(
             # free-form retrieval found, even below the confidence floor
             # that originally triggered this prompt. If it found literally
             # nothing, there's nothing to guess with.
-            shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id)
+            shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id, analysis)
             if not shortlist["tables"]:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -706,7 +862,10 @@ async def variance_nlresolve(
                 login_id, query,
             )
         else:
-            shortlist = _shortlist_for_return(answer)
+            shortlist = _nlp_stage(
+                "scoped_retrieval", login_id, query,
+                _shortlist_for_return, answer, query, login_id, analysis=analysis,
+            )
             if shortlist is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selected return is no longer available.")
             logger.info(
@@ -714,7 +873,12 @@ async def variance_nlresolve(
                 login_id, query, answer, len(shortlist["tables"]),
             )
             if shortlist["table_ambiguous"]:
-                return _build_table_clarification(query, shortlist, shortlist["table_confidence"], return_id=answer)
+                return {
+                    **_build_table_clarification(
+                        query, shortlist, shortlist["table_confidence"], return_id=answer,
+                    ),
+                    "interpretation": interpretation,
+                }
 
     elif payload.dimension == "table" and answer:
         if answer == _SKIP_ANSWER:
@@ -722,8 +886,11 @@ async def variance_nlresolve(
             # LLM choose freely from the (still-ambiguous) shortlist, scoped
             # to whichever return was already pinned if one was.
             shortlist = (
-                _shortlist_for_return(pinned_return_id) if pinned_return_id
-                else _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id)
+                _nlp_stage(
+                    "scoped_retrieval", login_id, query,
+                    _shortlist_for_return, pinned_return_id, query, login_id, analysis=analysis,
+                ) if pinned_return_id
+                else _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id, analysis)
             )
             if shortlist is None or not shortlist["tables"]:
                 raise HTTPException(
@@ -735,7 +902,10 @@ async def variance_nlresolve(
                 login_id, query,
             )
         else:
-            shortlist = _shortlist_for_table(answer)
+            shortlist = _nlp_stage(
+                "scoped_retrieval", login_id, query,
+                _shortlist_for_table, answer, query, login_id, analysis=analysis,
+            )
             if shortlist is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -748,7 +918,28 @@ async def variance_nlresolve(
 
     else:
         # First pass for this query — no clarification answer yet.
-        shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id)
+        # The query names a return, but the mention fits more than one — most
+        # often the same return in several reporting-frequency or
+        # domestic/overseas variants (e.g. "ALE" matching both
+        # CIMS_ALE_Domestic(Quarterly) and CIMS_ALE Oversease(Quarterly)).
+        # Asked BEFORE retrieval's own confidence gate because picking wrong
+        # here is silent and consequential: report_freq drives
+        # get_previous_dates(), so the wrong variant computes comparison
+        # periods at the wrong interval and returns confidently wrong numbers.
+        # The options are exactly the variants the query matched, so this is a
+        # two- or three-item question, not a browse through the full list.
+        if len(analysis.return_ids) > 1:
+            logger.info(
+                "[main] /variance/nlresolve | login_id=%s | query=%r | names %d return "
+                "variants %s -> asking which",
+                login_id, query, len(analysis.return_ids), analysis.return_names,
+            )
+            return {
+                **_build_return_clarification(query, login_id, restrict_to=analysis.return_ids),
+                "interpretation": interpretation,
+            }
+
+        shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id, analysis)
         table_confidence = shortlist.get("table_confidence", 0.0)
         table_ambiguous = shortlist.get("table_ambiguous", False)
 
@@ -759,10 +950,14 @@ async def variance_nlresolve(
             # query TEXT already names a known return explicitly. A literal
             # name mention is stronger evidence than a coincidental (or
             # coincidentally absent) embedding score.
-            named_return_ids = _find_named_return_ids(query, login_id)
+            named_return_ids = analysis.return_ids
 
             if len(named_return_ids) == 1:
-                named_shortlist = _shortlist_for_return(named_return_ids[0])
+                named_shortlist = _nlp_stage(
+                    "scoped_retrieval", login_id, query,
+                    _shortlist_for_return, named_return_ids[0], query, login_id,
+                    analysis=analysis,
+                )
                 if named_shortlist is not None:
                     logger.info(
                         "[main] /variance/nlresolve | login_id=%s | query=%r | "
@@ -796,10 +991,13 @@ async def variance_nlresolve(
                     "(table_confidence=%.3f, query_related_return_ids=%s) -> asking for return",
                     login_id, query, table_confidence, query_related_return_ids,
                 )
-                return _build_return_clarification(
-                    query, login_id,
-                    restrict_to=query_related_return_ids or None,
-                )
+                return {
+                    **_build_return_clarification(
+                        query, login_id,
+                        restrict_to=query_related_return_ids or None,
+                    ),
+                    "interpretation": interpretation,
+                }
 
         if table_ambiguous or table_confidence < CONFIDENCE_AUTO_PROCEED:
             logger.info(
@@ -807,7 +1005,10 @@ async def variance_nlresolve(
                 "(confidence=%.3f, tied=%s) -> asking clarification",
                 login_id, query, table_confidence, table_ambiguous,
             )
-            return _build_table_clarification(query, shortlist, table_confidence)
+            return {
+                **_build_table_clarification(query, shortlist, table_confidence),
+                "interpretation": interpretation,
+            }
 
     # Default to 1.0 for shortlists this route itself pinned down to exactly
     # one table (_shortlist_for_return/_shortlist_for_table, or the "return"
@@ -815,7 +1016,10 @@ async def variance_nlresolve(
     # scoring above, so there's no lower number to report here.
     final_confidence = shortlist.get("table_confidence", 1.0)
 
-    resolution = _nlp_stage("intent_resolution", login_id, query, resolve_intent, query, shortlist)
+    resolution = _nlp_stage(
+        "intent_resolution", login_id, query, resolve_intent, query, shortlist,
+        analysis=analysis,
+    )
     if resolution is None:
         logger.warning("[main] 404 /variance/nlresolve | login_id=%s | query=%r | intent resolution failed", login_id, query)
         raise HTTPException(
@@ -944,6 +1148,26 @@ async def variance_nlresolve(
         "report_freq":        report_freq,
         "table_mapping_path": found["table_mapping_path"],
         "confidence":         round(final_confidence, 3),
+        # What the query was understood to mean, echoed back so the UI can
+        # show it rather than the resolution being a black box the user can
+        # only judge by whether the numbers look right (frontend:
+        # ControlBar's NlpInterpretation). Also names the resolved column(s),
+        # which the analyzer can't know until intent resolution has run.
+        "interpretation": {
+            **interpretation,
+            "resolved_columns": resolution["selected_columns"],
+            # The human labels for those columns, from schema.json. End users
+            # have no knowledge of the schema behind a return, so the UI shows
+            # these ("Total Loan Assets") rather than the identifiers
+            # ("TOTAL_LOAN_ASSETS"). Falls back to the identifier when a column
+            # has no description, so the field is never empty.
+            "resolved_column_labels": [
+                schema_info.column_description(resolved_table["table_name"], col) or col
+                for col in resolution["selected_columns"]
+            ],
+            "reporting_date":   reporting_date,
+            "comparison_periods": reporting_period,
+        },
     }
 
 

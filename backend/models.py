@@ -14,6 +14,13 @@ class VarianceComputeRequest(BaseModel):
     reporting_period:   int = 1
     selected_columns:   Optional[List[str]] = None
     comparison_mode:    str = "vs_current"
+    # Exact reporting dates to compare, "DD-MON-YYYY", newest treated as the
+    # current period. When present it REPLACES reporting_period's derived
+    # comparison periods (the manual UI's date checkboxes — ControlBar's
+    # DateField); reporting_period is then ignored. Capped at
+    # MAX_COMPARISON_DATES in main.py, matching the Periods chips' own 1-3
+    # range, because the result table renders one column group per period.
+    comparison_dates:   Optional[List[str]] = None
 
 
 class NLResolveRequest(BaseModel):

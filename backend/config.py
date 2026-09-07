@@ -78,6 +78,17 @@ XML_ROLE_ACCESS_PATH: str = os.getenv(
     os.path.join(BASE_PATH, r"Database\XML_RoleAccess.xml"),
 )
 
+# Reporting-frequency master (Period_Id -> Frequency/EBRFrequency/PeriodName).
+# Same file this deployment already uses elsewhere for notification scheduling;
+# read here purely for its human PeriodName labels — see backend/period_lookup.py.
+# The actual date-membership rule per frequency code lives in
+# calculate_variance.validate_reporting_date(), not in this file, so there is
+# one definition of "which dates are valid for frequency X", not two.
+XML_PERIOD_PATH: str = os.getenv(
+    "DV_XML_PERIOD_PATH",
+    os.path.join(BASE_PATH, r"Database\XML_Period.xml"),
+)
+
 # ── API base path ────────────────────────────────────────────────────────────
 # Set DV_API_BASE_PATH=/Datavariance/api when the app is served behind a reverse proxy.
 API_BASE_PATH: str = os.getenv("DV_API_BASE_PATH", "").strip()

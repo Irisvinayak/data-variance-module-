@@ -65,20 +65,36 @@ Answer:
 {"return_id": "2041", "table_name": "CIMS_RAQ_Q_SEC1_PART_A_DOM", "selected_columns": ["TOTAL_LOAN_ASSETS"]}"""
 
 
-def _build_prompt(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> str:
+def _build_prompt(
+    query: str,
+    shortlist: Dict[str, List[Dict[str, Any]]],
+    rank_text: Optional[str] = None,
+) -> str:
     tables = shortlist["tables"]
     columns = shortlist["columns"]
     matched_labels = shortlist.get("matched_labels") or []
 
     lines = []
     for t in tables:
-        # Capped — see INTENT_MAX_COLS_PER_TABLE. Columns arrive similarity-
-        # ranked, and _validate_grounding still accepts anything in the full
-        # shortlist, so this bounds prompt size (and generation latency)
-        # without narrowing what's selectable.
-        table_cols = [c["column"] for c in columns if c["table"] == t["table"]][
-            :INTENT_MAX_COLS_PER_TABLE
-        ]
+        # Capped — see INTENT_MAX_COLS_PER_TABLE — but ranked FIRST.
+        #
+        # Columns now arrive similarity-ranked on every path: retriever.py's
+        # own search returns them so, and scoped_retriever.py ranks them for
+        # the return-scoped paths that previously handed over a table's whole
+        # column list in raw index order. _rank_columns_by_query is applied on
+        # top so a literal query-term match is promoted into the visible window
+        # even when similarity missed it.
+        #
+        # Ordering before the cap is not cosmetic: _validate_grounding accepts
+        # any column in the FULL shortlist, so a correct column pushed past the
+        # cap is one the model never sees and can therefore never name — an
+        # unreachable answer rather than a deprioritised one. (No table in the
+        # current corpus exceeds 34 columns, so the cap is not biting today;
+        # this keeps it from biting the moment a wider one is indexed.)
+        table_cols = _rank_columns_by_query(
+            rank_text or query,
+            [c["column"] for c in columns if c["table"] == t["table"]],
+        )[:INTENT_MAX_COLS_PER_TABLE]
         cols_str = ", ".join(table_cols) if table_cols else "(no candidate columns retrieved)"
         table_labels = [lbl for lbl in matched_labels if lbl["table"] == t["table"]]
         labels_line = ""
@@ -128,7 +144,12 @@ before or after it.
 {{"return_id": "<return_id>", "table_name": "<table_name>", "selected_columns": ["<column>", ...]}}"""
 
 
-def _build_retry_prompt(query: str, shortlist: Dict[str, List[Dict[str, Any]]], bad_raw: str) -> str:
+def _build_retry_prompt(
+    query: str,
+    shortlist: Dict[str, List[Dict[str, Any]]],
+    bad_raw: str,
+    rank_text: Optional[str] = None,
+) -> str:
     """Shorter than a full re-send of the original prompt — no few-shot
     example or rules prose, just what's needed to correct course. Each
     Ollama call is stateless (no conversation memory), so the candidates
@@ -137,9 +158,12 @@ def _build_retry_prompt(query: str, shortlist: Dict[str, List[Dict[str, Any]]], 
     columns = shortlist["columns"]
     lines = []
     for t in tables:
-        table_cols = [c["column"] for c in columns if c["table"] == t["table"]][
-            :INTENT_MAX_COLS_PER_TABLE
-        ]
+        # Same rank-then-cap rule as _build_prompt — this prompt truncated an
+        # unordered list too.
+        table_cols = _rank_columns_by_query(
+            rank_text or query,
+            [c["column"] for c in columns if c["table"] == t["table"]],
+        )[:INTENT_MAX_COLS_PER_TABLE]
         cols_str = ", ".join(table_cols) if table_cols else "(none)"
         lines.append(f"- return_id={t.get('return_id')} table_name={t['table']!r} columns: {cols_str}")
     candidates_block = "\n".join(lines)
@@ -399,7 +423,12 @@ def _resolve_deterministic(
     return resolution
 
 
-def resolve_intent(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
+def resolve_intent(
+    query: str,
+    shortlist: Dict[str, List[Dict[str, Any]]],
+    *,
+    analysis: Any = None,
+) -> Optional[Dict[str, Any]]:
     """Return {"return_id", "table_name", "selected_columns"} grounded entirely
     in `shortlist`.
 
@@ -413,13 +442,21 @@ def resolve_intent(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> Op
     if not shortlist["tables"]:
         return None
 
+    # The column-ranking heuristic scores on metric_text — the query with the
+    # return name, dates and boilerplate stripped — not the raw query. The raw
+    # string contributes tokens like "show", "variance", "2025" and the return's
+    # own name, which match RDATE and return-named columns by pure accident.
+    # The LLM still sees the full question in the prompt; only this token
+    # heuristic changes.
+    rank_text = getattr(analysis, "metric_text", None) or query
+
     # Endpoint known-bad right now -> don't spend the timeout rediscovering
     # that on every single request.
     if _in_cooldown():
         logger.info("[nlp.intent_resolver] In Ollama cooldown — using deterministic resolution")
-        return _resolve_deterministic(query, shortlist)
+        return _resolve_deterministic(rank_text, shortlist)
 
-    prompt = _build_prompt(query, shortlist)
+    prompt = _build_prompt(query, shortlist, rank_text)
 
     try:
         raw = _call_ollama(prompt)
@@ -427,7 +464,7 @@ def resolve_intent(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> Op
         # Nothing answered — a retry would just pay the timeout twice.
         logger.error("[nlp.intent_resolver] %s", exc)
         _start_cooldown()
-        return _resolve_deterministic(query, shortlist)
+        return _resolve_deterministic(rank_text, shortlist)
 
     parsed = _parse_json_response(raw)
     resolved = _validate_grounding(parsed, shortlist) if parsed else None
@@ -437,7 +474,7 @@ def resolve_intent(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> Op
         # corrective retry (the retry prompt is much shorter than the
         # original, so this is cheap).
         logger.warning("[nlp.intent_resolver] First attempt ungrounded/invalid (%r), retrying once", raw[:200])
-        retry_prompt = _build_retry_prompt(query, shortlist, raw)
+        retry_prompt = _build_retry_prompt(query, shortlist, raw, rank_text)
         try:
             raw = _call_ollama(retry_prompt)
             parsed = _parse_json_response(raw)
@@ -445,7 +482,7 @@ def resolve_intent(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> Op
         except _TransportError as exc:
             logger.error("[nlp.intent_resolver] Retry failed: %s", exc)
             _start_cooldown()
-            return _resolve_deterministic(query, shortlist)
+            return _resolve_deterministic(rank_text, shortlist)
 
     if resolved is None:
         logger.warning(
@@ -453,6 +490,6 @@ def resolve_intent(query: str, shortlist: Dict[str, List[Dict[str, Any]]]) -> Op
             "falling back to deterministic resolution",
             query,
         )
-        return _resolve_deterministic(query, shortlist)
+        return _resolve_deterministic(rank_text, shortlist)
 
     return resolved

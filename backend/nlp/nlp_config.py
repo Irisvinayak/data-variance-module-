@@ -42,6 +42,26 @@ ROW_LABEL_INDEX_PATH: str = os.path.join(INDEX_DIR, "row_label_index.faiss")
 ROW_LABEL_META_PATH: str = os.path.join(INDEX_DIR, "row_label_meta.pkl")
 
 # ── Retrieval tuning ───────────────────────────────────────────────────────────
+# RRF_K controls how fast a hit's influence decays with its rank in the fused
+# ranking: contribution = 1/(RRF_K + rank + 1).
+#
+# This was hard-coded to 60 — the value from the original TREC RRF paper, tuned
+# for fusing very long (thousands of docs) result lists. At that scale k=60 is
+# right; at OUR scale it is actively harmful, because it makes the top-5 hits
+# almost indistinguishable: 1/61 vs 1/65 is a 6.6% spread across the entire
+# shortlist. Rank position effectively stopped carrying information, so a table
+# that appeared at mediocre rank in several signals out-scored a table with one
+# precise, rank-0 match — the exact inversion the per-signal "best hit only"
+# rule further down was already trying to prevent.
+#
+# Measured on a 60-query benchmark built from the index's own column
+# descriptions (query = a column's human description, correct = the top table
+# actually contains that column): k=60 -> 55% top-1, k=20 -> 60%, k=10 -> 65%,
+# k=5 -> 77%, k=2 -> 78%. Top-3 peaks at 98% at k=5. Chose 5: it captures
+# essentially all of the available gain while still smoothing rank noise, where
+# k<=2 approaches "trust rank 0 absolutely".
+RRF_K: int = int(os.getenv("DV_NLP_RRF_K", "5"))
+
 TOP_K_TABLES: int = int(os.getenv("DV_NLP_TOP_K_TABLES", "5"))
 TOP_K_COLUMNS: int = int(os.getenv("DV_NLP_TOP_K_COLUMNS", "12"))
 TOP_K_LABELS: int = int(os.getenv("DV_NLP_TOP_K_LABELS", "10"))
@@ -79,9 +99,30 @@ QA_PREFILTER_TOP_N: int = int(os.getenv("DV_NLP_QA_PREFILTER_TOP_N", "20"))
 # ASK_FLOOR <= table_confidence < AUTO_PROCEED (or a tie is detected even above
 # AUTO_PROCEED) -> ask the user a clarifying question instead of guessing.
 # table_confidence < ASK_FLOOR -> today's existing "no match" 404, unchanged.
-CONFIDENCE_AUTO_PROCEED: float = float(os.getenv("DV_NLP_CONFIDENCE_AUTO_PROCEED", "0.72"))
+# Measured on the 60-query benchmark (see RRF_K): AUTO precision is FLAT at
+# ~80% for every threshold from 0.40 to 0.72, then buys only 3 more points
+# (83%) at 0.80 while coverage collapses from 83% to 48%. 0.60 is the knee —
+# the highest value that still keeps full coverage of the plateau. Raising it
+# back toward 0.72 does not buy accuracy, it only converts answers into
+# questions.
+CONFIDENCE_AUTO_PROCEED: float = float(os.getenv("DV_NLP_CONFIDENCE_AUTO_PROCEED", "0.60"))
 CONFIDENCE_ASK_FLOOR: float = float(os.getenv("DV_NLP_CONFIDENCE_ASK_FLOOR", "0.35"))
 TIE_EPSILON: float = float(os.getenv("DV_NLP_TIE_EPSILON", "0.08"))
+
+# Relative margin over the runner-up at which the winner is considered fully
+# separated: margin = (top1 - top2) / top1, and MARGIN_FULL_SEPARATION is where
+# that term saturates. Fused RRF margins are small in absolute terms even for a
+# clear winner (measured mean 0.18 on correct answers), so without this scaling
+# the margin term would contribute almost nothing to confidence.
+MARGIN_FULL_SEPARATION: float = float(os.getenv("DV_NLP_MARGIN_FULL_SEPARATION", "0.25"))
+
+# Stage-2 return-scoped ranking (backend/nlp/scoped_retriever.py). When false,
+# main.py's _shortlist_for_return falls back to _unranked_shortlist — the
+# pre-ranking behaviour, constants and all — so the feature can be switched off
+# without a deploy if it ever misbehaves in production.
+SCOPED_RETRIEVAL_ENABLED: bool = (
+    os.getenv("DV_NLP_SCOPED_RETRIEVAL", "true").strip().lower() == "true"
+)
 
 # ── Ollama (LLM-assisted intent resolution + SQL generation) ──────────────────
 # Reuses the same self-hosted Ollama endpoint sql_agent already talks to.

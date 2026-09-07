@@ -288,13 +288,102 @@
 .ctrl-input::placeholder { color: rgba(0, 0, 0, 0.38); opacity: 1; }
 .ctrl-input:disabled     { opacity: 0.45; cursor: not-allowed; }
 
-/* Date input — fixed-width monospace */
+/* Date field — now a multi-select checkbox dropdown (ControlBar's DateField),
+   so .ctrl-input-date styles a <button> trigger rather than a <select>. Wider
+   than the old single-date box because the summary line has to fit
+   "31-MAR-2025 +2 to compare". */
 .ctrl-input-date {
-  min-width: 130px;
-  width: 130px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 210px;
+  width: 210px;
   font-family: 'Courier New', monospace;
   font-size: 0.82rem;
   letter-spacing: 0.02em;
+  text-align: left;
+}
+.ctrl-input-date:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Ticked state — the trigger must read as "carrying a selection" at a glance,
+   since it now also governs whether the Periods control is on screen at all. */
+.ctrl-input-date-on {
+  border-color: var(--accent);
+  background: var(--input-bg);
+}
+
+.ctrl-date-wrap { position: relative; display: inline-block; }
+
+.ctrl-date-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctrl-date-arrow { font-size: 0.6rem; opacity: 0.65; flex: none; }
+
+.ctrl-date-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 240px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.ctrl-date-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ctrl-date-clear {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.ctrl-date-clear:hover { text-decoration: underline; }
+
+/* Scrolls rather than growing: tables with many submissions would otherwise
+   push the menu past the viewport. */
+.ctrl-date-list { max-height: 220px; overflow-y: auto; }
+
+.ctrl-date-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 5px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.ctrl-date-item:hover { background: var(--input-bg); }
+.ctrl-date-item-on    { background: var(--input-bg); font-weight: 700; }
+.ctrl-date-item-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctrl-date-item input { cursor: inherit; }
+
+.ctrl-date-note {
+  padding: 6px 6px 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--text-muted);
 }
 
 /* Table select dropdown */
@@ -872,6 +961,104 @@
   white-space: nowrap;
 }
 .ph-icon      { font-size: 0.95rem; line-height: 1; }
+
+/* Header carrying live content (TablePanel's table name + period badges)
+   rather than a fixed label — it must be free to take the width it needs and
+   to shrink, instead of .ph-title's nowrap sizing for a short static string. */
+.ph-root-rich .ph-title {
+  flex: 1;
+  min-width: 0;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.variance-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.variance-head-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  /* The badges beside it are the point of this row; a long table name yields
+     to them rather than pushing them off the edge. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Column-visibility menu in the panel header ─────────────────────────────
+   Reuses ControlBar's .ctrl-date-* dropdown styles wholesale; only placement
+   and the two extra list adornments are defined here. */
+.col-vis-wrap {
+  /* Pushed to the right of the table name + period badges. */
+  margin-left: auto;
+  flex: none;
+}
+.col-vis-wrap .ctrl-input-date {
+  /* Narrower than the date picker — the label is a short "Columns 7/12". */
+  min-width: 122px;
+  width: 122px;
+  height: 26px;
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: normal;
+}
+.col-vis-wrap .ctrl-date-menu {
+  /* .ph-root is position:sticky with z-index 5 and the table below it creates
+     no stacking context of its own, so the menu needs to out-rank both. It
+     opens downward into the panel body, which keeps it clear of
+     .bottom-panel-shell's overflow:hidden. */
+  z-index: 60;
+  right: 0;
+  left: auto;
+  width: 268px;
+}
+.col-vis-head-actions { display: flex; align-items: center; gap: 8px; }
+.col-vis-head-actions .ctrl-date-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+.col-vis-search { width: 100%; margin: 0 0 6px; }
+/* Hidden columns read as struck-out and dimmed — the row still says exactly
+   which column it is, but at a glance the menu shows what is missing from the
+   table rather than what is present. */
+.col-vis-item-off .col-vis-name {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.col-vis-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-vis-tag {
+  flex: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 0 5px;
+}
+
+.variance-head-meta .vt-period-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
 .ph-state-badge {
   font-size: 0.6rem;
   font-weight: 600;
@@ -1068,15 +1255,23 @@
 }
 
 /* Chart area */
-.viz-chart-wrap { height: 340px; flex-shrink: 0; position: relative; }
+/* Taller than the original 340px: the rotated x-axis labels now get a 72px
+   bottom margin of their own (they used to share ~60px with the legend and
+   overflow into it), so without the extra height the plot area itself would
+   be what shrank. */
+.viz-chart-wrap { height: 380px; flex-shrink: 0; position: relative; }
 
 /* Custom tooltip */
 .viz-tooltip {
-  background: #1c2128;
+  /* Was a hard-coded #1c2128 (near-black) left over from the old dark theme,
+     while the text inside uses var(--text)/var(--text-muted) — both dark. That
+     put dark navy text on a near-black panel. Uses the app surface token now,
+     so it stays legible and matches every other floating panel. */
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow);
   font-size: 0.78rem;
   min-width: 160px;
 }
@@ -1218,3 +1413,53 @@
   padding: 0; flex-shrink: 0;
 }
 .notice-toast-close:hover { color: var(--text); }
+/* ── NLP "understood as" chips (rendered below .nlp-mini-bar) ───────────────
+   Shows the structured reading of the user's query that produced the result
+   on screen — return, metric text, matched column(s), scope, resolved period.
+   See ControlBar.jsx's NlpInterpretation for why this is surfaced at all.
+   Styled as quiet metadata, not a control: it must be glanceable and
+   ignorable, never compete with the answer it annotates. */
+.nlp-interpretation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 2px 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.nlp-interpretation-lead {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.66rem;
+  opacity: 0.8;
+}
+
+.nlp-interpretation-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--input-bg);
+}
+
+.nlp-interpretation-chip-label {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.nlp-interpretation-chip-value {
+  color: var(--text);
+  font-weight: 600;
+  /* Long metric text / column lists must not push the control bar wide —
+     they wrap onto the chip's own line instead. */
+  overflow-wrap: anywhere;
+}
