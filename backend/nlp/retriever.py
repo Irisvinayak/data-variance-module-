@@ -18,8 +18,8 @@ import logging
 import re
 from typing import Any, Dict, List
 
-from ..auth_service import get_allowed_form_ids
-from ..config import AUTH_ENABLED
+from ..auth.service import get_allowed_form_ids
+from ..config import AUTH_ENABLED, RequestContext
 from . import return_lookup
 from .embedder import embed_query
 from .index_store import meta_by_table, search
@@ -70,14 +70,14 @@ _lexical_overlap = ranking.lexical_overlap
 
 
 def get_relevant_schema(
-    query: str, login_id: str, analysis: "QueryAnalysis | None" = None,
+    query: str, ctx: RequestContext, analysis: "QueryAnalysis | None" = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Embed `query`, search the table/column FAISS indices, RRF-fuse them into
     a ranked table shortlist, then filter that shortlist down to only tables
-    belonging to return_ids `login_id`'s department is allowed to access
-    (reusing auth_service.get_allowed_form_ids — no auth logic duplicated here).
+    belonging to return_ids the caller's department is allowed to access
+    (reusing auth.service.get_allowed_form_ids — no auth logic duplicated here).
 
-    When AUTH_ENABLED=false (dev bypass, same flag auth_deps.py already
+    When AUTH_ENABLED=false (dev bypass, same flag auth/deps.py already
     honors), the authorization filter is skipped entirely — every retrieved
     table is treated as authorized, same as require_login/require_return_access
     do in that mode.
@@ -355,7 +355,7 @@ def get_relevant_schema(
         )
         authorized_candidates = list(ranked_candidates)
     else:
-        allowed_returns = get_allowed_form_ids(login_id) or set()
+        allowed_returns = get_allowed_form_ids(ctx) or set()
 
         def _is_authorized(table_meta: Dict[str, Any]) -> bool:
             rid = table_meta.get("return_id")
@@ -367,9 +367,9 @@ def get_relevant_schema(
 
     if len(authorized_candidates) < len(ranked_candidates):
         logger.info(
-            "[nlp.retriever] login_id=%r | dropped %d unauthorized table(s) from the "
+            "[nlp.retriever] %s | dropped %d unauthorized table(s) from the "
             "candidate pool (%d remain before top-%d cut)",
-            login_id, len(ranked_candidates) - len(authorized_candidates),
+            ctx, len(ranked_candidates) - len(authorized_candidates),
             len(authorized_candidates), TOP_K_TABLES,
         )
 
@@ -432,9 +432,9 @@ def get_relevant_schema(
     )
 
     logger.info(
-        "[nlp.retriever] query=%r | login_id=%r | %d authorized table(s), %d column(s), %d label(s) | "
+        "[nlp.retriever] query=%r | %s | %d authorized table(s), %d column(s), %d label(s) | "
         "table_confidence=%.3f | table_ambiguous=%s | top=%s | leads_a_signal=%s",
-        query, login_id, len(tables), len(columns), len(matched_labels),
+        query, ctx, len(tables), len(columns), len(matched_labels),
         table_confidence, table_ambiguous,
         tables[0]["table"] if tables else None,
         bool(tables) and tables[0]["table"] in signal_leaders,

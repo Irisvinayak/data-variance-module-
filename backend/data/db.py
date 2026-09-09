@@ -9,7 +9,7 @@ from typing import Any, List, Optional, Tuple
 
 import oracledb
 
-from .config import DB_HOST, DB_PORT, DB_SERVICE, DB_USER, DB_PASSWORD, DB_MAX_ROWS
+from ..config import DB_HOST, DB_PORT, DB_SERVICE, DB_USER, DB_PASSWORD, DB_MAX_ROWS
 
 logger = logging.getLogger(__name__)
 

@@ -16,10 +16,10 @@ from typing import Optional, Tuple
 from dateutil import parser as dateutil_parser
 from dateutil.relativedelta import relativedelta
 
-from ..calculate_variance import get_previous_dates
+from ..data.calculate_variance import get_previous_dates
 from ..config import DP_TABLE_SCHEMA, IS_SP_TABLE_DATA_ENABLED
-from ..db import execute_query
-from ..report_lookup import _parse_returns, get_is_excel_by_return_code
+from ..data.db import execute_query
+from ..data.report_lookup import _parse_returns, get_is_excel_by_return_code
 from .query_normalizer import normalize_query
 
 logger = logging.getLogger(__name__)

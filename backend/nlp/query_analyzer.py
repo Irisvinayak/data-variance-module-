@@ -44,7 +44,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from ..report_lookup import _parse_returns
+from ..data.report_lookup import _parse_returns
 from . import indexed_returns, schema_info
 from .query_normalizer import normalize_query
 

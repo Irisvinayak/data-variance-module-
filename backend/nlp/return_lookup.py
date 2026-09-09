@@ -20,9 +20,9 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from .. import query_xml_lookup
-from ..report_lookup import _parse_returns
-from ..service import _load_table_mapping
+from ..data import query_xml_lookup
+from ..data.report_lookup import _parse_returns
+from ..data.service import _load_table_mapping
 
 logger = logging.getLogger(__name__)
 

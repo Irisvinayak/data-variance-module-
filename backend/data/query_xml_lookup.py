@@ -48,12 +48,11 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from .config import TABLE_MAPPING_BASE_DIR
+from ..config import ANONYMOUS, RequestContext
+from ..hosts import get_profile
 from .xml_loader import load_xml_tree
 
 logger = logging.getLogger(__name__)
-
-XML_QUERY_FILENAME = "XML_Query.xml"
 
 # Default reporting-date column. ~80% of rows carry RptDtClmnName="RDATE" and
 # the remainder leave it empty; RDATE is this schema's universal convention
@@ -70,14 +69,42 @@ _FROM_RE = re.compile(r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_$#]*)", re.IGNORE
 _NON_TABLES = {"DUAL", "SELECT", "TABLE", "LATERAL"}
 
 _TTL = float(os.getenv("DV_XML_QUERY_TTL_SEC", "3600"))
-_cache: Dict[str, tuple] = {}
+_cache: Dict[tuple, tuple] = {}
 _lock = threading.Lock()
 
 
-def _xml_query_path(return_id: str) -> str:
-    return os.path.normpath(
-        os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), XML_QUERY_FILENAME)
+def query_xml_label(ctx: RequestContext = ANONYMOUS) -> str:
+    """Name(s) of the query-definition file, for logs and error messages.
+
+    Plural because the 6.0 repository uses two names for the same role; an
+    error message that named only one would send an operator looking for
+    the wrong file.
+    """
+    return " / ".join(get_profile().query_xml_filenames)
+
+
+def _xml_query_path(return_id: str, ctx: RequestContext) -> Optional[str]:
+    """First existing query-definition file for this return, or None.
+
+    The profile supplies candidates because the filename is not uniform: the
+    6.0 repository is mid-rename and some return folders carry Query.xml where
+    others carry XML_Query.xml.
+    """
+    profile = get_profile()
+    profile.validate_context(ctx)
+
+    candidates = [
+        os.path.normpath(c) for c in profile.query_xml_candidates(ctx, return_id)
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+
+    logger.debug(
+        "[query_xml] No query definition for return_id=%s | tried=%s",
+        return_id, candidates,
     )
+    return None
 
 
 def _extract_tables(select_query: str) -> list:
@@ -92,14 +119,13 @@ def _extract_tables(select_query: str) -> list:
     return names
 
 
-def _build(return_id: str) -> Dict[str, Dict[str, Any]]:
+def _build(return_id: str, ctx: RequestContext) -> Dict[str, Dict[str, Any]]:
     """{UPPERCASE table name: {"table_name", "filter_col", "return_id"}}"""
-    path = _xml_query_path(return_id)
-    if not os.path.isfile(path):
-        logger.debug("[query_xml] No %s for return_id=%s (%s)", XML_QUERY_FILENAME, return_id, path)
+    path = _xml_query_path(return_id, ctx)
+    if path is None:
         return {}
 
-    root = load_xml_tree(path, label=f"{XML_QUERY_FILENAME} for return {return_id}")
+    root = load_xml_tree(path, label=f"{os.path.basename(path)} for return {return_id}")
     if root is None:
         return {}
 
@@ -136,33 +162,39 @@ def _build(return_id: str) -> Dict[str, Dict[str, Any]]:
 
     logger.info(
         "[query_xml] Parsed %s for return_id=%s -> %d table(s)",
-        XML_QUERY_FILENAME, return_id, len(tables),
+        os.path.basename(path), return_id, len(tables),
     )
     return tables
 
 
-def tables_for_return(return_id: str) -> Dict[str, Dict[str, Any]]:
+def tables_for_return(
+    return_id: str, ctx: RequestContext = ANONYMOUS
+) -> Dict[str, Dict[str, Any]]:
     """Cached {UPPERCASE table name: metadata} parsed from the return's
     XML_Query.xml. Empty dict when the file is absent/unparseable — callers
     must treat that as "no fallback available", not an error."""
-    key = str(return_id)
+    # Cache key includes the tenant: return 2029 is a different file per tenant
+    # under 6.0, and collapsing them would serve one tenant's queries to another.
+    key = (ctx.tenant_id, str(return_id))
     now = time.monotonic()
     with _lock:
         cached = _cache.get(key)
     if cached is not None and (now - cached[0]) < _TTL:
         return cached[1]
 
-    built = _build(key)
+    built = _build(str(return_id), ctx)
     with _lock:
         _cache[key] = (now, built)
     return built
 
 
-def get_table_metadata(return_id: str, table_name: str) -> Optional[Dict[str, Any]]:
+def get_table_metadata(
+    return_id: str, table_name: str, ctx: RequestContext = ANONYMOUS
+) -> Optional[Dict[str, Any]]:
     """Metadata for one table, or None if this return's XML_Query.xml doesn't
     mention it. Shaped to match service._get_table_metadata()'s return value
     so it can be used as a drop-in fallback."""
-    meta = tables_for_return(return_id).get(table_name.strip().upper())
+    meta = tables_for_return(return_id, ctx).get(table_name.strip().upper())
     if meta is None:
         return None
     return {

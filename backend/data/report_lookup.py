@@ -10,7 +10,8 @@ import re
 import time
 from typing import Any, Dict, List
 
-from .config import RETURNS_XML_PATH, NON_XBRL_RETURNS_XML_PATH
+from ..config import ANONYMOUS, RequestContext
+from ..hosts import get_profile
 from .xml_loader import load_xml_tree
 
 logger = logging.getLogger(__name__)
@@ -21,26 +22,38 @@ _returns_ttl = float(os.getenv("DV_RETURNS_TTL_SEC", "3600"))
 
 
 class _TTLCache:
+    """TTL cache with one slot per tenant.
+
+    Keyed rather than single-slot because the returns master is a different
+    file per tenant under iDEAL 6.0; one slot would serve tenant 1002 the
+    return list of whichever tenant happened to load first. The key is the
+    empty string under 5.5, so that host keeps exactly one slot as before.
+    """
+
     __slots__ = ("_ttl", "_data", "_ts")
 
     def __init__(self, ttl: float) -> None:
         self._ttl  = ttl
-        self._data = None
-        self._ts   = 0.0
+        self._data: dict = {}
+        self._ts:   dict = {}
 
-    @property
-    def loaded_at(self) -> float:
-        return self._ts
+    def loaded_at(self, key: str = "") -> float:
+        return self._ts.get(key, 0.0)
 
-    def get(self):
-        if self._data is not None and (time.monotonic() - self._ts) < self._ttl:
-            return self._data
+    def get(self, key: str = ""):
+        data = self._data.get(key)
+        if data is not None and (time.monotonic() - self._ts.get(key, 0.0)) < self._ttl:
+            return data
         return None
 
-    def set(self, data):
-        self._data = data
-        self._ts   = time.monotonic()
+    def set(self, data, key: str = ""):
+        self._data[key] = data
+        self._ts[key]   = time.monotonic()
         return data
+
+    def clear(self) -> None:
+        self._data.clear()
+        self._ts.clear()
 
 
 _returns_cache          = _TTLCache(ttl=_returns_ttl)
@@ -50,50 +63,71 @@ _non_xbrl_returns_cache = _TTLCache(ttl=_returns_ttl)
 
 # ── Parsers ────────────────────────────────────────────────────────────────────
 
-def _parse_returns() -> tuple:
-    """Parse Returns.xml; return a tuple of attribute dicts, one per <Return>."""
-    cached = _returns_cache.get()
+def _parse_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
+    """Parse the XBRL returns master; one attribute dict per return row.
+
+    The filename and the row element name both come from the host profile:
+    5.5 is Returns.xml with <Returns>/<Return>, 6.0 is Return.xml with
+    <Document>/<Row>.
+    """
+    cached = _returns_cache.get(ctx.tenant_id)
     if cached is not None:
         return cached
 
-    root = load_xml_tree(RETURNS_XML_PATH, "Returns.xml")
+    profile = get_profile()
+    profile.validate_context(ctx)
+    path    = profile.returns_xml_path(ctx)
+    row_tag = profile.returns_row_tag
+
+    root = load_xml_tree(path, os.path.basename(path))
     if root is None:
         return ()
 
     seen: set[str] = set()
     rows: List[Dict[str, Any]] = []
-    for el in root.findall("Return"):
+    for el in root.findall(row_tag):
         name = el.attrib.get("Name", "").strip()
         if name and name not in seen:
             seen.add(name)
             rows.append(el.attrib)
 
     result = tuple(rows)
-    logger.info("Loaded %d unique return(s) from Returns.xml", len(rows))
-    return _returns_cache.set(result)
+    logger.info(
+        "Loaded %d unique return(s) from %s | tenant=%r | row_tag=<%s>",
+        len(rows), path, ctx.tenant_id, row_tag,
+    )
+    return _returns_cache.set(result, ctx.tenant_id)
 
 
-def _parse_non_xbrl_returns() -> tuple:
-    """Parse NonXBRLReturns.xml; return a tuple of attribute dicts, one per <Return>."""
-    cached = _non_xbrl_returns_cache.get()
+def _parse_non_xbrl_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
+    """Parse the non-XBRL returns master; one attribute dict per return row."""
+    cached = _non_xbrl_returns_cache.get(ctx.tenant_id)
     if cached is not None:
         return cached
 
-    root = load_xml_tree(NON_XBRL_RETURNS_XML_PATH, "NonXBRLReturns.xml")
+    profile = get_profile()
+    profile.validate_context(ctx)
+    path    = profile.non_xbrl_returns_xml_path(ctx)
+    row_tag = profile.returns_row_tag
+
+    root = load_xml_tree(path, os.path.basename(path))
     if root is None:
         return ()
 
     seen: set[str] = set()
     rows: List[Dict[str, Any]] = []
-    for el in root.findall("Return"):
+    for el in root.findall(row_tag):
         name = el.attrib.get("Name", "").strip()
         if name and name not in seen:
             seen.add(name)
             rows.append(el.attrib)
 
     result = tuple(rows)
-    logger.info("Loaded %d unique return(s) from NonXBRLReturns.xml", len(rows))
-    return _non_xbrl_returns_cache.set(result)
+    logger.info(
+        "Loaded %d unique non-XBRL return(s) from %s | tenant=%r",
+        len(rows), path, ctx.tenant_id,
+    )
+    return _non_xbrl_returns_cache.set(result, ctx.tenant_id)
 
 
 def _normalise(s: str) -> str:
@@ -129,10 +163,11 @@ SCORE_TOKEN_ANY   =  50   # at least one token found in field
 AUTO_SELECT_THRESHOLD = 90   # auto-pick when top score >= this AND uniquely best
 
 
-def _normalised_returns() -> tuple:
-    if _norm_cache.loaded_at < _returns_cache.loaded_at:
-        _norm_cache._data = None
-    cached = _norm_cache.get()
+def _normalised_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
+    key = ctx.tenant_id
+    if _norm_cache.loaded_at(key) < _returns_cache.loaded_at(key):
+        _norm_cache._data.pop(key, None)
+    cached = _norm_cache.get(key)
     if cached is not None:
         return cached
     result = tuple(
@@ -142,10 +177,10 @@ def _normalised_returns() -> tuple:
             _normalise(r.get("AltName", "")),
             r,
         )
-        for r in _parse_returns()
+        for r in _parse_returns(ctx)
         if r.get("Name", "")
     )
-    return _norm_cache.set(result)
+    return _norm_cache.set(result, key)
 
 
 def _score_row(norm_name: str, norm_rid: str, norm_alt: str, query: str, tokens: List[str]) -> int:
@@ -170,7 +205,9 @@ def _score_row(norm_name: str, norm_rid: str, norm_alt: str, query: str, tokens:
     return 0
 
 
-def search_returns_scored(user_input: str) -> List[Dict[str, Any]]:
+def search_returns_scored(
+    user_input: str, ctx: RequestContext = ANONYMOUS
+) -> List[Dict[str, Any]]:
     """
     Score every return against *user_input* and return all candidates with
     score > 0, sorted descending by score.
@@ -181,7 +218,7 @@ def search_returns_scored(user_input: str) -> List[Dict[str, Any]]:
     """
     keyword = extract_keyword(user_input)
     tokens  = [t for t in re.split(r"[^a-z0-9]+", keyword) if t]
-    nr      = _normalised_returns()
+    nr      = _normalised_returns(ctx)
 
     scored: List[Dict[str, Any]] = []
     for norm_name, norm_rid, norm_alt, r in nr:
@@ -193,16 +230,20 @@ def search_returns_scored(user_input: str) -> List[Dict[str, Any]]:
     return scored
 
 
-def find_matching_reports(user_input: str) -> List[Dict[str, Any]]:
+def find_matching_reports(
+    user_input: str, ctx: RequestContext = ANONYMOUS
+) -> List[Dict[str, Any]]:
     """
     Backward-compatible wrapper — returns a flat list of raw return dicts.
     Preserves original call-sites that only want the raw list.
     """
-    scored = search_returns_scored(user_input)
+    scored = search_returns_scored(user_input, ctx)
     return [item["return"] for item in scored]
 
 
-def get_is_excel_by_return_code(return_code: Any, is_non_xbrl: bool = False) -> bool:
+def get_is_excel_by_return_code(
+    return_code: Any, is_non_xbrl: bool = False, ctx: RequestContext = ANONYMOUS
+) -> bool:
     """
     Mirror of .NET GetIsExcelByReturnCode().
 
@@ -224,8 +265,12 @@ def get_is_excel_by_return_code(return_code: Any, is_non_xbrl: bool = False) -> 
         )
         return False
 
-    xml_label = "NonXBRLReturns.xml" if is_non_xbrl else "Returns.xml"
-    source = _parse_non_xbrl_returns() if is_non_xbrl else _parse_returns()
+    profile   = get_profile()
+    xml_label = os.path.basename(
+        profile.non_xbrl_returns_xml_path(ctx) if is_non_xbrl
+        else profile.returns_xml_path(ctx)
+    )
+    source = _parse_non_xbrl_returns(ctx) if is_non_xbrl else _parse_returns(ctx)
 
     # Primary lookup: Id attribute (same as .NET)
     for row in source:

@@ -29,6 +29,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from ..config import RequestContext
+
 from . import confidence as confidence_mod
 from . import ranking, schema_info
 from .embedder import embed_query
@@ -66,7 +68,7 @@ def _empty(reason: str) -> Dict[str, Any]:
 def rank_within_tables(
     query: str,
     tables: Sequence[Mapping[str, Any]],
-    login_id: str = "",
+    ctx: "RequestContext | None" = None,
     *,
     analysis: Optional[QueryAnalysis] = None,
 ) -> Dict[str, Any]:
@@ -208,9 +210,9 @@ def rank_within_tables(
     matched_labels = matched_labels[:TOP_K_LABELS]
 
     logger.info(
-        "[nlp.scoped_retriever] query=%r | login_id=%r | search_text=%r | scope=%d table(s) | "
+        "[nlp.scoped_retriever] query=%r | %s | search_text=%r | scope=%d table(s) | "
         "top=%s | confidence=%.3f | ambiguous=%s | %d column(s), %d label(s)",
-        query, login_id, search_text, len(scope),
+        query, ctx, search_text, len(scope),
         ranked_tables[0]["table"] if ranked_tables else None,
         table_confidence, table_ambiguous, len(columns), len(matched_labels),
     )

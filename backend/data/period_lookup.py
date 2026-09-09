@@ -29,69 +29,87 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from .config import XML_PERIOD_PATH
+from ..config import ANONYMOUS, RequestContext
+from ..hosts import get_profile
 from .xml_loader import load_xml_tree
 
 logger = logging.getLogger(__name__)
 
 _TTL = float(os.getenv("DV_XML_PERIOD_TTL_SEC", "3600"))
-_cache: Optional[Dict[str, Dict[str, Any]]] = None
-_cache_ts: float = 0.0
+# Keyed by tenant ("" under 5.5) — the period master is per-tenant in 6.0.
+_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
+_cache_ts: Dict[str, float] = {}
 _lock = threading.Lock()
 
 
-def _build() -> Dict[str, Dict[str, Any]]:
+def _build(ctx: RequestContext) -> Dict[str, Dict[str, Any]]:
     """{UPPERCASE Frequency code: {period_id, period_name, advance_notification_days}}.
 
     Keyed on the primary `Frequency` attribute only — this app's Returns.xml
     RepFreq values are drawn from that column, never from EBRFrequency (see
     module docstring). Rows with an empty Frequency are skipped: they exist in
     the master purely to carry an EBRFrequency-only code."""
-    root = load_xml_tree(XML_PERIOD_PATH, label="XML_Period.xml")
+    profile = get_profile()
+    profile.validate_context(ctx)
+    path = profile.period_xml_path(ctx)
+
+    freq_attr = profile.period_freq_attr
+    if freq_attr is None:
+        # iDEAL 6.0's Period.xml is Id + PeriodName only; there is no frequency
+        # column to key on, so a frequency code cannot be resolved to a label
+        # from this file at all. Callers get None per the documented contract.
+        logger.info(
+            "[period_lookup] profile=%s has no frequency column in %s — "
+            "frequency labels unavailable (resolve via a return's PeriodId instead)",
+            profile.name, os.path.basename(path),
+        )
+        return {}
+
+    root = load_xml_tree(path, label=os.path.basename(path))
     if root is None:
         return {}
 
     out: Dict[str, Dict[str, Any]] = {}
     for row in root.findall("Row"):
-        freq = (row.attrib.get("Frequency") or "").strip().upper()
+        freq = (row.attrib.get(freq_attr) or "").strip().upper()
         if not freq:
             continue
         out[freq] = {
-            "period_id": row.attrib.get("Period_Id"),
+            "period_id": row.attrib.get(profile.period_id_attr),
             "period_name": (row.attrib.get("PeriodName") or "").strip(),
             "advance_notification_days": row.attrib.get("AdvanceNotificationDays"),
         }
-    logger.info("[period_lookup] Loaded %d frequency code(s) from %s", len(out), XML_PERIOD_PATH)
+    logger.info("[period_lookup] Loaded %d frequency code(s) from %s", len(out), path)
     return out
 
 
-def _get() -> Dict[str, Dict[str, Any]]:
-    global _cache, _cache_ts
+def _get(ctx: RequestContext) -> Dict[str, Dict[str, Any]]:
+    key = ctx.tenant_id
     now = time.monotonic()
     with _lock:
-        if _cache is not None and (now - _cache_ts) < _TTL:
-            return _cache
-    built = _build()
+        cached = _cache.get(key)
+        if cached is not None and (now - _cache_ts.get(key, 0.0)) < _TTL:
+            return cached
+    built = _build(ctx)
     with _lock:
-        _cache = built
-        _cache_ts = now
+        _cache[key] = built
+        _cache_ts[key] = now
     return built
 
 
-def period_name_for_freq(freq: str) -> Optional[str]:
+def period_name_for_freq(freq: str, ctx: RequestContext = ANONYMOUS) -> Optional[str]:
     """The human PeriodName for a RepFreq code (e.g. 'Q' -> 'Quarterly'), or
     None when the master has no row for it — callers must treat that as
     "no label available", not an error; frontend/src/types.js's freqLabel()
     already has an independent, richer fallback table for display."""
     if not freq:
         return None
-    entry = _get().get(freq.strip().upper())
+    entry = _get(ctx).get(freq.strip().upper())
     return entry["period_name"] if entry else None
 
 
 def invalidate() -> None:
     """Force the next call to re-read the XML (tests / admin action)."""
-    global _cache, _cache_ts
     with _lock:
-        _cache = None
-        _cache_ts = 0.0
+        _cache.clear()
+        _cache_ts.clear()

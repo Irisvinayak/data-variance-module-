@@ -9,13 +9,13 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .config import (
-    TABLE_MAPPING_BASE_DIR,
-    INSTANCE_BASE_DIR,
-    RETURNS_XML_PATH,
+from ..config import (
+    ANONYMOUS,
     IS_SP_TABLE_DATA_ENABLED,
     DP_TABLE_SCHEMA,
+    RequestContext,
 )
+from ..hosts import get_profile
 from .xml_loader import load_xml_tree
 from . import query_xml_lookup
 from .report_lookup import (
@@ -31,6 +31,7 @@ def _resolve_report_table_name(
     return_id: str,
     table_name: str,
     is_non_xbrl: bool = False,
+    ctx: RequestContext = ANONYMOUS,
 ) -> str:
     """
     Mirror of the .NET table-name resolution block:
@@ -40,7 +41,7 @@ def _resolve_report_table_name(
         if (isSpTableDataEnabled && !isExcel)
             reportName = tableName + "_DP";
     """
-    is_excel = get_is_excel_by_return_code(return_id, is_non_xbrl=is_non_xbrl)
+    is_excel = get_is_excel_by_return_code(return_id, is_non_xbrl=is_non_xbrl, ctx=ctx)
 
     report_name = table_name
     if IS_SP_TABLE_DATA_ENABLED and not is_excel:
@@ -127,8 +128,13 @@ _mapping_cache: Dict[Tuple[str, str], Tuple[float, Any, str]] = {}
 _mapping_cache_lock = threading.Lock()
 
 
-def _load_table_mapping(return_id: str, tbl_path: str):
-    cache_key = (str(return_id), tbl_path or "")
+def _load_table_mapping(
+    return_id: str, tbl_path: str, ctx: RequestContext = ANONYMOUS
+):
+    # Tenant is part of the key: return 2029 resolves to a different file
+    # per tenant under 6.0, and a shared key would serve one tenant the
+    # other one's mapping.
+    cache_key = (ctx.tenant_id, str(return_id), tbl_path or "")
     now = time.monotonic()
     with _mapping_cache_lock:
         cached = _mapping_cache.get(cache_key)
@@ -137,18 +143,28 @@ def _load_table_mapping(return_id: str, tbl_path: str):
 
     # ── Startup diagnostics (verbose — only useful when actively debugging a
     # missing table-mapping file, not on every normal call) ───────────────────
+    profile = get_profile()
+    profile.validate_context(ctx)
+    # Bound to locals once per call. The candidate/scan logic below is long
+    # and references these repeatedly; resolving them here keeps one place
+    # where "where does this host keep its files" is decided.
+    mapping_base  = profile.table_mapping_base_dir(ctx)
+    instance_base = profile.instance_base_dir(ctx)
+    returns_xml   = profile.returns_xml_path(ctx)
+
     logger.debug("[service] _load_table_mapping called")
     logger.debug("[service]   return_id          = %r", return_id)
     logger.debug("[service]   tbl_path           = %r", tbl_path)
-    logger.debug("[service]   TABLE_MAPPING_BASE_DIR = %r", TABLE_MAPPING_BASE_DIR)
-    logger.debug("[service]   INSTANCE_BASE_DIR      = %r", INSTANCE_BASE_DIR)
-    logger.debug("[service]   RETURNS_XML_PATH        = %r", RETURNS_XML_PATH)
+    logger.debug("[service]   profile            = %s", profile.name)
+    logger.debug("[service]   mapping_base       = %r", mapping_base)
+    logger.debug("[service]   instance_base      = %r", instance_base)
+    logger.debug("[service]   returns_xml        = %r", returns_xml)
 
     return_dir_from_config = os.path.normpath(
-        os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id))
+        os.path.join(mapping_base, str(return_id))
     )
     logger.debug(
-        "[service]   return_dir (TABLE_MAPPING_BASE_DIR/return_id) = %r  isdir=%s",
+        "[service]   return_dir (mapping_base/return_id) = %r  isdir=%s",
         return_dir_from_config,
         os.path.isdir(return_dir_from_config),
     )
@@ -162,13 +178,13 @@ def _load_table_mapping(return_id: str, tbl_path: str):
 
     # ── Candidates 2-5: tbl_path relative to known base directories ──────────
     if tbl_path:
-        candidates.append(os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path))
-        candidates.append(os.path.join(TABLE_MAPPING_BASE_DIR, tbl_path))
-        candidates.append(os.path.join(INSTANCE_BASE_DIR, str(return_id), tbl_path))
+        candidates.append(os.path.join(mapping_base, str(return_id), tbl_path))
+        candidates.append(os.path.join(mapping_base, tbl_path))
+        candidates.append(os.path.join(instance_base, str(return_id), tbl_path))
 
-        if RETURNS_XML_PATH:
+        if returns_xml:
             candidates.append(
-                os.path.join(os.path.dirname(RETURNS_XML_PATH), str(return_id), tbl_path)
+                os.path.join(os.path.dirname(returns_xml), str(return_id), tbl_path)
             )
 
     # ── Candidates 6+: well-known fixed filenames in the return folder ────────
@@ -183,13 +199,13 @@ def _load_table_mapping(return_id: str, tbl_path: str):
         "TABLEMAPPING.XML",
     ):
         candidates.append(
-            os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), fixed_name)
+            os.path.join(mapping_base, str(return_id), fixed_name)
         )
 
     # ── Directory scan ────────────────────────────────────────────────────────
     # Collect every directory that might be the return's root folder.
     # We derive them from multiple sources so that spaces / trailing separators
-    # in TABLE_MAPPING_BASE_DIR can't silently break os.path.isdir.
+    # in mapping_base can't silently break os.path.isdir.
     scan_dirs: List[str] = []
 
     # Source A: straight join of config dir + return_id
@@ -200,7 +216,7 @@ def _load_table_mapping(return_id: str, tbl_path: str):
         #           find a folder whose basename == str(return_id).
         #           This is immune to trailing-separator / double-sep issues.
         deep_candidate = os.path.normpath(
-            os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path)
+            os.path.join(mapping_base, str(return_id), tbl_path)
         )
         probe = os.path.dirname(deep_candidate)
         for _ in range(15):                       # safety cap
@@ -212,9 +228,9 @@ def _load_table_mapping(return_id: str, tbl_path: str):
                 break
             probe = parent
 
-        # Source C: same walk from INSTANCE_BASE_DIR path
+        # Source C: same walk from the instance base path
         deep_instance = os.path.normpath(
-            os.path.join(INSTANCE_BASE_DIR, str(return_id), tbl_path)
+            os.path.join(instance_base, str(return_id), tbl_path)
         )
         probe = os.path.dirname(deep_instance)
         for _ in range(15):
@@ -281,7 +297,7 @@ def _load_table_mapping(return_id: str, tbl_path: str):
 
     # ── Nothing found — fall back to the canonical path (will log an error) ───
     fallback = os.path.normpath(
-        os.path.join(TABLE_MAPPING_BASE_DIR, str(return_id), tbl_path or "TableMapping.xml")
+        os.path.join(mapping_base, str(return_id), tbl_path or "TableMapping.xml")
     )
     # WARNING, not ERROR: a missing mapping file is an expected, handled
     # condition for a large minority of returns — backend/nlp/return_lookup.py
@@ -311,7 +327,9 @@ def _load_table_mapping(return_id: str, tbl_path: str):
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
-def find_return_and_tables(return_input: str) -> Dict[str, Any]:
+def find_return_and_tables(
+    return_input: str, ctx: RequestContext = ANONYMOUS
+) -> Dict[str, Any]:
     """Find a return by name and list available tables from its mapping XML.
 
     Response variants:
@@ -321,7 +339,7 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
     """
     logger.info("[service] Finding return=%s", return_input)
 
-    scored = search_returns_scored(return_input)
+    scored = search_returns_scored(return_input, ctx)
     if not scored:
         return {"error": f"Return '{return_input}' not found."}
 
@@ -371,7 +389,7 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
 
     # tbl_path may be empty — _load_table_mapping handles that via fixed-name
     # fallbacks and directory scan, so we no longer hard-stop here.
-    root, resolved_path = _load_table_mapping(return_id, tbl_path)
+    root, resolved_path = _load_table_mapping(return_id, tbl_path, ctx)
 
     tables = []
     if root is not None:
@@ -411,7 +429,8 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
     # mapping file have no XML_Query.xml either — it is handled for symmetry,
     # so a deployment that ships one without the other works.
     if not any(t.get("table_name") for t in tables):
-        recovered = query_xml_lookup.tables_for_return(return_id)
+        query_label = query_xml_lookup.query_xml_label(ctx)
+        recovered = query_xml_lookup.tables_for_return(return_id, ctx)
         if recovered:
             tables = [
                 {
@@ -419,7 +438,7 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
                     "filter_col":           meta.get("filter_col"),
                     "primary_column":       None,
                     "comp_filter_col_name": None,
-                    "source":               query_xml_lookup.XML_QUERY_FILENAME,
+                    "source":               query_label,
                 }
                 for name, meta in recovered.items()
             ]
@@ -428,7 +447,7 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
                 return_id, r.get("Name"),
                 "no table-mapping file" if root is None
                 else f"mapping file {resolved_path} declares no TableName attributes",
-                len(tables), query_xml_lookup.XML_QUERY_FILENAME,
+                len(tables), query_label,
             )
         elif root is None:
             # Nothing anywhere describes this return's tables. Only NOW is it
@@ -437,10 +456,10 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
             return {
                 "error": (
                     f"Return '{r.get('Name', return_input)}' (Id={return_id}): "
-                    f"no table mapping file and no {query_xml_lookup.XML_QUERY_FILENAME}. "
+                    f"no table mapping file and no {query_label}. "
                     f"Checked TblPath={tbl_path!r} and standard fallback locations "
-                    f"under {TABLE_MAPPING_BASE_DIR}, plus "
-                    f"{query_xml_lookup._xml_query_path(return_id)}."
+                    f"under {get_profile().table_mapping_base_dir(ctx)}, plus "
+                    f"{list(get_profile().query_xml_candidates(ctx, return_id))}."
                 )
             }
         else:
@@ -449,7 +468,7 @@ def find_return_and_tables(return_input: str) -> Dict[str, Any]:
                 "attributes and %s has no fallback either. The table dropdown for "
                 "this return will be empty.",
                 return_id, r.get("Name"), resolved_path,
-                query_xml_lookup.XML_QUERY_FILENAME,
+                query_label,
             )
 
     return {
@@ -466,8 +485,9 @@ def _get_table_metadata(
     return_id: str,
     tbl_path: str,
     table_name: str,
+    ctx: RequestContext = ANONYMOUS,
 ) -> Dict[str, Any]:
-    root, _ = _load_table_mapping(return_id, tbl_path)
+    root, _ = _load_table_mapping(return_id, tbl_path, ctx)
     tname_up = table_name.strip().upper()
 
     if root is not None:
@@ -495,18 +515,18 @@ def _get_table_metadata(
     # in XML_Query.xml's SELECT statements, which is where RptDtClmnName gives
     # us the filter_col this function exists to provide. Without this, every
     # such table 404'd out of /variance/dates and compute_variance.
-    fallback = query_xml_lookup.get_table_metadata(return_id, table_name)
+    fallback = query_xml_lookup.get_table_metadata(return_id, table_name, ctx)
     if fallback is not None:
         logger.info(
             "[service] Table %r resolved via %s fallback (return_id=%s, filter_col=%s)",
-            table_name, query_xml_lookup.XML_QUERY_FILENAME, return_id, fallback["filter_col"],
+            table_name, query_xml_lookup.query_xml_label(ctx), return_id, fallback["filter_col"],
         )
         return fallback
 
     if root is None:
         raise FileNotFoundError(
             f"Table mapping not found for return {return_id}, and no "
-            f"{query_xml_lookup.XML_QUERY_FILENAME} entry for table '{table_name}'."
+            f"{query_xml_lookup.query_xml_label(ctx)} entry for table '{table_name}'."
         )
 
     available = [el.attrib.get("TableName", "") for el in root.findall("Row")]
@@ -519,6 +539,7 @@ def _resolve_physical_table_name(
     return_id: str,
     table_name: str,
     return_meta: Optional[Dict[str, Any]] = None,
+    ctx: RequestContext = ANONYMOUS,
 ) -> str:
     """is_excel -> optional '_DP' suffix -> optional DP_TABLE_SCHEMA prefix.
 
@@ -528,7 +549,7 @@ def _resolve_physical_table_name(
     is_excel = (
         str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
         if return_meta
-        else get_is_excel_by_return_code(return_id)
+        else get_is_excel_by_return_code(return_id, ctx=ctx)
     )
     if IS_SP_TABLE_DATA_ENABLED and not is_excel:
         dp_name = f"{table_name}_DP"
@@ -541,6 +562,7 @@ def get_available_dates(
     return_tbl_path: str,
     table_name: str,
     execute_query_fn: Callable,
+    ctx: RequestContext = ANONYMOUS,
 ) -> List[str]:
     """List every distinct value of the table's filter (date) column that
     actually has data AND is a canonical period-end for the return's OWN
@@ -577,7 +599,7 @@ def get_available_dates(
     the table mapping or table itself can't be resolved. Returns [] (not an
     error) when the table resolves fine but genuinely has no rows yet.
     """
-    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name)
+    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name, ctx)
     filter_col = table_meta["filter_col"]
     resolved_table_name = _resolve_physical_table_name(return_id, table_name)
 
@@ -602,7 +624,7 @@ def get_available_dates(
 
     # Same lookup compute_variance() itself uses to decide report_freq for this
     # return — one source of truth, not a second copy of the RepFreq census.
-    return_meta = next((r for r in _parse_returns() if r.get("Id") == str(return_id)), None)
+    return_meta = next((r for r in _parse_returns(ctx) if r.get("Id") == str(return_id)), None)
     report_freq = ((return_meta.get("RepFreq") or "").strip().upper() if return_meta else "")
 
     if report_freq:
@@ -638,6 +660,7 @@ def compute_variance(
     selected_columns: Optional[List[str]] = None,
     comparison_mode: str = "vs_current",
     comparison_dates: Optional[List[str]] = None,
+    ctx: RequestContext = ANONYMOUS,
 ) -> Dict[str, Any]:
     """Orchestrate full variance computation for one table.
 
@@ -647,7 +670,7 @@ def compute_variance(
     no decisions about it."""
     logger.info("[service] compute_variance started")
 
-    parsed      = _parse_returns()
+    parsed      = _parse_returns(ctx)
     return_meta = next((r for r in parsed if r.get("Id") == str(return_id)), None)
     report_freq = (
         (return_meta.get("RepFreq") or "").strip().upper()
@@ -668,7 +691,7 @@ def compute_variance(
     logger.debug("[table_resolution] OriginalTable=%s", table_name)
     logger.debug("[table_resolution] FinalReportName=%s", resolved_table_name)
 
-    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name)
+    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name, ctx)
 
     metadata = {
         "filter_col":            table_meta["filter_col"],

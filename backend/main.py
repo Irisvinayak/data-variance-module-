@@ -12,13 +12,13 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS
+from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS, RequestContext
 from .logging_config import configure_logging
-from .models import NLResolveRequest, VarianceComputeRequest
-from . import service
-from .db import execute_query
-from .auth_deps import require_login, require_return_access
-from .report_lookup import _parse_returns
+from .data.models import NLResolveRequest, VarianceComputeRequest
+from .data import service
+from .data.db import execute_query
+from .auth.deps import require_login, require_return_access
+from .data.report_lookup import _parse_returns
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 # One line per meaningful boundary (API request, LLM call, auth decision) at
@@ -160,14 +160,32 @@ async def nlp_health(check_model: bool = False) -> dict:
 # ── Health check (no auth — used by infra/monitoring probes) ──────────────────
 @app.get("/health", tags=["Meta"])
 async def health():
-    return {"status": "ok"}
+    from .config import ANONYMOUS, APP_VERSION
+    from .hosts import HostProfileError, get_profile
+
+    info = {"status": "ok", "version": APP_VERSION}
+    try:
+        profile = get_profile()
+        # ANONYMOUS resolves cleanly under 5.5, where paths do not depend on
+        # identity. Under 6.0 it is rejected by design — there is no
+        # tenant-free repository — so the paths are reported as unavailable
+        # rather than guessed from an arbitrary tenant.
+        info["profile"] = profile.name
+        try:
+            info["paths"] = profile.describe(ANONYMOUS)
+        except HostProfileError as exc:
+            info["paths"] = {"detail": f"tenant-scoped; not resolvable without a request ({exc})"}
+    except HostProfileError as exc:
+        info["status"] = "misconfigured"
+        info["detail"] = str(exc)
+    return info
 
 
 # ── GET /variance/find ─────────────────────────────────────────────────────────
 @app.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_find(
     return_name: str,
-    login_id: str = Depends(require_login),     # ← validates loginId param & user exists
+    ctx: RequestContext = Depends(require_login),     # ← validates loginId param & user exists
 ) -> dict:
     """Find a return by name.
 
@@ -183,9 +201,9 @@ async def variance_find(
     If you want to hide inaccessible returns from search results, see the
     commented-out block below.
     """
-    logger.info("[main] GET /variance/find | login_id=%s | return_name=%r", login_id, return_name)
+    logger.info("[main] GET /variance/find | %s | return_name=%r", ctx, return_name)
 
-    result = service.find_return_and_tables(return_name)
+    result = service.find_return_and_tables(return_name, ctx)
     if result.get("error"):
         logger.warning("[main] 404 /variance/find | return_name=%r | %s", return_name, result["error"])
         raise HTTPException(
@@ -196,8 +214,8 @@ async def variance_find(
     # ── Optional: filter search results to user's allowed returns only ─────────
     # Uncomment if you want the search list itself to be access-controlled.
     #
-    # from .auth_service import get_allowed_form_ids
-    # allowed = get_allowed_form_ids(login_id) or set()
+    # from .auth.service import get_allowed_form_ids
+    # allowed = get_allowed_form_ids(ctx) or set()
     # if "candidates" in result:
     #     result["candidates"] = [
     #         c for c in result["candidates"]
@@ -230,7 +248,7 @@ MAX_COMPARISON_DATES = 3
 @app.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_compute(
     payload: VarianceComputeRequest,
-    login_id: str = Depends(require_login),     # ← step 1: user must exist in XML_User.xml
+    ctx: RequestContext = Depends(require_login),     # ← step 1: user must exist in XML_User.xml
 ) -> dict:
     """Compute variance for the given return / table / date / periods.
 
@@ -239,14 +257,14 @@ async def variance_compute(
       2. require_return_access — confirms user's dept has this return in Forms/NXForms
     """
     logger.info(
-        "[main] POST /variance/compute | login_id=%s | return_id=%s | table=%s | date=%s | "
+        "[main] POST /variance/compute | %s | return_id=%s | table=%s | date=%s | "
         "periods=%s | comparison_dates=%s",
-        login_id, payload.return_id, payload.table_name,
+        ctx, payload.return_id, payload.table_name,
         payload.reporting_date, payload.reporting_period, payload.comparison_dates,
     )
 
     # ── Step 2: check this specific return is in the user's allowed set ────────
-    require_return_access(login_id, payload.return_id)
+    require_return_access(ctx, payload.return_id)
 
     comparison_dates = [d.strip().upper() for d in (payload.comparison_dates or []) if d and d.strip()]
     if comparison_dates:
@@ -284,10 +302,11 @@ async def variance_compute(
             selected_columns=payload.selected_columns,
             comparison_mode=payload.comparison_mode,
             comparison_dates=comparison_dates or None,
+            ctx=ctx,
         )
         logger.info(
-            "[main] compute_variance SUCCESS | login_id=%s | return_id=%s | table=%s",
-            login_id, payload.return_id, payload.table_name,
+            "[main] compute_variance SUCCESS | %s | return_id=%s | table=%s",
+            ctx, payload.return_id, payload.table_name,
         )
     except FileNotFoundError as exc:
         logger.error("[main] 404 FileNotFoundError | %s", exc)
@@ -314,18 +333,18 @@ async def variance_dates(
     return_id: str,
     table_mapping_path: str,
     table_name: str,
-    login_id: str = Depends(require_login),
+    ctx: RequestContext = Depends(require_login),
 ) -> dict:
     """List every reporting date that actually has data for this return/table,
     newest first — lets the manual UI offer a dropdown of real submission
     dates instead of a free calendar picker.
     """
     logger.info(
-        "[main] GET /variance/dates | login_id=%s | return_id=%s | table=%s",
-        login_id, return_id, table_name,
+        "[main] GET /variance/dates | %s | return_id=%s | table=%s",
+        ctx, return_id, table_name,
     )
 
-    require_return_access(login_id, return_id)
+    require_return_access(ctx, return_id)
 
     try:
         dates = service.get_available_dates(
@@ -333,6 +352,7 @@ async def variance_dates(
             return_tbl_path=table_mapping_path,
             table_name=table_name,
             execute_query_fn=execute_query,
+            ctx=ctx,
         )
     except FileNotFoundError as exc:
         logger.error("[main] 404 FileNotFoundError | %s", exc)
@@ -413,7 +433,7 @@ def _tokens(text: str) -> set:
     return set(_TOKEN_RE.findall((text or "").lower()))
 
 
-def _find_named_return_ids(query: str, login_id: str) -> list:
+def _find_named_return_ids(query: str, ctx: RequestContext) -> list:
     """Does the query text itself name a return (e.g. the user typed "CIMS_RAQ"
     or "ALE domestic quarterly")? Returns the matching return_ids — empty if it
     names none, one if it's specific, several if the mention is ambiguous
@@ -435,18 +455,18 @@ def _find_named_return_ids(query: str, login_id: str) -> list:
     hand-maintained stopword list. In this dataset every return name starts
     with "CIMS", so the old rule matched all 281 of them on that token alone.
     """
-    from .auth_service import get_allowed_form_ids
+    from .auth.service import get_allowed_form_ids
     from .config import AUTH_ENABLED
     from .nlp.query_analyzer import analyze_query
 
     # None (not an empty set) when auth is bypassed — analyze_query treats
     # None as "no auth scoping", whereas an empty set means "this user may
     # access nothing", and those must not be confused.
-    allowed = (get_allowed_form_ids(login_id) or set()) if AUTH_ENABLED else None
+    allowed = (get_allowed_form_ids(ctx) or set()) if AUTH_ENABLED else None
     return analyze_query(query, allowed_return_ids=allowed).return_ids
 
 
-def _build_return_clarification(query: str, login_id: str, restrict_to: list | None = None) -> dict:
+def _build_return_clarification(query: str, ctx: RequestContext, restrict_to: list | None = None) -> dict:
     """Build a needs_clarification response for the "no table/return signal
     at all" case (today's old 404) — asks the user to pick a return, rather
     than failing outright.
@@ -464,14 +484,14 @@ def _build_return_clarification(query: str, login_id: str, restrict_to: list | N
     `allow_other: True` is always included so the frontend can offer an
     "Others" free-text box (see ControlBar.jsx's NlpReturnPicker) for a user
     whose intended return isn't among the narrowed options."""
-    from .auth_service import get_allowed_form_ids
+    from .auth.service import get_allowed_form_ids
     from .config import AUTH_ENABLED
 
     from .nlp import indexed_returns
 
-    returns = list(_parse_returns())
+    returns = list(_parse_returns(ctx))
     if AUTH_ENABLED:
-        allowed = get_allowed_form_ids(login_id) or set()
+        allowed = get_allowed_form_ids(ctx) or set()
         returns = [r for r in returns if str(r.get("Id")) in allowed]
 
     # Only offer returns the embedding index actually covers. Every option in
@@ -578,7 +598,7 @@ def _build_table_clarification(
 def _shortlist_for_return(
     return_id: str,
     query: str,
-    login_id: str,
+    ctx: RequestContext,
     *,
     analysis=None,
 ) -> dict | None:
@@ -586,7 +606,7 @@ def _shortlist_for_return(
     (named in the query, or picked from the "which return?" clarification), so
     rank ITS tables and their columns against what the query actually asks for.
 
-    `query` and `login_id` are REQUIRED, not optional. This function used to
+    `query` and `ctx` are REQUIRED, not optional. This function used to
     take only `return_id` and ignore the query entirely — tables in
     table-mapping-XML order, every column of every table in raw index order,
     and a confidence hardcoded to 0.5/1.0. Downstream, intent_resolver shows
@@ -616,7 +636,7 @@ def _shortlist_for_return(
     from .nlp.nlp_config import SCOPED_RETRIEVAL_ENABLED, TABLE_INDEX_PATH, TABLE_META_PATH
     from .nlp.scoped_retriever import rank_within_tables
 
-    return_row = next((r for r in _parse_returns() if r.get("Id") == return_id), None)
+    return_row = next((r for r in _parse_returns(ctx) if r.get("Id") == return_id), None)
     if return_row is None:
         return None
 
@@ -650,7 +670,7 @@ def _shortlist_for_return(
     if not SCOPED_RETRIEVAL_ENABLED:
         return _unranked_shortlist(tables)
 
-    return rank_within_tables(query, tables, login_id, analysis=analysis)
+    return rank_within_tables(query, tables, ctx, analysis=analysis)
 
 
 def _unranked_shortlist(tables: list) -> dict:
@@ -671,7 +691,7 @@ def _unranked_shortlist(tables: list) -> dict:
 def _shortlist_for_table(
     table_name: str,
     query: str,
-    login_id: str,
+    ctx: RequestContext,
     *,
     analysis=None,
 ) -> dict | None:
@@ -708,7 +728,7 @@ def _shortlist_for_table(
     if not SCOPED_RETRIEVAL_ENABLED:
         shortlist = _unranked_shortlist(tables)
     else:
-        shortlist = rank_within_tables(query, tables, login_id, analysis=analysis)
+        shortlist = rank_within_tables(query, tables, ctx, analysis=analysis)
 
     # One pinned table is not ambiguous by construction — the user, or a prior
     # stage, named it. Overriding the computed confidence is deliberate and
@@ -730,15 +750,15 @@ def _shortlist_for_table(
 # each stage already logs its own outcome (nlp.retriever, nlp.intent_resolver,
 # nlp.date_resolver). The exception is re-raised untouched so the existing
 # handlers still decide the status code.
-def _nlp_stage(stage: str, login_id: str, query: str, fn, *args, **kwargs):
+def _nlp_stage(stage: str, ctx: RequestContext, query: str, fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
     except HTTPException:
         raise                       # a deliberate 404/400 — not a stage failure
     except Exception as exc:
         logger.error(
-            "[main] /variance/nlresolve | login_id=%s | query=%r | stage=%s FAILED | %s: %s",
-            login_id, query, stage, type(exc).__name__, exc, exc_info=True,
+            "[main] /variance/nlresolve | %s | query=%r | stage=%s FAILED | %s: %s",
+            ctx, query, stage, type(exc).__name__, exc, exc_info=True,
         )
         raise
 
@@ -747,12 +767,12 @@ def _nlp_stage(stage: str, login_id: str, query: str, fn, *args, **kwargs):
 @app.post("/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_nlresolve(
     payload: NLResolveRequest,
-    login_id: str = Depends(require_login),
+    ctx: RequestContext = Depends(require_login),
 ) -> dict:
     """Resolve a natural-language query AND compute the result in one shot.
 
     Embedding-based retrieval (backend/nlp/retriever.py) shortlists candidate
-    tables/columns and filters them to what login_id's department is already
+    tables/columns and filters them to what ctx's department is already
     allowed to access, then an LLM (backend/nlp/intent_resolver.py) picks the
     best match from that authorized shortlist only. backend/nlp/date_resolver.py
     then turns any date/period intent in the query (or its absence, defaulting
@@ -775,17 +795,17 @@ async def variance_nlresolve(
         from .nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
     except Exception as exc:
         logger.error(
-            "[main] /variance/nlresolve | login_id=%s | NLP module import FAILED | %s: %s "
+            "[main] /variance/nlresolve | %s | NLP module import FAILED | %s: %s "
             "| the NL path needs faiss-cpu, sentence-transformers and rank-bm25 "
             "(pip install -r requirements.txt) — check GET /variance/nlp-health",
-            login_id, type(exc).__name__, exc, exc_info=True,
+            ctx, type(exc).__name__, exc, exc_info=True,
         )
         raise
 
     query = payload.query.strip()
     logger.info(
-        "[main] POST /variance/nlresolve | login_id=%s | query=%r | dimension=%r | answer=%r",
-        login_id, query, payload.dimension, payload.clarification_answer,
+        "[main] POST /variance/nlresolve | %s | query=%r | dimension=%r | answer=%r",
+        ctx, query, payload.dimension, payload.clarification_answer,
     )
 
     if not query:
@@ -801,12 +821,12 @@ async def variance_nlresolve(
     # "show me the variance in total loan assets for CIMS_RAQ as of 31-Mar-2025"
     # searches for "total loan assets" and treats the return and the date as
     # the exact facts they are. See backend/nlp/query_analyzer.py.
-    from .auth_service import get_allowed_form_ids as _get_allowed
+    from .auth.service import get_allowed_form_ids as _get_allowed
     from .config import AUTH_ENABLED as _auth_on
 
     analysis = _nlp_stage(
-        "query_analysis", login_id, query, analyze_query, query,
-        allowed_return_ids=((_get_allowed(login_id) or set()) if _auth_on else None),
+        "query_analysis", ctx, query, analyze_query, query,
+        allowed_return_ids=((_get_allowed(ctx) or set()) if _auth_on else None),
     )
     interpretation = analysis.to_interpretation()
 
@@ -821,9 +841,9 @@ async def variance_nlresolve(
     if analysis.unindexed_return_names and not analysis.return_ids:
         named = analysis.unindexed_return_names[0]
         logger.info(
-            "[main] /variance/nlresolve | login_id=%s | query=%r | names return %r which has "
+            "[main] /variance/nlresolve | %s | query=%r | names return %r which has "
             "no embeddings -> refusing rather than answering from another return",
-            login_id, query, named,
+            ctx, query, named,
         )
         return {
             "needs_clarification": True,
@@ -833,7 +853,7 @@ async def variance_nlresolve(
                 f"can't answer questions about it here. Use the Return/Table/Date "
                 f"controls above for {named}, or ask me about one of these instead:"
             ),
-            "options": _build_return_clarification(query, login_id)["options"],
+            "options": _build_return_clarification(query, ctx)["options"],
             "skippable": False,
             "allow_other": False,
             "confidence": 0.0,
@@ -851,26 +871,26 @@ async def variance_nlresolve(
             # free-form retrieval found, even below the confidence floor
             # that originally triggered this prompt. If it found literally
             # nothing, there's nothing to guess with.
-            shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id, analysis)
+            shortlist = _nlp_stage("retrieval", ctx, query, get_relevant_schema, query, ctx, analysis)
             if not shortlist["tables"]:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Still couldn't find a matching return/table for this query — please add more detail.",
                 )
             logger.info(
-                "[main] /variance/nlresolve | login_id=%s | query=%r | return clarification skipped -> best-effort guess",
-                login_id, query,
+                "[main] /variance/nlresolve | %s | query=%r | return clarification skipped -> best-effort guess",
+                ctx, query,
             )
         else:
             shortlist = _nlp_stage(
-                "scoped_retrieval", login_id, query,
-                _shortlist_for_return, answer, query, login_id, analysis=analysis,
+                "scoped_retrieval", ctx, query,
+                _shortlist_for_return, answer, query, ctx, analysis=analysis,
             )
             if shortlist is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selected return is no longer available.")
             logger.info(
-                "[main] /variance/nlresolve | login_id=%s | query=%r | return answered -> return_id=%s (%d table(s))",
-                login_id, query, answer, len(shortlist["tables"]),
+                "[main] /variance/nlresolve | %s | query=%r | return answered -> return_id=%s (%d table(s))",
+                ctx, query, answer, len(shortlist["tables"]),
             )
             if shortlist["table_ambiguous"]:
                 return {
@@ -887,10 +907,10 @@ async def variance_nlresolve(
             # to whichever return was already pinned if one was.
             shortlist = (
                 _nlp_stage(
-                    "scoped_retrieval", login_id, query,
-                    _shortlist_for_return, pinned_return_id, query, login_id, analysis=analysis,
+                    "scoped_retrieval", ctx, query,
+                    _shortlist_for_return, pinned_return_id, query, ctx, analysis=analysis,
                 ) if pinned_return_id
-                else _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id, analysis)
+                else _nlp_stage("retrieval", ctx, query, get_relevant_schema, query, ctx, analysis)
             )
             if shortlist is None or not shortlist["tables"]:
                 raise HTTPException(
@@ -898,13 +918,13 @@ async def variance_nlresolve(
                     detail="No accessible return/table matches this query.",
                 )
             logger.info(
-                "[main] /variance/nlresolve | login_id=%s | query=%r | table clarification skipped -> best-effort guess",
-                login_id, query,
+                "[main] /variance/nlresolve | %s | query=%r | table clarification skipped -> best-effort guess",
+                ctx, query,
             )
         else:
             shortlist = _nlp_stage(
-                "scoped_retrieval", login_id, query,
-                _shortlist_for_table, answer, query, login_id, analysis=analysis,
+                "scoped_retrieval", ctx, query,
+                _shortlist_for_table, answer, query, ctx, analysis=analysis,
             )
             if shortlist is None:
                 raise HTTPException(
@@ -912,8 +932,8 @@ async def variance_nlresolve(
                     detail="Selected option is no longer valid for this query.",
                 )
             logger.info(
-                "[main] /variance/nlresolve | login_id=%s | query=%r | table answered -> table=%s",
-                login_id, query, answer,
+                "[main] /variance/nlresolve | %s | query=%r | table answered -> table=%s",
+                ctx, query, answer,
             )
 
     else:
@@ -930,16 +950,16 @@ async def variance_nlresolve(
         # two- or three-item question, not a browse through the full list.
         if len(analysis.return_ids) > 1:
             logger.info(
-                "[main] /variance/nlresolve | login_id=%s | query=%r | names %d return "
+                "[main] /variance/nlresolve | %s | query=%r | names %d return "
                 "variants %s -> asking which",
-                login_id, query, len(analysis.return_ids), analysis.return_names,
+                ctx, query, len(analysis.return_ids), analysis.return_names,
             )
             return {
-                **_build_return_clarification(query, login_id, restrict_to=analysis.return_ids),
+                **_build_return_clarification(query, ctx, restrict_to=analysis.return_ids),
                 "interpretation": interpretation,
             }
 
-        shortlist = _nlp_stage("retrieval", login_id, query, get_relevant_schema, query, login_id, analysis)
+        shortlist = _nlp_stage("retrieval", ctx, query, get_relevant_schema, query, ctx, analysis)
         table_confidence = shortlist.get("table_confidence", 0.0)
         table_ambiguous = shortlist.get("table_ambiguous", False)
 
@@ -954,15 +974,15 @@ async def variance_nlresolve(
 
             if len(named_return_ids) == 1:
                 named_shortlist = _nlp_stage(
-                    "scoped_retrieval", login_id, query,
-                    _shortlist_for_return, named_return_ids[0], query, login_id,
+                    "scoped_retrieval", ctx, query,
+                    _shortlist_for_return, named_return_ids[0], query, ctx,
                     analysis=analysis,
                 )
                 if named_shortlist is not None:
                     logger.info(
-                        "[main] /variance/nlresolve | login_id=%s | query=%r | "
+                        "[main] /variance/nlresolve | %s | query=%r | "
                         "query names return_id=%s directly -> using it instead of asking",
-                        login_id, query, named_return_ids[0],
+                        ctx, query, named_return_ids[0],
                     )
                     shortlist = named_shortlist
                     table_confidence = shortlist["table_confidence"]
@@ -987,13 +1007,13 @@ async def variance_nlresolve(
                             query_related_return_ids.append(rid)
 
                 logger.info(
-                    "[main] /variance/nlresolve | login_id=%s | query=%r | no usable table/return signal "
+                    "[main] /variance/nlresolve | %s | query=%r | no usable table/return signal "
                     "(table_confidence=%.3f, query_related_return_ids=%s) -> asking for return",
-                    login_id, query, table_confidence, query_related_return_ids,
+                    ctx, query, table_confidence, query_related_return_ids,
                 )
                 return {
                     **_build_return_clarification(
-                        query, login_id,
+                        query, ctx,
                         restrict_to=query_related_return_ids or None,
                     ),
                     "interpretation": interpretation,
@@ -1001,9 +1021,9 @@ async def variance_nlresolve(
 
         if table_ambiguous or table_confidence < CONFIDENCE_AUTO_PROCEED:
             logger.info(
-                "[main] /variance/nlresolve | login_id=%s | query=%r | table ambiguous "
+                "[main] /variance/nlresolve | %s | query=%r | table ambiguous "
                 "(confidence=%.3f, tied=%s) -> asking clarification",
-                login_id, query, table_confidence, table_ambiguous,
+                ctx, query, table_confidence, table_ambiguous,
             )
             return {
                 **_build_table_clarification(query, shortlist, table_confidence),
@@ -1017,26 +1037,26 @@ async def variance_nlresolve(
     final_confidence = shortlist.get("table_confidence", 1.0)
 
     resolution = _nlp_stage(
-        "intent_resolution", login_id, query, resolve_intent, query, shortlist,
+        "intent_resolution", ctx, query, resolve_intent, query, shortlist,
         analysis=analysis,
     )
     if resolution is None:
-        logger.warning("[main] 404 /variance/nlresolve | login_id=%s | query=%r | intent resolution failed", login_id, query)
+        logger.warning("[main] 404 /variance/nlresolve | %s | query=%r | intent resolution failed", ctx, query)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Could not resolve this query to a known table/column.",
         )
 
     return_row = next(
-        (r for r in _parse_returns() if r.get("Id") == resolution["return_id"]), None
+        (r for r in _parse_returns(ctx) if r.get("Id") == resolution["return_id"]), None
     )
     if return_row is None:
-        logger.warning("[main] 404 /variance/nlresolve | login_id=%s | resolved return_id=%s not found", login_id, resolution["return_id"])
+        logger.warning("[main] 404 /variance/nlresolve | %s | resolved return_id=%s not found", ctx, resolution["return_id"])
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resolved return not found.")
 
-    found = service.find_return_and_tables(return_row.get("Name", ""))
+    found = service.find_return_and_tables(return_row.get("Name", ""), ctx)
     if found.get("error") or found.get("candidates") or not found.get("table_mapping_path"):
-        logger.warning("[main] 404 /variance/nlresolve | login_id=%s | return_name=%r | table mapping unresolved", login_id, return_row.get("Name"))
+        logger.warning("[main] 404 /variance/nlresolve | %s | return_name=%r | table mapping unresolved", ctx, return_row.get("Name"))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resolved return could not be mapped to a table-mapping file.",
@@ -1065,9 +1085,9 @@ async def variance_nlresolve(
         # if it has no entry either, compute_variance raises FileNotFoundError
         # and the existing handler turns it into a 404 with a real reason.
         logger.info(
-            "[main] /variance/nlresolve | login_id=%s | table=%r not in return %s's "
+            "[main] /variance/nlresolve | %s | table=%r not in return %s's "
             "table mapping — proceeding via %s fallback",
-            login_id, resolution["table_name"], found["return_id"],
+            ctx, resolution["table_name"], found["return_id"],
             "XML_Query.xml",
         )
         resolved_table = {"table_name": resolution["table_name"]}
@@ -1085,13 +1105,13 @@ async def variance_nlresolve(
             query, found["return_id"], resolved_table["table_name"], filter_col, report_freq,
         )
     except ValueError as exc:
-        logger.warning("[main] 404 /variance/nlresolve | login_id=%s | date resolution failed: %s", login_id, exc)
+        logger.warning("[main] 404 /variance/nlresolve | %s | date resolution failed: %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     logger.info(
-        "[main] POST /variance/nlresolve | login_id=%s | query=%r | return_id=%s | table=%s | "
+        "[main] POST /variance/nlresolve | %s | query=%r | return_id=%s | table=%s | "
         "columns=%s | reporting_date=%s | reporting_period=%s",
-        login_id, query, found["return_id"], resolved_table["table_name"],
+        ctx, query, found["return_id"], resolved_table["table_name"],
         resolution["selected_columns"], reporting_date, reporting_period,
     )
 
@@ -1113,32 +1133,33 @@ async def variance_nlresolve(
             execute_query_fn=execute_query,
             connection_string=None,
             selected_columns=None,
+            ctx=ctx,
         )
     except FileNotFoundError as exc:
-        logger.error("[main] 404 /variance/nlresolve | login_id=%s | %s", login_id, exc)
+        logger.error("[main] 404 /variance/nlresolve | %s | %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except KeyError as exc:
-        logger.error("[main] 404 /variance/nlresolve | login_id=%s | %s", login_id, exc)
+        logger.error("[main] 404 /variance/nlresolve | %s | %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RuntimeError as exc:
-        logger.error("[main] 500 /variance/nlresolve | login_id=%s | %s", login_id, exc)
+        logger.error("[main] 500 /variance/nlresolve | %s | %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("[main] 500 /variance/nlresolve | login_id=%s | unhandled exception", login_id)
+        logger.exception("[main] 500 /variance/nlresolve | %s | unhandled exception", ctx)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected server error: {type(exc).__name__}: {exc}",
         ) from exc
 
     if computed.get("error"):
-        logger.warning("[main] 500 /variance/nlresolve | login_id=%s | compute_variance error: %s", login_id, computed["error"])
+        logger.warning("[main] 500 /variance/nlresolve | %s | compute_variance error: %s", ctx, computed["error"])
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=computed["error"])
 
     computed = _restrict_result_columns(computed, resolution["selected_columns"])
 
     logger.info(
-        "[main] 200 /variance/nlresolve | login_id=%s | return_id=%s | table=%s | rows=%d",
-        login_id, found["return_id"], resolved_table["table_name"], len(computed.get("rows", [])),
+        "[main] 200 /variance/nlresolve | %s | return_id=%s | table=%s | rows=%d",
+        ctx, found["return_id"], resolved_table["table_name"], len(computed.get("rows", [])),
     )
 
     return {
@@ -1175,7 +1196,7 @@ async def variance_nlresolve(
 @app.post("/variance/nlquery", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_nlquery(
     payload: NLResolveRequest,
-    login_id: str = Depends(require_login),
+    ctx: RequestContext = Depends(require_login),
 ) -> dict:
     """Free-form NL -> SQL -> execution, mirroring sql_agent's /api/query.
 
@@ -1184,7 +1205,7 @@ async def variance_nlquery(
     build the SQL), this endpoint lets the LLM write the actual SQL text via
     backend/nlp/sql_generator.py — no period-comparison, no visualization,
     just raw query results. The two safety nets that make this narrower than
-    sql_agent's own version: the shortlist is pre-filtered to login_id's
+    sql_agent's own version: the shortlist is pre-filtered to ctx's
     authorized returns before the LLM ever sees a table name, and
     validate_sql() rejects anything outside that shortlist, any non-SELECT,
     and any DML/DDL keyword before backend/db.execute_query ever runs it.
@@ -1193,14 +1214,14 @@ async def variance_nlquery(
     from .nlp.sql_generator import generate_sql
 
     query = payload.query.strip()
-    logger.info("[main] POST /variance/nlquery | login_id=%s | query=%r", login_id, query)
+    logger.info("[main] POST /variance/nlquery | %s | query=%r", ctx, query)
 
     if not query:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="query must not be empty.")
 
-    shortlist = get_relevant_schema(query, login_id)
+    shortlist = get_relevant_schema(query, ctx)
     if not shortlist["tables"]:
-        logger.warning("[main] 404 /variance/nlquery | login_id=%s | query=%r | no authorized table matched", login_id, query)
+        logger.warning("[main] 404 /variance/nlquery | %s | query=%r | no authorized table matched", ctx, query)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No accessible return/table matches this query.",
@@ -1212,8 +1233,8 @@ async def variance_nlquery(
     )
     if not result.get("sql") or result.get("warnings"):
         logger.warning(
-            "[main] 422 /variance/nlquery | login_id=%s | query=%r | warnings=%s",
-            login_id, query, result.get("warnings"),
+            "[main] 422 /variance/nlquery | %s | query=%r | warnings=%s",
+            ctx, query, result.get("warnings"),
         )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1221,22 +1242,22 @@ async def variance_nlquery(
         )
 
     logger.info(
-        "[main] /variance/nlquery generated SQL | login_id=%s | query=%r | sql=%s",
-        login_id, query, result["sql"],
+        "[main] /variance/nlquery generated SQL | %s | query=%r | sql=%s",
+        ctx, query, result["sql"],
     )
 
     columns, rows, err = execute_query(result["sql"])
     if err:
-        logger.error("[main] 500 /variance/nlquery | login_id=%s | sql=%s | %s", login_id, result["sql"], err)
+        logger.error("[main] 500 /variance/nlquery | %s | sql=%s | %s", ctx, result["sql"], err)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err)
 
-    logger.info("[main] 200 /variance/nlquery | login_id=%s | rows=%d", login_id, len(rows))
+    logger.info("[main] 200 /variance/nlquery | %s | rows=%d", ctx, len(rows))
     return {"sql": result["sql"], "columns": columns, "rows": rows}
 
 
 # ── GET /auth/my-returns ───────────────────────────────────────────────────────
 @app.get("/auth/my-returns", status_code=status.HTTP_200_OK, tags=["Auth"])
-async def my_returns(login_id: str = Depends(require_login)) -> dict:
+async def my_returns(ctx: RequestContext = Depends(require_login)) -> dict:
     """Return the list of return IDs the current user is allowed to access.
 
     Useful for debugging access issues.
@@ -1244,10 +1265,11 @@ async def my_returns(login_id: str = Depends(require_login)) -> dict:
 
     Example: GET /auth/my-returns?loginId=iris810
     """
-    from .auth_service import get_allowed_form_ids
-    allowed = get_allowed_form_ids(login_id) or set()
+    from .auth.service import get_allowed_form_ids
+    allowed = get_allowed_form_ids(ctx) or set()
     return {
-        "login_id":      login_id,
+        "login_id":      ctx.login_id,
+        "tenant_id":     ctx.tenant_id,
         "allowed_count": len(allowed),
         "allowed_forms": sorted(allowed),
     }

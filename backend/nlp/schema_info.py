@@ -26,7 +26,7 @@ import re
 import threading
 from typing import Any, Dict, Optional, Tuple
 
-from ..calculate_variance import _is_excluded_value_col
+from ..data.calculate_variance import _is_excluded_value_col
 from .nlp_config import SCHEMA_JSON_PATH
 
 logger = logging.getLogger(__name__)
