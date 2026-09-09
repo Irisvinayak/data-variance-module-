@@ -175,6 +175,21 @@ def _normalised_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
             _normalise(r.get("Name", "")),
             _normalise(r.get("ReturnId", "")),
             _normalise(r.get("AltName", "")),
+            # The return's numeric Id, so "6001" finds return 6001. ReturnId
+            # above is a different thing — a short code like "R145" — and on
+            # its own left the id a user actually sees unsearchable.
+            _normalise(r.get("Id", "")),
+            # The stop-word-stripped form of the name. extract_keyword() strips
+            # words like "of"/"to"/"for" from the QUERY, so a name that
+            # contains one could never match itself exactly: searching
+            # "Credit to Women(Excel)" yielded "creditwomenexcel" while the
+            # field held "credittowomenexcel". Storing both forms makes an
+            # exact-name search score as exact. This matters beyond tidiness —
+            # the UI resolves an ambiguous search by re-querying with the
+            # chosen candidate's full name, which failed outright for the 25
+            # such names in 5.5 and for most 6.0 names, whose titles are
+            # prose ("QCB_F014_Breakdown of Funding by geography").
+            extract_keyword(r.get("Name", "")),
             r,
         )
         for r in _parse_returns(ctx)
@@ -183,9 +198,20 @@ def _normalised_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
     return _norm_cache.set(result, key)
 
 
-def _score_row(norm_name: str, norm_rid: str, norm_alt: str, query: str, tokens: List[str]) -> int:
+def _score_row(
+    norm_name: str,
+    norm_rid: str,
+    norm_alt: str,
+    norm_id: str,
+    norm_kw: str,
+    query: str,
+    tokens: List[str],
+) -> int:
     """Return the highest confidence score for this row against the query."""
-    fields = [f for f in (norm_name, norm_rid, norm_alt) if f]
+    # dict.fromkeys keeps order while dropping duplicates — norm_kw equals
+    # norm_name for any name without stop words (most of them), and a
+    # duplicated field would otherwise just be scored twice for no gain.
+    fields = [f for f in dict.fromkeys((norm_name, norm_rid, norm_alt, norm_id, norm_kw)) if f]
 
     for f in fields:
         if f == query:
@@ -221,8 +247,8 @@ def search_returns_scored(
     nr      = _normalised_returns(ctx)
 
     scored: List[Dict[str, Any]] = []
-    for norm_name, norm_rid, norm_alt, r in nr:
-        s = _score_row(norm_name, norm_rid, norm_alt, keyword, tokens)
+    for norm_name, norm_rid, norm_alt, norm_id, norm_kw, r in nr:
+        s = _score_row(norm_name, norm_rid, norm_alt, norm_id, norm_kw, keyword, tokens)
         if s > 0:
             scored.append({"score": s, "return": r})
 

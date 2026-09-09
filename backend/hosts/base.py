@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from typing import Sequence
 
 from ..config.context import RequestContext
-from ..config.settings import BASE_PATH, PATH_OVERRIDES
+from ..config.settings import BASE_PATH_OVERRIDE, PATH_OVERRIDES
 
 
 class HostProfileError(RuntimeError):
@@ -184,9 +184,20 @@ class HostProfile(ABC):
         """
         return PATH_OVERRIDES.get(key) or derived
 
+    #: Repository root for this host when DV_BASE_PATH is not set. Subclasses
+    #: set it from their own DV_BASE_PATH_xx setting.
+    default_base_path: str = ""
+
     @property
     def base_path(self) -> str:
-        return BASE_PATH
+        """This profile's repository root.
+
+        Derived from the profile rather than from a module-level constant so
+        that a profile is never handed the other host's root — the two
+        repositories have incompatible layouts, and pointing 6.0 at the 5.5
+        tree fails in ways that read like a permissions problem.
+        """
+        return BASE_PATH_OVERRIDE or self.default_base_path
 
     def describe(self, ctx: RequestContext) -> dict[str, str]:
         """Resolved paths for this context — powers /health and startup logging.
@@ -194,6 +205,10 @@ class HostProfile(ABC):
         Exists so a misconfigured deployment can be diagnosed from the health
         endpoint instead of by reading source and guessing.
         """
+        # Validate first: under 6.0 an unusable context must be reported as
+        # such, not rendered as a plausible-looking path with an empty tenant
+        # segment that no one can act on.
+        self.validate_context(ctx)
         return {
             "profile":                self.name,
             "base_path":              self.base_path,

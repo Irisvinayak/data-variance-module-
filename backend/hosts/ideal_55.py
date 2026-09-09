@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 
+from ..config.settings import BASE_PATH_55
 from ..config.context import RequestContext
 from .base import HostProfile
 
@@ -26,6 +27,7 @@ from .base import HostProfile
 class Ideal55Profile(HostProfile):
     name = "iDEAL 5.5"
     requires_tenant = False
+    default_base_path = BASE_PATH_55
 
     # ── Validation ─────────────────────────────────────────────────────────────
 

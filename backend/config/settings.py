@@ -73,7 +73,26 @@ DB_MAX_ROWS : int = int(os.getenv("DV_DB_MAX_ROWS", "5000"))
 # Root of the iDEAL repository installation. In 5.5 this is the repo itself
 # (D:\Repo5.5); in 6.0 it is the parent of the per-tenant folders (D:\Repo6).
 # The profile decides how to build paths beneath it.
-BASE_PATH: str = os.getenv("DV_BASE_PATH", r"D:\Repo5.5")
+#
+# Resolved per version so that flipping VERSION is the ONLY edit needed: both
+# repositories can be declared once and the right one is picked automatically.
+#   DV_BASE_PATH        — explicit override, wins for either version
+#   DV_BASE_PATH_55     — used when VERSION is 5.5
+#   DV_BASE_PATH_60     — used when VERSION is 6.0
+# Without this, changing VERSION alone would leave 6.0 pointed at the 5.5 repo,
+# where every lookup fails in a way that looks like a permissions problem.
+
+# Each profile picks its own root from these, so a profile's base path always
+# matches the profile rather than whatever VERSION happened to be at import
+# time. BASE_PATH_OVERRIDE, when set, wins for either version.
+BASE_PATH_OVERRIDE: str = os.getenv("DV_BASE_PATH", "").strip()
+BASE_PATH_55: str = os.getenv("DV_BASE_PATH_55", "").strip() or r"D:\Repo5.5"
+BASE_PATH_60: str = os.getenv("DV_BASE_PATH_60", "").strip() or r"D:\Repo6"
+
+# The root for the CONFIGURED version. Convenience for logging and for callers
+# that legitimately mean "this deployment's repository"; path resolution goes
+# through the profile's own base_path, never this.
+BASE_PATH: str = BASE_PATH_OVERRIDE or (BASE_PATH_55 if is_legacy_mode() else BASE_PATH_60)
 
 # ── Table-data behaviour ───────────────────────────────────────────────────────
 IS_SP_TABLE_DATA_ENABLED: bool = _flag("DV_IS_SP_TABLE_DATA_ENABLED")

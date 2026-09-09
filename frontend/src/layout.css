@@ -1463,3 +1463,16 @@
      they wrap onto the chip's own line instead. */
   overflow-wrap: anywhere;
 }
+
+/* Shown only while src/auth/ resolves the caller's identity (one /app-config
+   round-trip). Rendering the app before that would fire its auth effects with
+   an empty loginId and flash a spurious "not authorised" panel. */
+.auth-booting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 12rem;
+  font-size: 0.875rem;
+  opacity: 0.6;
+}

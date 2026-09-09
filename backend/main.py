@@ -181,6 +181,37 @@ async def health():
     return info
 
 
+# ── GET /app-config ────────────────────────────────────────────────────────────
+@app.get("/app-config", tags=["Meta"])
+async def app_config():
+    """Which iDEAL host this backend is configured for.
+
+    The React app fetches this once at startup to pick its authentication
+    strategy, so VERSION in the root .env is the single switch for the whole
+    project - backend and frontend - with no rebuild and no second setting to
+    keep in sync. Unauthenticated by necessity (it runs before auth exists)
+    and deliberately exposes nothing but the version and whether a tenant is
+    required; /health carries the filesystem detail.
+    """
+    from .config import APP_VERSION
+    from .hosts import HostProfileError, get_profile
+
+    requires_tenant = False
+    profile_name = None
+    try:
+        profile = get_profile()
+        requires_tenant = profile.requires_tenant
+        profile_name = profile.name
+    except HostProfileError as exc:
+        logger.error("[main] /app-config - profile unavailable: %s", exc)
+
+    return {
+        "version":         APP_VERSION,
+        "profile":         profile_name,
+        "requires_tenant": requires_tenant,
+    }
+
+
 # ── GET /variance/find ─────────────────────────────────────────────────────────
 @app.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"])
 async def variance_find(

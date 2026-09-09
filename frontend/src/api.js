@@ -8,21 +8,25 @@
  *
  *   Prod : Set VITE_API_BASE_URL=http://your-backend-server:8002 in .env
  *
- * loginId is appended as ?loginId= on every request so FastAPI's
- * require_login dependency can authorize against XML_User.xml → XML_Dept.xml.
+ * AUTH: every request carries loginId and tenantId, built by src/auth/. This
+ * module does not know or care which iDEAL host supplied them — 5.5 reads a
+ * query param, 6.0 decodes a JWT, and both end up in authQuery(). tenantId is
+ * sent in both modes (empty under 5.5), so there is no per-host branching here.
+ * bootstrapAuth() must have run before any of these functions are called; App
+ * awaits it before rendering.
  */
+
+import { authQuery, withAuth } from './auth/index.js'
 
 // Leave empty in dev — Vite proxy handles forwarding to FastAPI.
 // Set VITE_API_BASE_URL=/Datavariance/api for reverse-proxy deployments.
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
-// ── GET /auth/my-returns?loginId=... ──────────────────────────────────────────
+// ── GET /auth/my-returns ──────────────────────────────────────────────────────
 // Fetches the list of return IDs the user is allowed to access.
 // Called once on app load — result used to filter all search results.
-export async function getMyReturns(loginId = '') {
-  const res = await fetch(
-    `${BASE_URL}/auth/my-returns?loginId=${encodeURIComponent(loginId)}`
-  )
+export async function getMyReturns() {
+  const res = await fetch(`${BASE_URL}/auth/my-returns?${authQuery()}`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail ?? `Auth error (${res.status})`)
@@ -30,11 +34,10 @@ export async function getMyReturns(loginId = '') {
   return res.json()  // { login_id, allowed_count, allowed_forms: ["2001","2007",...] }
 }
 
-// ── GET /variance/find?return_name=...&loginId=... ────────────────────────────
-export async function findReturnTables(returnName, loginId = '') {
-  const res = await fetch(
-    `${BASE_URL}/variance/find?return_name=${encodeURIComponent(returnName)}&loginId=${encodeURIComponent(loginId)}`
-  )
+// ── GET /variance/find?return_name=... ────────────────────────────────────────
+export async function findReturnTables(returnName) {
+  const params = withAuth({ return_name: returnName })
+  const res = await fetch(`${BASE_URL}/variance/find?${params.toString()}`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail ?? `Find error (${res.status})`)
@@ -42,16 +45,15 @@ export async function findReturnTables(returnName, loginId = '') {
   return res.json()
 }
 
-// ── GET /variance/dates?return_id=&table_mapping_path=&table_name=&loginId= ──
+// ── GET /variance/dates?return_id=&table_mapping_path=&table_name= ───────────
 // Lists every reporting date that actually has data for this return/table,
 // newest first — feeds the manual date dropdown (see ControlBar's DateField)
 // so the user picks a real submission date instead of guessing on a calendar.
-export async function getAvailableDates(returnId, tableMappingPath, tableName, loginId = '') {
-  const params = new URLSearchParams({
+export async function getAvailableDates(returnId, tableMappingPath, tableName) {
+  const params = withAuth({
     return_id:          returnId,
     table_mapping_path: tableMappingPath,
     table_name:         tableName,
-    loginId,
   })
   const res = await fetch(`${BASE_URL}/variance/dates?${params.toString()}`)
   if (!res.ok) {
@@ -61,10 +63,10 @@ export async function getAvailableDates(returnId, tableMappingPath, tableName, l
   return res.json()  // { dates: ["31-MAR-2025", ...] }
 }
 
-// ── POST /variance/compute?loginId=... ───────────────────────────────────────
-export async function computeVariance(payload, loginId = '') {
+// ── POST /variance/compute ───────────────────────────────────────────────────
+export async function computeVariance(payload) {
   const res = await fetch(
-    `${BASE_URL}/variance/compute?loginId=${encodeURIComponent(loginId)}`,
+    `${BASE_URL}/variance/compute?${authQuery()}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -78,7 +80,7 @@ export async function computeVariance(payload, loginId = '') {
   return res.json()
 }
 
-// ── POST /variance/nlresolve?loginId=... ─────────────────────────────────────
+// ── POST /variance/nlresolve ─────────────────────────────────────────────────
 // One-shot: resolves a free-text query (e.g. "total loan") to a known return/
 // table/column set via the backend's embedding + LLM layer, resolves any
 // date/period intent in the query (or defaults to the latest submission),
@@ -101,9 +103,9 @@ export async function computeVariance(payload, loginId = '') {
 // result. No server-side session is kept between the two calls.
 export const SKIP_ANSWER = '__skip__'
 
-export async function resolveNlQuery(query, loginId = '', { dimension, clarificationAnswer, resolvedContext } = {}) {
+export async function resolveNlQuery(query, { dimension, clarificationAnswer, resolvedContext } = {}) {
   const res = await fetch(
-    `${BASE_URL}/variance/nlresolve?loginId=${encodeURIComponent(loginId)}`,
+    `${BASE_URL}/variance/nlresolve?${authQuery()}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -181,10 +181,12 @@ bank deployment.
 
 ## 3. Migration phases
 
-> **Status: Phases 0–3 complete** on branch `6-host-profile-config`. 5.5 verified
-> behaviourally identical (see section 7). Phase 4 is guarded: `VERSION=6.0`
-> raises a `HostProfileError` naming the missing profile rather than failing
-> obscurely.
+> **Status: Phases 0–5 complete** on branch `6-host-profile-config`.
+> `VERSION=5.5` / `VERSION=6.0` in the root `.env` is now the only edit
+> needed to move the whole project between hosts — backend and frontend.
+> Both modes verified end to end against the real repositories; see
+> sections 7 and 8. Phases 6–7 (deployment docs, NLP under multi-tenancy)
+> remain.
 
 Each phase leaves 5.5 working. 5.5 is in production use, so it is the regression
 baseline — re-verify after every phase.
@@ -213,13 +215,13 @@ route `report_lookup`, `query_xml_lookup`, `period_lookup` and `service` through
 `get_profile()`. **After this phase 5.5 must behave identically** — test this
 phase hardest, it is the one that can break production.
 
-**Phase 4 — `ideal_60.py`.** Port the tenant logic from
+**Phase 4 — `ideal_60.py`. [DONE]** Port the tenant logic from
 `2-data-variance-ideal-60`: `XML_Tenant.xml` lookup with the `Status` check,
 per-tenant `Database\` roots, the `Id` / `ReturnId` / `NXReturnId` attribute
 names. Cache keys become `(tenant_id, login_id)` in both modes (harmless in 5.5).
 Fold in the JWT verification fix from section 4.
 
-**Phase 5 — frontend auth strategies.** Extract `frontend/src/auth/`, port the
+**Phase 5 — frontend auth strategies. [DONE]** Extract `frontend/src/auth/`, port the
 JWT bootstrap from the 6.0 branch, remove the debug logging.
 
 **Phase 6 — env + deployment.** Three `.env` examples; document the IIS reverse
@@ -406,3 +408,105 @@ return rather than just the affected row.
 - `describe(ANONYMOUS)` is what `/health` reports. `Ideal60Profile` must reject
   `ANONYMOUS` from `validate_context()`; `/health` already handles that and
   reports the paths as tenant-scoped rather than guessing a tenant.
+
+---
+
+## 8. Phase 4-5 verification record
+
+`VERSION` in the root `.env` is the single switch. Verified in **both** modes on
+branch `6-host-profile-config`.
+
+### How one value drives the whole project
+
+| Layer | How it learns the version |
+|---|---|
+| Backend | `settings.APP_VERSION` reads `VERSION`; `hosts.get_profile()` picks the profile |
+| Repository root | `DV_BASE_PATH_55` / `DV_BASE_PATH_60`, chosen by the profile itself |
+| Frontend | `GET /app-config` at startup, then `src/auth/` picks its strategy |
+
+The frontend needs no rebuild and no second setting. `VITE_APP_VERSION` exists
+as an optional build-time pin and is empty by default. If `/app-config` is
+unreachable the app falls back to detecting the host from the URL shape
+(`_at`/`_lid` means 6.0, bare `loginId` means 5.5), so a proxy misconfiguration
+degrades to a working guess instead of an empty screen.
+
+Base path is resolved **per profile**, not once from the module-level `VERSION`.
+The first cut got this wrong: `get_profile("6.0")` was handed the 5.5 root, and
+because the two layouts are incompatible every lookup failed in a way that read
+like a permissions problem. `HostProfile.base_path` now derives from the
+profile, so a profile can never be given the other host's tree.
+
+### VERSION=5.5 (unchanged from the Phase 0-3 record)
+
+`/app-config` -> `{version: 5.5, profile: iDEAL 5.5, requires_tenant: false}`;
+`/auth/my-returns?loginId=iris810` -> 24 forms; all paths under `D:\Repo5.5`;
+a stray `tenantId` is ignored.
+
+### VERSION=6.0, tenant 1001, DV_AUTH_ENABLED=true
+
+| Check | Result |
+|---|---|
+| `/app-config` | `{version: 6.0, profile: iDEAL 6.0, requires_tenant: true}` |
+| Paths | all under `D:\Repo6\1001\DataBase\` + `D:\Repo6\1001\Instance\` |
+| `Return.xml` parsed (`<Document>/<Row>`) | 27 returns |
+| Allowed forms for `vaibhav@irisindia.net` | **23** — resolved through the comma delimiter (B1 fixed) |
+| `is_return_allowed(2029 / 9999)` | `True` / `False` |
+| `find_return_and_tables("QCB_F014_Breakdown of Funding by geography")` | 200; `id=4080`, `freq=D`, mapping `4080\TableMapping.xml`, tables `QCB_F014_FILING_INFO`, `QCB_F014_FUNDING_GEO` |
+| `Query.xml` fallback (return 4061) | picks `Query.xml`; others pick `XML_Query.xml`; unknown return -> `None` |
+| `period_name_for_freq('Q')` | `None` — correct, 6.0 has no frequency column (B5) |
+| `can_generate_instance` | `False`, logged as INDETERMINATE (B3 — awaiting Q1) |
+| `/health` | reports paths as tenant-scoped rather than inventing a tenant |
+
+Tenant validation, which turns silent empty results into diagnosable errors:
+
+| Tenant | Outcome |
+|---|---|
+| `1001` | OK |
+| `1002` | 403 — active in registry, repository not provisioned (only `User.xml` exists) |
+| `1003` | 403 — active in registry, no folder at all |
+| `1000` | 403 — folder exists but not in the registry |
+| *(none)* | 401 — `tenantId` required |
+
+### Latent search bug fixed (affected 5.5 too)
+
+Two returns were unfindable by their own identity, in **both** hosts:
+
+1. **Exact-name search failed for any name containing a stop word.**
+   `extract_keyword()` strips words like "of"/"to"/"for" from the query but not
+   from the stored name, so `"Credit to Women(Excel)"` searched as
+   `creditwomenexcel` against a field holding `credittowomenexcel`. This was not
+   cosmetic: the UI resolves an ambiguous search by re-querying with the chosen
+   candidate's **full name**, so those returns could not be opened at all. It hit
+   25 names in 5.5 and most 6.0 names, whose titles are prose.
+
+2. **The numeric `Id` was not searchable.** Only `ReturnId` was indexed, which is
+   a short code (`R145`), so searching `2007` or `6001` returned nothing.
+
+Both fixed by adding the return's `Id` and the keyword-form of its `Name` to the
+searchable fields in `_normalised_returns()`. After the fix, with a valid
+`Returns.xml`: `search("2007")` scores an exact match on return 2007, and the
+exact-name round-trip succeeds for **280 of 281** 5.5 returns. The one exception
+is correct behaviour, not a failure — `test-nbfc` (4071) and `Test_NBFC` (4073)
+normalise identically, so a tie and a clarification prompt is the right answer.
+The equivalent 6.0 check leaves 2 of 27 asking for clarification, both genuine
+substring ambiguities (`F024`, `F027`).
+
+**This changes 5.5 search behaviour** — deliberately, since it makes returns
+findable that previously were not. A search that used to score 75 and prompt may
+now score 100 and auto-select. Worth a regression pass with real user queries
+before this reaches production.
+
+### Local 6.0 repository is internally inconsistent
+
+`D:\Repo6\1001\DataBase\Return.xml` declares returns **4076-4119**, but the
+per-return folders on disk are **1001, 2029, 2034, 2065, 2066, 4061-4071, 4080,
+5001**. Only **4080** appears in both, which is why it is the only return that
+resolves to a table mapping. The masters and the return folders are from
+different vintages of the repository. Nothing to fix in code — but 6.0 cannot be
+meaningfully load-tested against this copy, and the error message now names both
+the `TblPath` tried and the query-file candidates so the gap is obvious rather
+than looking like a bug.
+
+Note also that return 2034's `XML_Query.xml` targets an Excel range
+(`from [General Information$A5:B5]`) rather than a database table, so extracting
+zero tables from it is correct.

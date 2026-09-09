@@ -2,10 +2,10 @@
  * LayoutContainer — main layout orchestrator.
  *
  * Authorization flow:
- *   1. On mount → calls GET /auth/my-returns?loginId=...
+ *   1. On mount → calls GET /auth/my-returns (auth params from src/auth/)
  *      → stores allowedFormIds as a Set (e.g. Set{"2001","2007","4016",...})
  *
- *   2. On search → calls GET /variance/find?return_name=...&loginId=...
+ *   2. On search → calls GET /variance/find?return_name=...
  *      → filters the results against allowedFormIds BEFORE showing to user:
  *          • Single result  → shown only if return_id is in allowedFormIds
  *          • Candidates list → filtered to only allowed return_ids
@@ -70,7 +70,10 @@ function saveHiddenCols(tableName, hidden) {
   }
 }
 
-export default function LayoutContainer({ loginId = '', uid = '' }) {
+// loginId/tenantId are the RESOLVED identity from src/auth/, passed in for
+// display and access gating only — api.js reads them from the auth module
+// itself, so no call site needs to forward them.
+export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' }) {
 
   // ─── Allowed form IDs for this user ──────────────────────────────────────
   // Populated once on mount from GET /auth/my-returns
@@ -223,7 +226,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setDatesLoading(true)
     setSelectedDates([]) // stale dates from a previous table must not linger
 
-    getAvailableDates(returnInfo.return_id, returnInfo.table_mapping_path, tableName, loginId)
+    getAvailableDates(returnInfo.return_id, returnInfo.table_mapping_path, tableName)
       .then((data) => {
         if (cancelled) return
         setAvailableDates(data.dates || [])
@@ -250,7 +253,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     }
 
     setAuthLoading(true)
-    getMyReturns(loginId)
+    getMyReturns()
       .then((data) => {
         // data.allowed_forms = ["2001", "2007", "4016", ...]
         setAllowedFormIds(new Set(data.allowed_forms || []))
@@ -325,14 +328,14 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setNlColumns(null)
 
     try {
-      const raw  = await findReturnTables(name, loginId)
+      const raw  = await findReturnTables(name)
       const info = filterByAccess(raw)         // ← filter here
 
       if (info.candidates) {
         // If only 1 allowed candidate, auto-select instead of showing pick-list
         if (info._autoSelect) {
           const only = info.candidates[0]
-          const full = await findReturnTables(only.return_name, loginId)
+          const full = await findReturnTables(only.return_name)
           setReturnInfo(full)
           setTableName(full.tables?.[0]?.table_name ?? '')
           setStep(VARIANCE_STEPS.TABLE)
@@ -358,11 +361,11 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setCandidates(null)
     setNlColumns(null)
     try {
-      const info = await findReturnTables(candidate.return_name, loginId)
+      const info = await findReturnTables(candidate.return_name)
       if (info.candidates) {
         const best = info.candidates.find(c => c.has_mapping && isAllowed(c.return_id))
         if (!best) throw new Error('No accessible table mapping available for this return.')
-        const retry = await findReturnTables(best.return_name, loginId)
+        const retry = await findReturnTables(best.return_name)
         setReturnInfo(retry)
         setTableName(retry.tables?.[0]?.table_name ?? '')
       } else {
@@ -417,7 +420,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
         comparison_dates:   selectedDates.length > 1 ? selectedDates : undefined,
         selected_columns:   selectedColumns,
         comparison_mode:    comparisonMode,
-      }, loginId)
+      })
       setResult(res)
       // A manual compute replaces the table on screen, so the "Understood as"
       // chips from an earlier NLP query would now be describing a different
@@ -508,7 +511,7 @@ export default function LayoutContainer({ loginId = '', uid = '' }) {
     setError('')
 
     try {
-      const res = await resolveNlQuery(trimmed, loginId, {
+      const res = await resolveNlQuery(trimmed, {
         dimension:            activeClarification?.dimension,
         clarificationAnswer:  selectedOption?.id,
         resolvedContext:      activeClarification?.resolvedContext,
