@@ -18,6 +18,7 @@ from .data.models import NLResolveRequest, VarianceComputeRequest
 from .data import service
 from .data.db import execute_query
 from .auth.deps import require_login, require_return_access
+from .hosts import HostProfileError
 from .data.report_lookup import _parse_returns
 
 # ── Logging ────────────────────────────────────────────────────────────────────
@@ -60,6 +61,23 @@ app.add_middleware(
 # This handler makes every such crash self-reporting: the full traceback goes
 # to logs/<date>.log and the exception type/message reaches the client as a
 # normal JSON `detail`.
+# A HostProfileError means the request cannot address a repository — no tenant,
+# an unknown tenant, an unprovisioned one. That is a configuration or
+# authorisation fault with a message written for an operator, so it must not
+# surface as "Unexpected server error"; 400 keeps it distinguishable from the
+# 403s that require_login raises for a *known but disallowed* caller.
+@app.exception_handler(HostProfileError)
+async def host_profile_error_handler(request: Request, exc: HostProfileError) -> JSONResponse:
+    logger.warning(
+        "[main] 400 %s %s | host profile cannot serve this request | %s",
+        request.method, request.url.path, exc,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(exc)},
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception(

@@ -123,6 +123,16 @@ AUTH_ENABLED: bool = _flag("DV_AUTH_ENABLED", "true")
 # TTL for the resolved login -> allowed-returns cache.
 AUTH_TTL_SEC: float = float(os.getenv("AUTH_TTL_SEC", "3600"))
 
+# Tenant assumed when auth is bypassed and the caller sent no tenantId.
+#
+# Only consulted while AUTH_ENABLED is false. Under 6.0 every repository path is
+# rooted at a tenant, so "no auth" does not imply "no tenant" the way it does
+# under 5.5 — without this, disabling auth for local work made every request
+# fail on a missing tenantId, which is a confusing way to learn that the dev
+# bypass does not cover path resolution. Ignored entirely when auth is on, so it
+# can never widen access in a real deployment.
+DEV_TENANT_ID: str = os.getenv("DV_DEV_TENANT_ID", "").strip()
+
 # ── API base path ──────────────────────────────────────────────────────────────
 # Set DV_API_BASE_PATH=/Datavariance/api when served behind a reverse proxy.
 API_BASE_PATH: str = os.getenv("DV_API_BASE_PATH", "").strip()

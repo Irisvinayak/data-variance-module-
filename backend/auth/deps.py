@@ -17,7 +17,7 @@ import logging
 
 from fastapi import HTTPException, Query, status
 
-from ..config import AUTH_ENABLED, RequestContext
+from ..config import AUTH_ENABLED, DEV_TENANT_ID, RequestContext
 from ..hosts import HostProfileError, get_profile
 from .service import get_allowed_form_ids, is_return_allowed
 
@@ -39,6 +39,31 @@ def require_login(
     profile = get_profile()
 
     if not AUTH_ENABLED:
+        # The bypass skips *authorisation*, but path resolution still needs a
+        # tenant under 6.0. Fill it from DV_DEV_TENANT_ID so local work behaves,
+        # and say so loudly rather than letting a later failure look unrelated.
+        if profile.requires_tenant and not ctx.tenant_id:
+            if not DEV_TENANT_ID:
+                logger.error(
+                    "[AUTH_DEP] AUTH_DISABLED and no tenantId supplied, but %s is "
+                    "tenant-scoped and DV_DEV_TENANT_ID is unset",
+                    profile.name,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"{profile.name} needs a tenant to locate its repository. "
+                        "Auth is disabled (DV_AUTH_ENABLED=false) and no tenantId was "
+                        "sent, so set DV_DEV_TENANT_ID in .env (e.g. 1001) or pass "
+                        "?tenantId= on the request."
+                    ),
+                )
+            ctx = RequestContext(login_id=ctx.login_id, tenant_id=DEV_TENANT_ID)
+            logger.warning(
+                "[AUTH_DEP] AUTH_DISABLED — assuming DV_DEV_TENANT_ID=%r | %s",
+                DEV_TENANT_ID, ctx,
+            )
+
         logger.warning("[AUTH_DEP] AUTH_DISABLED — bypassing login validation | %s", ctx)
         return ctx
 
