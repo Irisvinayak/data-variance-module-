@@ -601,7 +601,13 @@ def get_available_dates(
     """
     table_meta = _get_table_metadata(return_id, return_tbl_path, table_name, ctx)
     filter_col = table_meta["filter_col"]
-    resolved_table_name = _resolve_physical_table_name(return_id, table_name)
+    # ctx was missing here, so this call fell back to its ANONYMOUS default.
+    # Harmless under 5.5 (paths never depend on identity there), but under 6.0
+    # ANONYMOUS carries no tenant, so is_excel's fallback lookup
+    # (get_is_excel_by_return_code) hit HostProfileError on every call — this
+    # is the sole reason GET /variance/dates 500'd for every 6.0 return while
+    # /variance/find, which threads ctx correctly, worked fine.
+    resolved_table_name = _resolve_physical_table_name(return_id, table_name, ctx=ctx)
 
     sql = (
         f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
@@ -683,7 +689,12 @@ def compute_variance(
         return_id, report_freq, table_name, reporting_date, reporting_period,
     )
 
-    resolved_table_name = _resolve_physical_table_name(return_id, table_name, return_meta=return_meta)
+    # ctx passed even though return_meta is always set here (so the
+    # ctx-dependent is_excel lookup is not reached today) — leaving it off
+    # makes correctness depend on a caller invariant that nothing enforces.
+    resolved_table_name = _resolve_physical_table_name(
+        return_id, table_name, return_meta=return_meta, ctx=ctx
+    )
 
     logger.debug("[table_resolution] ReturnCode=%s", return_id)
     logger.debug("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)

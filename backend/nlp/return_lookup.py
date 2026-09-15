@@ -20,6 +20,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from ..config import ANONYMOUS, RequestContext
 from ..data import query_xml_lookup
 from ..data.report_lookup import _parse_returns
 from ..data.service import _load_table_mapping
@@ -27,17 +28,21 @@ from ..data.service import _load_table_mapping
 logger = logging.getLogger(__name__)
 
 _TTL = float(os.getenv("DV_NLP_RETURN_LOOKUP_TTL_SEC", "3600"))
-_cache: Dict[str, Any] | None = None
-_cache_ts: float = 0.0
+# Keyed by tenant ("" under 5.5). This map is built from ONE tenant's
+# Return.xml and table-mapping files; a single shared slot would hand
+# whichever tenant warmed it first to every other tenant afterwards —
+# a data-isolation fault rather than mere staleness.
+_cache: Dict[str, Dict[str, Any]] = {}
+_cache_ts: Dict[str, float] = {}
 _lock = threading.Lock()
-_rebuild_in_progress = False
+_rebuild_in_progress: set = set()
 
 
 def _strip_dp_suffix(table_name: str) -> str:
     return table_name[:-3] if table_name.upper().endswith("_DP") else table_name
 
 
-def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
+def _build_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, Any]]]:
     """Walk every <Return> in Returns.xml and build
     {UPPERCASE base table name (no _DP suffix): [candidate return metadata, ...]}.
 
@@ -61,7 +66,7 @@ def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
     correctly. See _select_candidate()."""
     lookup: Dict[str, List[Dict[str, Any]]] = {}
 
-    for ret in _parse_returns():
+    for ret in _parse_returns(ctx):
         return_id = ret.get("Id")
         return_name = ret.get("Name", "")
         report_freq = ret.get("RepFreq", "")
@@ -70,7 +75,7 @@ def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
             continue
 
         try:
-            root, resolved_path = _load_table_mapping(return_id, tbl_path)
+            root, resolved_path = _load_table_mapping(return_id, tbl_path, ctx)
         except Exception as exc:
             logger.warning(
                 "[nlp.return_lookup] Skipping return_id=%s (%s) — _load_table_mapping raised: %s",
@@ -111,7 +116,7 @@ def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
         # TableName attribute is empty (the CIMS_ALE returns). Either way the
         # return's SELECT statements in XML_Query.xml still name its tables.
         if rows_registered == 0:
-            for key, meta in query_xml_lookup.tables_for_return(return_id).items():
+            for key, meta in query_xml_lookup.tables_for_return(return_id, ctx).items():
                 base_key = _strip_dp_suffix(key).upper()
                 # Recorded as one more CANDIDATE rather than skipped-if-present:
                 # the old "if base_key in lookup: continue" made this path
@@ -136,7 +141,7 @@ def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
                     "[nlp.return_lookup] return_id=%s (%s) — no usable table mapping "
                     "(tbl_path=%r, tried %r); recovered %d table(s) from %s",
                     return_id, return_name, tbl_path, resolved_path,
-                    rows_registered, query_xml_lookup.XML_QUERY_FILENAME,
+                    rows_registered, query_xml_lookup.query_xml_label(ctx),
                 )
             else:
                 logger.warning(
@@ -144,7 +149,7 @@ def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
                     "(tbl_path=%r, tried %r) and no %s fallback. Every table under this "
                     "return is unresolvable via get_return_for_table().",
                     return_id, return_name, tbl_path, resolved_path,
-                    query_xml_lookup.XML_QUERY_FILENAME,
+                    query_xml_lookup.query_xml_label(ctx),
                 )
 
     contested = {k: v for k, v in lookup.items() if len(v) > 1}
@@ -162,24 +167,24 @@ def _build_lookup() -> Dict[str, List[Dict[str, Any]]]:
     return lookup
 
 
-def _rebuild_in_background() -> None:
+def _rebuild_in_background(ctx: RequestContext) -> None:
     """Runs _build_lookup() off the request thread and swaps the cache in
     when done. Any exception just leaves the stale cache in place — a table
     lookup failing entirely is worse than serving slightly-stale metadata."""
-    global _cache, _cache_ts, _rebuild_in_progress
+    key = ctx.tenant_id
     try:
-        new_lookup = _build_lookup()
+        new_lookup = _build_lookup(ctx)
         with _lock:
-            _cache = new_lookup
-            _cache_ts = time.monotonic()
+            _cache[key] = new_lookup
+            _cache_ts[key] = time.monotonic()
     except Exception:
         logger.exception("[nlp.return_lookup] Background cache rebuild failed — keeping stale cache")
     finally:
         with _lock:
-            _rebuild_in_progress = False
+            _rebuild_in_progress.discard(key)
 
 
-def _get_lookup() -> Dict[str, List[Dict[str, Any]]]:
+def _get_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, Any]]]:
     """As the number of returns grows, _build_lookup()'s O(returns) XML
     read+parse cost grows with it. Rebuilding synchronously on whichever
     user's request happens to land right after the TTL expires — the
@@ -193,22 +198,27 @@ def _get_lookup() -> Dict[str, List[Dict[str, Any]]]:
     gets the same stale-but-fast answer instead of paying for or piling up
     rebuilds. Only the very first call (no cache yet) blocks, since there's
     nothing valid to serve in the meantime."""
-    global _cache, _cache_ts, _rebuild_in_progress
+    key = ctx.tenant_id
 
-    if _cache is None:
+    if key not in _cache:
         with _lock:
-            if _cache is None:  # re-check: another thread may have built it while we waited for the lock
-                _cache = _build_lookup()
-                _cache_ts = time.monotonic()
-        return _cache
+            if key not in _cache:  # re-check: another thread may have built it while we waited for the lock
+                _cache[key] = _build_lookup(ctx)
+                _cache_ts[key] = time.monotonic()
+        return _cache[key]
 
-    if (time.monotonic() - _cache_ts) >= _TTL:
+    if (time.monotonic() - _cache_ts.get(key, 0.0)) >= _TTL:
         with _lock:
-            if not _rebuild_in_progress:
-                _rebuild_in_progress = True
-                threading.Thread(target=_rebuild_in_background, daemon=True).start()
+            if key not in _rebuild_in_progress:
+                _rebuild_in_progress.add(key)
+                # ctx is captured explicitly: a new thread does not inherit
+                # the request's context, so the rebuild must be told which
+                # tenant it is rebuilding for.
+                threading.Thread(
+                    target=_rebuild_in_background, args=(ctx,), daemon=True,
+                ).start()
 
-    return _cache
+    return _cache[key]
 
 
 def _select_candidate(
@@ -274,7 +284,8 @@ def _select_candidate(
 
 
 def get_return_for_table(
-    table_name: str, hint_text: Optional[str] = None
+    table_name: str, hint_text: Optional[str] = None,
+    ctx: RequestContext = ANONYMOUS,
 ) -> Optional[Dict[str, Any]]:
     """Return {"return_id", "return_name", "report_freq", "filter_col",
     "comp_filter_col_names"} for `table_name`, or None if it isn't tied to
@@ -284,15 +295,17 @@ def get_return_for_table(
     (e.g. its embedding-index metadata) — table names are not unique across
     returns and the hint is what disambiguates them. See _select_candidate."""
     key = _strip_dp_suffix(table_name).upper()
-    candidates = _get_lookup().get(key)
+    candidates = _get_lookup(ctx).get(key)
     if not candidates:
         return None
     return _select_candidate(table_name, candidates, hint_text)
 
 
-def candidates_for_table(table_name: str) -> List[Dict[str, Any]]:
+def candidates_for_table(
+    table_name: str, ctx: RequestContext = ANONYMOUS
+) -> List[Dict[str, Any]]:
     """Every return claiming `table_name` (diagnostics / ambiguity reports)."""
-    return list(_get_lookup().get(_strip_dp_suffix(table_name).upper(), []))
+    return list(_get_lookup(ctx).get(_strip_dp_suffix(table_name).upper(), []))
 
 
 def invalidate() -> None:

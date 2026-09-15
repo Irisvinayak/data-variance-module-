@@ -156,17 +156,47 @@ async def nlp_health(check_model: bool = False) -> dict:
         except Exception as exc:
             embed_model = f"FAILED: {type(exc).__name__}: {exc}"
 
+    # Reported first and on its own: a whole folder missing for the configured
+    # version otherwise shows up as five separate "index file MISSING" lines,
+    # which reads like a broken build rather than "this deployment has no
+    # embeddings for the version it is set to". The two need different fixes.
+    dir_problem = nlp_config.index_dir_problem()
+
     problems = (
-        [f"package {k}: {v}" for k, v in packages.items() if v != "ok"]
+        ([dir_problem] if dir_problem else [])
+        + [f"package {k}: {v}" for k, v in packages.items() if v != "ok"]
         + [f"index file {k}: {v}" for k, v in index_files.items() if v == "MISSING"]
         + ([f"retriever import: {retriever_import}"] if retriever_import != "ok" else [])
         + ([f"embedding model: {embed_model}"] if embed_model.startswith("FAILED") else [])
     )
 
+    # Which index folder is in use is decided by VERSION: 5.5 covers the CIMS
+    # returns, 6.0 the QCB ones. They share no tables, so serving one host from
+    # the other's index does NOT fail loudly - retrieval just returns the
+    # closest wrong table and the generated SQL names something that does not
+    # exist for that host. Reporting the version beside the folder is what makes
+    # that mismatch visible instead of silent.
+    from .config import settings as _settings
+
+    index_tables = None
+    try:
+        with open(nlp_config.SCHEMA_JSON_PATH, encoding="utf-8") as fh:
+            import json as _json
+            index_tables = len(_json.load(fh))
+    except Exception:
+        pass
+
     return {
         "status":           "ok" if not problems else "degraded",
         "problems":         problems,
+        "app_version":      _settings.APP_VERSION,
         "index_dir":        nlp_config.INDEX_DIR,
+        "index_dir_source": (
+            "DV_NLP_INDEX_DIR override"
+            if nlp_config.INDEX_DIR_OVERRIDE
+            else "VERSION=" + _settings.APP_VERSION
+        ),
+        "index_tables":     index_tables,
         "embed_model_name": nlp_config.EMBED_MODEL,
         "packages":         packages,
         "index_files":      index_files,
@@ -363,6 +393,14 @@ async def variance_compute(
     except KeyError as exc:
         logger.error("[main] 404 KeyError | %s", exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except HostProfileError as exc:
+        # HostProfileError subclasses RuntimeError, so it must be caught here
+        # explicitly — this route's own except RuntimeError below would
+        # otherwise shadow it and report a configuration/authorisation fault
+        # (unknown tenant, tenant not provisioned) as a generic 500, hiding
+        # the actual, operator-actionable message inside a scary wrapper.
+        logger.warning("[main] 400 HostProfileError | %s", exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RuntimeError as exc:
         logger.error("[main] 500 RuntimeError | %s", exc)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
@@ -409,6 +447,14 @@ async def variance_dates(
     except KeyError as exc:
         logger.error("[main] 404 KeyError | %s", exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except HostProfileError as exc:
+        # HostProfileError subclasses RuntimeError, so it must be caught here
+        # explicitly — this route's own except RuntimeError below would
+        # otherwise shadow it and report a configuration/authorisation fault
+        # (unknown tenant, tenant not provisioned) as a generic 500, hiding
+        # the actual, operator-actionable message inside a scary wrapper.
+        logger.warning("[main] 400 HostProfileError | %s", exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RuntimeError as exc:
         logger.error("[main] 500 RuntimeError | %s", exc)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
@@ -512,7 +558,7 @@ def _find_named_return_ids(query: str, ctx: RequestContext) -> list:
     # None as "no auth scoping", whereas an empty set means "this user may
     # access nothing", and those must not be confused.
     allowed = (get_allowed_form_ids(ctx) or set()) if AUTH_ENABLED else None
-    return analyze_query(query, allowed_return_ids=allowed).return_ids
+    return analyze_query(query, allowed_return_ids=allowed, ctx=ctx).return_ids
 
 
 def _build_return_clarification(query: str, ctx: RequestContext, restrict_to: list | None = None) -> dict:
@@ -551,7 +597,7 @@ def _build_return_clarification(query: str, ctx: RequestContext, restrict_to: li
     # untrimmed whole-table result. Listing all 281 authorized returns when 3
     # are indexed made picking a dud the overwhelmingly likely outcome.
     # (No-op when coverage can't be determined — see indexed_returns.)
-    returns = indexed_returns.filter_returns(returns)
+    returns = indexed_returns.filter_returns(returns, ctx=ctx)
 
     if restrict_to:
         restrict_set = set(restrict_to)
@@ -689,7 +735,7 @@ def _shortlist_for_return(
     if return_row is None:
         return None
 
-    table_names = indexed_returns.tables_for_return(return_id)
+    table_names = indexed_returns.tables_for_return(return_id, ctx)
     if not table_names:
         logger.warning(
             "[main] _shortlist_for_return | return_id=%s | the embedding index covers "
@@ -707,7 +753,7 @@ def _shortlist_for_return(
     tables: list = []
     for name in table_names:
         hint = " ".join(r.get("text", "") for r in hint_records.get(name.upper(), [])) or None
-        ret = return_lookup.get_return_for_table(name, hint_text=hint) or {}
+        ret = return_lookup.get_return_for_table(name, hint_text=hint, ctx=ctx) or {}
         tables.append({
             "table":       name,
             "return_id":   return_id,
@@ -769,7 +815,7 @@ def _shortlist_for_table(
     hint_records = meta_by_table(TABLE_INDEX_PATH, TABLE_META_PATH).get(table_name.upper(), [])
     hint_text = " ".join(r.get("text", "") for r in hint_records) or None
 
-    ret = return_lookup.get_return_for_table(table_name, hint_text=hint_text)
+    ret = return_lookup.get_return_for_table(table_name, hint_text=hint_text, ctx=ctx)
     if not ret or not ret.get("return_id"):
         return None
 
@@ -873,9 +919,17 @@ async def variance_nlresolve(
     from .auth.service import get_allowed_form_ids as _get_allowed
     from .config import AUTH_ENABLED as _auth_on
 
+    # None (not an empty set) when auth is bypassed: analyze_query reads None as
+    # "no auth scoping" and an empty set as "this user may access nothing".
+    _allowed_ids = (_get_allowed(ctx) or set()) if _auth_on else None
+
     analysis = _nlp_stage(
-        "query_analysis", ctx, query, analyze_query, query,
-        allowed_return_ids=((_get_allowed(ctx) or set()) if _auth_on else None),
+        # _nlp_stage's own `ctx` parameter is for its logging only, so the ctx
+        # the analyzer reads the repository with must go through *args like the
+        # other stages below do — passing it as ctx=ctx would bind to
+        # _nlp_stage itself and never reach analyze_query.
+        "query_analysis", ctx, query,
+        analyze_query, query, _allowed_ids, ctx,
     )
     interpretation = analysis.to_interpretation()
 
@@ -1150,8 +1204,9 @@ async def variance_nlresolve(
     report_freq = shortlist_table_meta.get("report_freq") or found.get("report_freq") or "M"
 
     try:
-        reporting_date, reporting_period = resolve_reporting_date(
+        reporting_date, reporting_period, comparison_dates = resolve_reporting_date(
             query, found["return_id"], resolved_table["table_name"], filter_col, report_freq,
+            ctx=ctx,
         )
     except ValueError as exc:
         logger.warning("[main] 404 /variance/nlresolve | %s | date resolution failed: %s", ctx, exc)
@@ -1182,6 +1237,11 @@ async def variance_nlresolve(
             execute_query_fn=execute_query,
             connection_string=None,
             selected_columns=None,
+            # Real dates from the table when the resolver found any, so the
+            # comparison lands on rows that exist. Empty list -> omitted, and
+            # compute_variance falls back to deriving them from reporting_period
+            # exactly as before.
+            comparison_dates=comparison_dates or None,
             ctx=ctx,
         )
     except FileNotFoundError as exc:
@@ -1190,6 +1250,9 @@ async def variance_nlresolve(
     except KeyError as exc:
         logger.error("[main] 404 /variance/nlresolve | %s | %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except HostProfileError as exc:
+        logger.warning("[main] 400 /variance/nlresolve | %s | %s", ctx, exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RuntimeError as exc:
         logger.error("[main] 500 /variance/nlresolve | %s | %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

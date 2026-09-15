@@ -102,7 +102,7 @@ def get_relevant_schema(
     # score without discriminating. Callers that don't supply one get the old
     # behavior — normalize the whole query and search that.
     if analysis is None:
-        analysis = analyze_query(query)
+        analysis = analyze_query(query, ctx=ctx)
 
     normalized_query = analysis.metric_text
     if normalized_query != query:
@@ -246,6 +246,17 @@ def get_relevant_schema(
         lexical_overlap_by_table[tbl] = overlap
         scores[tbl] += overlap * 0.03
 
+    # Demote each return's key-value submission header (FILING_INFO and
+    # friends) unless the query actually asks for filing metadata. Its text is
+    # short and led by the return name, so naming the return makes it out-score
+    # the real data table whose text is spread over dozens of columns. Same
+    # rule the scoped path applies — see ranking.metadata_demotion.
+    for tbl in list(scores):
+        penalty = ranking.metadata_demotion(tbl, normalized_query)
+        if penalty:
+            scores[tbl] -= penalty
+            logger.debug("[nlp.retriever] demoted metadata table %s by %.2f", tbl, penalty)
+
     # Snapshot the fused score with the QA strong-match bonus (+10.0) removed,
     # for confidence scoring only — that bonus deliberately dwarfs every other
     # signal so it can win the ranking below, but it would otherwise saturate
@@ -291,7 +302,7 @@ def get_relevant_schema(
     for tbl in ranked_candidates:
         meta = all_table_meta[tbl]
         hint = " ".join(texts_by_table.get(tbl, []))
-        ret = return_lookup.get_return_for_table(tbl, hint_text=hint or None)
+        ret = return_lookup.get_return_for_table(tbl, hint_text=hint or None, ctx=ctx)
         if ret:
             meta.update(ret)
         else:

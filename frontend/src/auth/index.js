@@ -35,12 +35,37 @@ function normalizeVersion(raw) {
 }
 
 async function fetchBackendVersion() {
+  // Failure here is NOT benign, so it is never swallowed silently. The app
+  // falls back to guessing the version from the URL shape, and a wrong guess
+  // against a 6.0 backend is guaranteed-broken rather than merely degraded:
+  // strategy55 hardcodes tenantId to '', so every single request 401s with
+  // "tenantId required" — an error that points at the URL, several layers away
+  // from the actual cause (an unreachable /app-config, e.g. missing from the
+  // dev-server proxy list, or a reverse proxy that does not forward it).
+  const url = `${BASE_URL}/app-config`
   try {
-    const res = await fetch(`${BASE_URL}/app-config`, { headers: { Accept: 'application/json' } })
-    if (!res.ok) return null
+    const res = await fetch(url, { headers: { Accept: 'application/json' } })
+    if (!res.ok) {
+      console.error(
+        `[auth] GET ${url} -> ${res.status}. Cannot read the backend's VERSION, ` +
+        'so the host version will be GUESSED from the URL. If the backend is ' +
+        'running 6.0 this guess will be wrong and every request will 401. ' +
+        'Check that /app-config is forwarded to the API (vite.config.js proxy, ' +
+        'or the reverse-proxy rules in production).',
+      )
+      return null
+    }
     const body = await res.json()
-    return normalizeVersion(body?.version)
-  } catch {
+    const version = normalizeVersion(body?.version)
+    if (!version) {
+      console.error('[auth] /app-config returned no usable version:', body)
+    }
+    return version
+  } catch (err) {
+    console.error(
+      `[auth] GET ${url} failed (${err?.message ?? err}). Falling back to ` +
+      'guessing the host version from the URL — see above for why that is risky.',
+    )
     return null
   }
 }
@@ -59,7 +84,20 @@ function autoDetectVersion() {
  */
 export async function bootstrapAuth() {
   const pinned = normalizeVersion(import.meta.env.VITE_APP_VERSION)
-  const version = pinned ?? (await fetchBackendVersion()) ?? autoDetectVersion() ?? '5.5'
+  const fromBackend = pinned ? null : await fetchBackendVersion()
+  const guessed = pinned ?? fromBackend ?? autoDetectVersion() ?? '5.5'
+  const version = guessed
+
+  if (!pinned && !fromBackend) {
+    // Reached only when the authoritative source was unavailable. Say so
+    // plainly — an operator seeing a 401 needs to know the version was a
+    // guess, not a fact, because that reframes the whole investigation.
+    console.warn(
+      `[auth] Host version could not be read from the backend; GUESSED "${version}" ` +
+      'from the URL shape. If this is wrong, authentication will fail in ways ' +
+      'that look like bad credentials rather than a misconfigured proxy.',
+    )
+  }
 
   const strategy = STRATEGIES[version] ?? strategy55
   const resolved = strategy.resolve()

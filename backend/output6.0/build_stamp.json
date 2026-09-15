@@ -1,0 +1,92 @@
+{
+  "published_at": "2026-09-15T05:46:10+00:00",
+  "label": "QCB 6.0 corrected table names + row labels",
+  "src": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging",
+  "dest": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\current",
+  "returns": [
+    "QCB_F010_Maturity Ladder of Assets & Liabilities",
+    "QCB_F013_Breakdown of exposures by geography",
+    "QCB_F014_Breakdown of Funding by geography",
+    "QCB_F015_Foreign Currency Net Open Positions"
+  ],
+  "tables": 10,
+  "qa_pairs": 0,
+  "files": [
+    "concept_map.json",
+    "taxonomies.json",
+    "description_samples.json",
+    "label_columns_cache.json",
+    "needs_trim.json",
+    "bm25_table_index.pkl",
+    "table_index.faiss",
+    "table_meta.pkl",
+    "column_index.faiss",
+    "column_meta.pkl",
+    "row_label_index.faiss",
+    "row_label_meta.pkl",
+    "concept_index.faiss",
+    "concept_meta.pkl",
+    "qa_pairs.json",
+    "schema.json",
+    "build_report.json"
+  ],
+  "removed_stale": [],
+  "checksums": {
+    "concept_map.json": "4206d3da0130dc504a9b8c50ea68648b38a9e78e6459879e37636fb79e7512c5",
+    "taxonomies.json": "10a48e1accb5c6c2e6aaea478ea3f6e82dabf15d287bfba8bb20bc2f283c3b60",
+    "description_samples.json": "4ed5aaae597f01edc303a0c1757362704621a34cb722538109576a95de9ea102",
+    "label_columns_cache.json": "04d36d56f8a4a414d91b23f1420d155cb7ba1562f3a94a59016c403db024f7e6",
+    "needs_trim.json": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "bm25_table_index.pkl": "d95db0648e9e2147f51227d3618ef05242cf87991579b8781d671a03e9c56047",
+    "table_index.faiss": "27161d029835b7fdfe002c304231fc9ccef9e89bc3cc68f03d45401f0582c640",
+    "table_meta.pkl": "e1df9cd2816bc2ee6aae51089b558b7567012edb68b98725a1c4db2b46e86e08",
+    "column_index.faiss": "4e18721eca38e03bfb07833b8a8b44eb87ab700c317d390cb8b287247e3ba565",
+    "column_meta.pkl": "239378bc102641ea5ccf5aef28ad1cc33a1e32c4d87fc3a6f30cecdb342d0895",
+    "row_label_index.faiss": "7a1543babdb116601d93b64c8e7eaafb9762d477c4dffb79c54cfec249c184d7",
+    "row_label_meta.pkl": "10263898f9d5442ae902ba939d5c60b4031ff2ad135785ad1a47c33510f18ae2",
+    "concept_index.faiss": "6190481130059c702768ed08f1cd9a41ffcc9ae4f4fd2ae810fe0440379d4d1e",
+    "concept_meta.pkl": "542f0193dd8db213f44584b37cf9dc34d256bfa4fbab320aff657b9140555ad0",
+    "qa_pairs.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "schema.json": "9cf54ca8d1d3e3abf615dbd5b024c86e213625f0d2080d645267833465799228",
+    "build_report.json": "845f97050c1601fbfe8f284d20d560564edc44d66e6e42b42ded6ec218446ac6"
+  },
+  "verification": {
+    "ok": true,
+    "src": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging",
+    "problems": [],
+    "files": [
+      "concept_map.json",
+      "taxonomies.json",
+      "description_samples.json",
+      "label_columns_cache.json",
+      "needs_trim.json",
+      "bm25_table_index.pkl",
+      "table_index.faiss",
+      "table_meta.pkl",
+      "column_index.faiss",
+      "column_meta.pkl",
+      "row_label_index.faiss",
+      "row_label_meta.pkl",
+      "concept_index.faiss",
+      "concept_meta.pkl",
+      "qa_pairs.json",
+      "schema.json",
+      "build_report.json"
+    ],
+    "returns": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "tables": 10,
+    "qa_pairs": 0,
+    "returns_without_qa": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ]
+  },
+  "rollback_available": true
+}

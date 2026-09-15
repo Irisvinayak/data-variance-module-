@@ -11,13 +11,13 @@ import calendar
 import logging
 import re
 from datetime import date, datetime
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from dateutil import parser as dateutil_parser
 from dateutil.relativedelta import relativedelta
 
 from ..data.calculate_variance import get_previous_dates
-from ..config import DP_TABLE_SCHEMA, IS_SP_TABLE_DATA_ENABLED
+from ..config import ANONYMOUS, DP_TABLE_SCHEMA, IS_SP_TABLE_DATA_ENABLED, RequestContext
 from ..data.db import execute_query
 from ..data.report_lookup import _parse_returns, get_is_excel_by_return_code
 from .query_normalizer import normalize_query
@@ -28,17 +28,19 @@ _DATE_FMT = "%d-%b-%Y"
 _MAX_PERIOD_WALK = 12  # safety cap when counting steps between two explicit periods
 
 
-def _resolve_physical_table_name(return_id: str, table_name: str) -> str:
+def _resolve_physical_table_name(
+    return_id: str, table_name: str, ctx: RequestContext = ANONYMOUS
+) -> str:
     """Mirrors service.compute_variance()'s inline table-name resolution
     (is_excel -> optional _DP suffix -> optional DP_TABLE_SCHEMA prefix).
     Duplicated here deliberately, read-only use only (a MAX() lookup) —
     service._resolve_report_table_name() is dead/incomplete code (it's
     missing the DP_TABLE_SCHEMA prefix), so it is not reused."""
-    return_meta = next((r for r in _parse_returns() if r.get("Id") == str(return_id)), None)
+    return_meta = next((r for r in _parse_returns(ctx) if r.get("Id") == str(return_id)), None)
     is_excel = (
         str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
         if return_meta
-        else get_is_excel_by_return_code(return_id)
+        else get_is_excel_by_return_code(return_id, ctx=ctx)
     )
     if IS_SP_TABLE_DATA_ENABLED and not is_excel:
         dp_name = f"{table_name}_DP"
@@ -46,8 +48,55 @@ def _resolve_physical_table_name(return_id: str, table_name: str) -> str:
     return table_name
 
 
-def _latest_available_date(return_id: str, table_name: str, filter_col: str) -> Optional[datetime]:
-    resolved = _resolve_physical_table_name(return_id, table_name)
+_MAX_DATE_SCAN = 500
+
+
+def _available_dates_desc(
+    return_id: str, table_name: str, filter_col: str,
+    ctx: RequestContext = ANONYMOUS,
+) -> List[datetime]:
+    """Every distinct reporting date in the table, newest first.
+
+    This is the same question /variance/dates answers for the manual UI —
+    asked here so the NLP path anchors on dates that exist rather than on
+    dates a frequency calculation predicts should exist.
+    """
+    resolved = _resolve_physical_table_name(return_id, table_name, ctx)
+    sql = (
+        f"SELECT DISTINCT {filter_col} FROM {resolved} "
+        f"ORDER BY {filter_col} DESC FETCH FIRST {_MAX_DATE_SCAN} ROWS ONLY"
+    )
+    _cols, rows, err = execute_query(sql)
+    if err:
+        # Older Oracle without FETCH FIRST — same fallback service.py uses.
+        sql = (
+            f"SELECT DISTINCT {filter_col} FROM "
+            f"(SELECT {filter_col} FROM {resolved} ORDER BY {filter_col} DESC) "
+            f"WHERE ROWNUM <= {_MAX_DATE_SCAN}"
+        )
+        _cols, rows, err = execute_query(sql)
+        if err:
+            logger.warning(
+                "[nlp.date_resolver] Could not list dates for %s: %s", resolved, err,
+            )
+            return []
+
+    out: List[datetime] = []
+    for r in rows or []:
+        v = r[0]
+        if v is None:
+            continue
+        out.append(v if isinstance(v, datetime)
+                   else datetime.combine(v, datetime.min.time()))
+    out.sort(reverse=True)
+    return out
+
+
+def _latest_available_date(
+    return_id: str, table_name: str, filter_col: str,
+    ctx: RequestContext = ANONYMOUS,
+) -> Optional[datetime]:
+    resolved = _resolve_physical_table_name(return_id, table_name, ctx)
     sql = f"SELECT MAX({filter_col}) FROM {resolved}"
     _cols, rows, err = execute_query(sql)
     if err or not rows or rows[0][0] is None:
@@ -57,9 +106,10 @@ def _latest_available_date(return_id: str, table_name: str, filter_col: str) -> 
 
 
 def _nearest_available_on_or_before(
-    return_id: str, table_name: str, filter_col: str, target: datetime
+    return_id: str, table_name: str, filter_col: str, target: datetime,
+    ctx: RequestContext = ANONYMOUS,
 ) -> Optional[datetime]:
-    resolved = _resolve_physical_table_name(return_id, table_name)
+    resolved = _resolve_physical_table_name(return_id, table_name, ctx)
     target_str = target.strftime(_DATE_FMT).upper()
     sql = (
         f"SELECT MAX({filter_col}) FROM {resolved} "
@@ -267,12 +317,15 @@ def _steps_between(anchor: datetime, target: datetime, report_freq: str) -> int:
     return _MAX_PERIOD_WALK
 
 
-def resolve_reporting_date(
+def _resolve_anchor_and_periods(
     query: str, return_id: str, table_name: str, filter_col: str, report_freq: str,
-) -> Tuple[str, int]:
-    """Returns (reporting_date, reporting_period) ready for
-    service.compute_variance(). Raises ValueError if the table has no data
-    at all (nothing to anchor to)."""
+    ctx: RequestContext = ANONYMOUS,
+) -> Tuple[datetime, int]:
+    """Read the query's date/period intent as (anchor_date, periods_back).
+
+    Returns datetimes rather than formatted strings so the caller can map
+    the period count onto real dates. Raises ValueError if the table has no
+    data at all (nothing to anchor to)."""
     freq = (report_freq or "M").strip().upper() or "M"
 
     # Fix known typos/abbreviations ("perids"->"periods", "quater"->"quarter",
@@ -284,7 +337,7 @@ def resolve_reporting_date(
     if query != original_query:
         logger.info("[nlp.date_resolver] query normalized: %r -> %r", original_query, query)
 
-    latest = _latest_available_date(return_id, table_name, filter_col)
+    latest = _latest_available_date(return_id, table_name, filter_col, ctx)
     if latest is None:
         raise ValueError(
             f"No data found in {table_name} to determine a reporting date."
@@ -298,23 +351,23 @@ def resolve_reporting_date(
     xox_n = _extract_xox_periods(query, latest, freq)
     if xox_n > 0:
         logger.info("[nlp.date_resolver] query=%r -> XoX shorthand, %d period(s) back from latest=%s", query, xox_n, latest)
-        return latest.strftime(_DATE_FMT).upper(), xox_n
+        return latest, xox_n
 
     n = _extract_relative_periods_back(query)
     if n > 0:
         logger.info("[nlp.date_resolver] query=%r -> relative %d period(s) back from latest=%s", query, n, latest)
-        return latest.strftime(_DATE_FMT).upper(), n
+        return latest, n
 
     two_dates = _extract_two_dates(query)
     if two_dates:
         later, earlier = two_dates
-        anchor = _nearest_available_on_or_before(return_id, table_name, filter_col, later) or latest
+        anchor = _nearest_available_on_or_before(return_id, table_name, filter_col, later, ctx) or latest
         periods = _steps_between(anchor, earlier, freq)
         logger.info(
             "[nlp.date_resolver] query=%r -> two explicit periods, anchor=%s periods=%d",
             query, anchor, periods,
         )
-        return anchor.strftime(_DATE_FMT).upper(), max(periods, 1)
+        return anchor, max(periods, 1)
 
     # "since <date>" — open-ended range from an explicit start up to the
     # latest submission, distinct from "on <date>" (which anchors ON that
@@ -326,17 +379,82 @@ def resolve_reporting_date(
             "[nlp.date_resolver] query=%r -> since date=%s, periods=%d",
             query, since_date, periods,
         )
-        return latest.strftime(_DATE_FMT).upper(), max(periods, 1)
+        return latest, max(periods, 1)
 
     single_date = _try_parse_date(query)
     if single_date:
-        anchor = _nearest_available_on_or_before(return_id, table_name, filter_col, single_date)
+        anchor = _nearest_available_on_or_before(return_id, table_name, filter_col, single_date, ctx)
         if anchor is None:
             raise ValueError(
                 f"No data found in {table_name} on or before {single_date.strftime(_DATE_FMT)}."
             )
         logger.info("[nlp.date_resolver] query=%r -> explicit date, anchor=%s", query, anchor)
-        return anchor.strftime(_DATE_FMT).upper(), 1
+        return anchor, 1
 
     logger.info("[nlp.date_resolver] query=%r -> no date/period intent, using latest=%s", query, latest)
-    return latest.strftime(_DATE_FMT).upper(), 1
+    return latest, 1
+
+
+# Same ceiling the manual /variance/compute route enforces (main.py's
+# MAX_COMPARISON_DATES): each extra period is another full set of rows in the
+# query and the response, and the result table renders one column group per
+# period.
+#
+# It caps the WHOLE list, anchor included — the manual UI sends the ticked
+# dates with the newest as element 0 and validates len(unique) > 3 — so the
+# NLP path may add at most MAX - 1 older dates. Emitting anchor + 3 here would
+# build a 4-date request the manual route would reject outright, leaving the
+# two paths disagreeing about what is a legal request.
+_MAX_COMPARISON_DATES = 3
+_MAX_OLDER_DATES = _MAX_COMPARISON_DATES - 1
+
+
+def resolve_reporting_date(
+    query: str, return_id: str, table_name: str, filter_col: str, report_freq: str,
+    ctx: RequestContext = ANONYMOUS,
+) -> Tuple[str, int, List[str]]:
+    """(reporting_date, reporting_period, comparison_dates) for compute_variance().
+
+    comparison_dates are REAL dates taken from the table, newest first and
+    including the anchor, exactly as the manual UI supplies them. Handing
+    these over means compute_variance compares against rows that exist
+    instead of walking the calendar by Return.xml's RepFreq — which is wrong
+    whenever the declared frequency disagrees with the data (QCB F010 declares
+    daily, files monthly), and silently produces an all-blank comparison.
+
+    reporting_period is still returned so the caller keeps the old contract,
+    and it remains the fallback: if the table exposes no older date at all,
+    comparison_dates is empty and compute_variance derives them itself as
+    before, preserving today's behaviour rather than failing.
+    """
+    anchor, periods = _resolve_anchor_and_periods(
+        query, return_id, table_name, filter_col, report_freq, ctx,
+    )
+    anchor_str = anchor.strftime(_DATE_FMT).upper()
+
+    available = _available_dates_desc(return_id, table_name, filter_col, ctx)
+    older = [d for d in available if d < anchor]
+    wanted = max(1, min(periods, _MAX_OLDER_DATES))
+    picked = older[:wanted]
+
+    if not picked:
+        logger.info(
+            "[nlp.date_resolver] anchor=%s | no older date present in %s — leaving "
+            "comparison to frequency arithmetic (freq=%s)",
+            anchor_str, table_name, report_freq,
+        )
+        return anchor_str, periods, []
+
+    comparison = [anchor_str] + [d.strftime(_DATE_FMT).upper() for d in picked]
+    if len(picked) < periods:
+        logger.info(
+            "[nlp.date_resolver] asked for %d period(s) back but only %d older "
+            "date(s) exist in %s — using what is there",
+            periods, len(picked), table_name,
+        )
+    logger.info(
+        "[nlp.date_resolver] anchor=%s | comparison_dates=%s (from actual data, "
+        "not RepFreq=%s arithmetic)",
+        anchor_str, comparison[1:], report_freq,
+    )
+    return anchor_str, periods, comparison

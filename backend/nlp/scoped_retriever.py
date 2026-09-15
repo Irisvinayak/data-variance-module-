@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from ..config import RequestContext
+from ..config import ANONYMOUS, RequestContext
 
 from . import confidence as confidence_mod
 from . import ranking, schema_info
@@ -94,7 +94,7 @@ def rank_within_tables(
         return _empty("caller supplied no tables")
 
     if analysis is None:
-        analysis = analyze_query(query)
+        analysis = analyze_query(query, ctx=ctx or ANONYMOUS)
 
     # metric_text is the query with the return name, dates and request
     # boilerplate stripped — the words that actually describe the DATA. On this
@@ -181,6 +181,18 @@ def rank_within_tables(
     }
     for tbl, overlap in lexical_overlaps.items():
         scores[tbl] += overlap * 0.03
+
+    # Demote the return's key-value submission header. Its embedded text is
+    # short and led by the return name, so naming the return in the query
+    # makes it out-score the actual data table, whose text is diluted across
+    # dozens of column names. See ranking.metadata_demotion.
+    for tbl in list(scores):
+        penalty = ranking.metadata_demotion(tbl, search_text)
+        if penalty:
+            scores[tbl] -= penalty
+            logger.debug(
+                "[nlp.scoped_retriever] demoted metadata table %s by %.2f", tbl, penalty,
+            )
 
     # Name is the tie-break so the order is stable across runs rather than
     # depending on dict insertion order.

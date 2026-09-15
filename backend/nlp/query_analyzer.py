@@ -44,6 +44,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
+from ..config import ANONYMOUS, RequestContext
 from ..data.report_lookup import _parse_returns
 from . import indexed_returns, schema_info
 from .query_normalizer import normalize_query
@@ -410,7 +411,11 @@ def _tidy(text: str) -> str:
     return text
 
 
-def analyze_query(query: str, allowed_return_ids: Optional[Set[str]] = None) -> QueryAnalysis:
+def analyze_query(
+    query: str,
+    allowed_return_ids: Optional[Set[str]] = None,
+    ctx: RequestContext = ANONYMOUS,
+) -> QueryAnalysis:
     """Full end-to-end read of one user query.
 
     `allowed_return_ids` scopes the return-name matching to what the caller's
@@ -422,13 +427,13 @@ def analyze_query(query: str, allowed_return_ids: Optional[Set[str]] = None) -> 
     raw = (query or "").strip()
     normalized = normalize_query(raw)
 
-    corpus = [r for r in _parse_returns() if r.get("Id") and r.get("Name")]
+    corpus = [r for r in _parse_returns(ctx) if r.get("Id") and r.get("Name")]
     candidates = list(corpus)
     if allowed_return_ids is not None:
         candidates = [r for r in candidates if str(r["Id"]) in allowed_return_ids]
     # The coverage filter is NOT optional and NOT caller-controlled: a return
     # without embeddings cannot be answered by this pipeline at all.
-    candidates = indexed_returns.filter_returns(candidates)
+    candidates = indexed_returns.filter_returns(candidates, ctx=ctx)
 
     matched = _match_named_returns(normalized, candidates, corpus)
 

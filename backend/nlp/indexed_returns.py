@@ -36,6 +36,7 @@ import os
 import threading
 from typing import Any, Dict, List, Optional, Set
 
+from ..config import ANONYMOUS, RequestContext
 from . import return_lookup
 from .index_store import all_meta
 from .nlp_config import TABLE_INDEX_PATH, TABLE_META_PATH
@@ -46,8 +47,11 @@ logger = logging.getLogger(__name__)
 # invalidation rule — dropping in a freshly-rebuilt backend/output/ folder is
 # picked up on the next request with no restart, exactly like the FAISS
 # indices themselves.
-_cache: Optional[Dict[str, Any]] = None
-_cache_mtime: float = -1.0
+# Keyed by tenant ("" under 5.5): the coverage map is derived from a
+# tenant's own return metadata via return_lookup, so one shared slot would
+# report another tenant's embedding coverage.
+_cache: Dict[str, Dict[str, Any]] = {}
+_cache_mtime: Dict[str, float] = {}
 _lock = threading.Lock()
 
 
@@ -58,7 +62,7 @@ def _current_mtime() -> float:
         return -1.0
 
 
-def _build() -> Dict[str, Any]:
+def _build(ctx: RequestContext = ANONYMOUS) -> Dict[str, Any]:
     """Resolve every indexed table to its owning return, exactly the way
     retriever.py does (same return_lookup call, same metadata text as the
     disambiguation hint), so the coverage set here can never disagree with
@@ -79,7 +83,9 @@ def _build() -> Dict[str, Any]:
         # the index text names the return it was built against. Without it a
         # CIMS_RAQ(Quarterly) table can resolve to CIMS_RAQ(Annually) and this
         # module would report coverage for a return that has none.
-        ret = return_lookup.get_return_for_table(table, hint_text=record.get("text") or None)
+        ret = return_lookup.get_return_for_table(
+            table, hint_text=record.get("text") or None, ctx=ctx,
+        )
         if not ret or not ret.get("return_id"):
             unresolved.append(table)
             continue
@@ -100,18 +106,18 @@ def _build() -> Dict[str, Any]:
     }
 
 
-def _get() -> Dict[str, Any]:
-    global _cache, _cache_mtime
+def _get(ctx: RequestContext = ANONYMOUS) -> Dict[str, Any]:
     mtime = _current_mtime()
     with _lock:
-        if _cache is not None and _cache_mtime == mtime:
-            return _cache
-        _cache = _build()
-        _cache_mtime = mtime
-        return _cache
+        key = ctx.tenant_id
+        if key in _cache and _cache_mtime.get(key) == mtime:
+            return _cache[key]
+        _cache[key] = _build(ctx)
+        _cache_mtime[key] = mtime
+        return _cache[key]
 
 
-def indexed_return_ids() -> Set[str]:
+def indexed_return_ids(ctx: RequestContext = ANONYMOUS) -> Set[str]:
     """The return_ids the embedding index actually covers, as strings.
 
     An EMPTY set means the index is missing/unreadable entirely — callers
@@ -119,16 +125,16 @@ def indexed_return_ids() -> Set[str]:
     misconfigured INDEX_DIR would silently reduce every clarification list to
     zero options instead of surfacing as the load error it is (which
     GET /variance/nlp-health already reports properly)."""
-    return set(_get()["return_ids"])
+    return set(_get(ctx)["return_ids"])
 
 
-def indexed_table_names() -> Set[str]:
+def indexed_table_names(ctx: RequestContext = ANONYMOUS) -> Set[str]:
     """Every indexed table name, UPPERCASED (the index stores them lowercase,
     this app's XML uppercase — see index_store.meta_by_table)."""
-    return set(_get()["tables_upper"])
+    return set(_get(ctx)["tables_upper"])
 
 
-def tables_for_return(return_id: str) -> List[str]:
+def tables_for_return(return_id: str, ctx: RequestContext = ANONYMOUS) -> List[str]:
     """The indexed table names belonging to one return, UPPERCASED.
 
     This is the reliable source of a return's tables for the NLP layer, and it
@@ -143,25 +149,28 @@ def tables_for_return(return_id: str) -> List[str]:
     Empty list when the return has no indexed tables — including when coverage
     itself is unknown, since there is nothing to scope to in that case.
     """
-    return sorted(_get()["tables_by_return"].get(str(return_id), ()))
+    return sorted(_get(ctx)["tables_by_return"].get(str(return_id), ()))
 
 
-def has_embeddings(return_id: str) -> bool:
+def has_embeddings(return_id: str, ctx: RequestContext = ANONYMOUS) -> bool:
     """False only when coverage is KNOWN and this return isn't in it — see
     indexed_return_ids() on why an empty coverage set means 'don't filter'."""
-    covered = indexed_return_ids()
+    covered = indexed_return_ids(ctx)
     if not covered:
         return True
     return str(return_id) in covered
 
 
-def filter_returns(returns: List[Dict[str, Any]], id_key: str = "Id") -> List[Dict[str, Any]]:
+def filter_returns(
+    returns: List[Dict[str, Any]], id_key: str = "Id",
+    ctx: RequestContext = ANONYMOUS,
+) -> List[Dict[str, Any]]:
     """Narrow a list of Returns.xml rows to just those with embeddings.
 
     Returns the list UNCHANGED when coverage is unknown (empty set), so a
     missing index degrades to today's unfiltered behavior rather than an
     empty picker."""
-    covered = indexed_return_ids()
+    covered = indexed_return_ids(ctx)
     if not covered:
         logger.warning(
             "[nlp.indexed_returns] No embedding coverage resolved (index missing or "
@@ -180,10 +189,12 @@ def filter_returns(returns: List[Dict[str, Any]], id_key: str = "Id") -> List[Di
     return kept
 
 
-def filter_table_names(table_names: List[str]) -> List[str]:
+def filter_table_names(
+    table_names: List[str], ctx: RequestContext = ANONYMOUS
+) -> List[str]:
     """Narrow a list of table names to just the indexed ones (case-insensitive).
     Unchanged when coverage is unknown, same rationale as filter_returns."""
-    covered = indexed_table_names()
+    covered = indexed_table_names(ctx)
     if not covered:
         return table_names
     return [t for t in table_names if t.upper() in covered]
@@ -191,7 +202,6 @@ def filter_table_names(table_names: List[str]) -> List[str]:
 
 def invalidate() -> None:
     """Force a rebuild on the next call (tests / admin action)."""
-    global _cache, _cache_mtime
     with _lock:
-        _cache = None
-        _cache_mtime = -1.0
+        _cache.clear()
+        _cache_mtime.clear()

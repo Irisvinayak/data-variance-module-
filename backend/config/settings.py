@@ -62,12 +62,43 @@ def is_tenant_aware_mode(version: str | None = None) -> bool:
 
 
 # ── Oracle DB settings ─────────────────────────────────────────────────────────
-DB_HOST     : str = os.getenv("DV_DB_HOST",     "3.6.209.141")
-DB_PORT     : int = int(os.getenv("DV_DB_PORT", "1521"))
-DB_SERVICE  : str = os.getenv("DV_DB_SERVICE",  "XE")
-DB_USER     : str = os.getenv("DV_DB_USER",     "SOUTHINDIANBANK")
-DB_PASSWORD : str = os.getenv("DV_DB_PASSWORD", "southindianbank1123")
-DB_MAX_ROWS : int = int(os.getenv("DV_DB_MAX_ROWS", "5000"))
+# Resolved per version, the same way BASE_PATH is below: 5.5's CIMS returns and
+# 6.0's QCB returns live in different Oracle schemas (in this deployment,
+# distinct DBs entirely — DV_DB_USER=crilc vs idealcrilc). Without a per-version
+# split here, flipping VERSION alone leaves the OTHER host's DB connection in
+# place, and every query 500s with ORA-00942 ("table or view does not exist")
+# for a table that is perfectly real — just in the schema the wrong host is
+# pointed at. That symptom looks like a data problem; it is a config one.
+#
+#   DV_DB_*      — explicit override, wins for either version
+#   DV_DB_*_55   — used when VERSION is 5.5
+#   DV_DB_*_60   — used when VERSION is 6.0
+#
+# A bare DV_DB_* (no suffix) is also honoured as an implicit "same DB for both"
+# convenience for a single-database deployment, so an existing .env with only
+# unsuffixed DV_DB_* keeps working unchanged.
+
+def _db_setting(name: str, default: str) -> tuple[str, str, str]:
+    """(resolved_for_current_version, value_55, value_60) for one DB_* setting."""
+    override = os.getenv(f"DV_DB_{name}", "").strip()
+    v55 = (os.getenv(f"DV_DB_{name}_55", "").strip() or override or default)
+    v60 = (os.getenv(f"DV_DB_{name}_60", "").strip() or override or default)
+    resolved = v55 if is_legacy_mode() else v60
+    return resolved, v55, v60
+
+
+DB_HOST, DB_HOST_55, DB_HOST_60 = _db_setting("HOST", "3.6.209.141")
+_DB_PORT_S, _DB_PORT_55_S, _DB_PORT_60_S = _db_setting("PORT", "1521")
+DB_PORT    : int = int(_DB_PORT_S)
+DB_PORT_55 : int = int(_DB_PORT_55_S)
+DB_PORT_60 : int = int(_DB_PORT_60_S)
+DB_SERVICE, DB_SERVICE_55, DB_SERVICE_60 = _db_setting("SERVICE", "XE")
+DB_USER, DB_USER_55, DB_USER_60 = _db_setting("USER", "SOUTHINDIANBANK")
+DB_PASSWORD, DB_PASSWORD_55, DB_PASSWORD_60 = _db_setting("PASSWORD", "southindianbank1123")
+_DB_MAXR_S, _DB_MAXR_55_S, _DB_MAXR_60_S = _db_setting("MAX_ROWS", "5000")
+DB_MAX_ROWS    : int = int(_DB_MAXR_S)
+DB_MAX_ROWS_55 : int = int(_DB_MAXR_55_S)
+DB_MAX_ROWS_60 : int = int(_DB_MAXR_60_S)
 
 # ── Base path ──────────────────────────────────────────────────────────────────
 # Root of the iDEAL repository installation. In 5.5 this is the repo itself
@@ -95,8 +126,32 @@ BASE_PATH_60: str = os.getenv("DV_BASE_PATH_60", "").strip() or r"D:\Repo6"
 BASE_PATH: str = BASE_PATH_OVERRIDE or (BASE_PATH_55 if is_legacy_mode() else BASE_PATH_60)
 
 # ── Table-data behaviour ───────────────────────────────────────────────────────
-IS_SP_TABLE_DATA_ENABLED: bool = _flag("DV_IS_SP_TABLE_DATA_ENABLED")
-DP_TABLE_SCHEMA: str = os.getenv("DV_DP_SCHEMA", "CRILC").strip()
+# Also per-version: the two hosts' Oracle schemas differ (CRILC vs IDEALCRILC
+# in this deployment), and _resolve_physical_table_name prefixes every query
+# with DP_TABLE_SCHEMA — a stale value here means every table name 6.0 builds
+# is qualified with 5.5's schema (or vice versa), which is the same
+# "looks like missing data, is actually a stale switch" failure as DB_HOST.
+def _flag_versioned(name: str, default: str) -> tuple[bool, bool, bool]:
+    override = os.getenv(f"DV_{name}", "").strip()
+    v55 = os.getenv(f"DV_{name}_55", "").strip() or override or default
+    v60 = os.getenv(f"DV_{name}_60", "").strip() or override or default
+    truthy = lambda v: v.strip().lower() in {"1", "true", "yes", "on"}
+    return (truthy(v55) if is_legacy_mode() else truthy(v60)), truthy(v55), truthy(v60)
+
+
+IS_SP_TABLE_DATA_ENABLED, IS_SP_TABLE_DATA_ENABLED_55, IS_SP_TABLE_DATA_ENABLED_60 = (
+    _flag_versioned("IS_SP_TABLE_DATA_ENABLED", "false")
+)
+
+
+def _schema_setting(default_55: str, default_60: str) -> tuple[str, str, str]:
+    override = os.getenv("DV_DP_SCHEMA", "").strip()
+    v55 = os.getenv("DV_DP_SCHEMA_55", "").strip() or override or default_55
+    v60 = os.getenv("DV_DP_SCHEMA_60", "").strip() or override or default_60
+    return (v55 if is_legacy_mode() else v60), v55, v60
+
+
+DP_TABLE_SCHEMA, DP_TABLE_SCHEMA_55, DP_TABLE_SCHEMA_60 = _schema_setting("CRILC", "IDEALCRILC")
 
 # ── Explicit path overrides ────────────────────────────────────────────────────
 # Empty string means "not overridden — let the host profile derive it from

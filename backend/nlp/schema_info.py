@@ -94,6 +94,36 @@ def _entry(table: str, column: str) -> Optional[Dict[str, Any]]:
     return _get().get(((table or "").upper(), (column or "").upper()))
 
 
+def columns_for_table(table: str) -> frozenset:
+    """Every known column of `table`, upper-cased. Empty when unknown."""
+    t = (table or "").upper()
+    return frozenset(col for (tbl, col) in _get() if tbl == t)
+
+
+# The key-value submission header every QCB return carries: one fact per ROW
+# rather than per column, so these four columns are the whole table regardless
+# of how much information it holds.
+_KEY_VALUE_SIGNATURE = frozenset({"DESCRIPTION", "VALUE", "CODE", "RDATE"})
+
+
+def is_metadata_table(table: str) -> bool:
+    """True for a key-value submission-header table (FILING_INFO and friends).
+
+    Detected from the COLUMN SIGNATURE rather than the table name: the name
+    convention (_FILING_INFO) holds across QCB today but is not enforced
+    anywhere, whereas the shape — description/value/code/rdate and nothing
+    else — is what actually makes the table unanswerable as "the data".
+
+    Returns False when the schema is unknown, so a missing schema.json
+    degrades to today's un-demoted ranking rather than silently reordering
+    results based on no information.
+    """
+    cols = columns_for_table(table)
+    if not cols:
+        return False
+    return cols <= _KEY_VALUE_SIGNATURE
+
+
 def column_type(table: str, column: str) -> Optional[str]:
     """'number' | 'varchar2' | 'date' | None when unknown."""
     entry = _entry(table, column)

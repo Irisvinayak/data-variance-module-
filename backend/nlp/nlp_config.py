@@ -26,11 +26,79 @@ QUERY_PREFIX: str = os.getenv(
 )
 
 # ── Vector index location ──────────────────────────────────────────────────────
-# backend/output/ — one level above nlp/, where the embedding folder is
-# actually dropped in. Override with DV_NLP_INDEX_DIR if it lives elsewhere.
+# Resolved PER VERSION, the same way settings.BASE_PATH is, so that flipping
+# VERSION is the only edit needed:
+#   DV_NLP_INDEX_DIR     — explicit override, wins for either version
+#   DV_NLP_INDEX_DIR_55  — used when VERSION is 5.5   (default backend/output)
+#   DV_NLP_INDEX_DIR_60  — used when VERSION is 6.0   (default backend/output6.0)
+#
+# The two versions describe different databases: 5.5's index covers the CIMS
+# returns, 6.0's the QCB ones. They share no tables, so serving one version's
+# questions from the other's index does not fail loudly — retrieval simply
+# returns the closest wrong table and the generated SQL names something that
+# does not exist for that host. Before this, VERSION=6.0 silently kept reading
+# the 5.5 index, which is exactly that failure.
+#
+# `is_legacy_mode` is imported rather than re-reading VERSION here for two
+# reasons: one normalisation rule for the whole app ("6", "6.0", "6.0.1" all
+# mean 6.0), and importing backend.config guarantees its load_dotenv() has run
+# before anything below reads os.getenv.
+from ..config.settings import APP_VERSION, is_legacy_mode
+
 NLP_DIR: str = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR: str = os.path.dirname(NLP_DIR)
-INDEX_DIR: str = os.getenv("DV_NLP_INDEX_DIR", os.path.join(BACKEND_DIR, "output"))
+
+INDEX_DIR_OVERRIDE: str = os.getenv("DV_NLP_INDEX_DIR", "").strip()
+INDEX_DIR_55: str = (
+    os.getenv("DV_NLP_INDEX_DIR_55", "").strip() or os.path.join(BACKEND_DIR, "output")
+)
+INDEX_DIR_60: str = (
+    os.getenv("DV_NLP_INDEX_DIR_60", "").strip()
+    or os.path.join(BACKEND_DIR, "output6.0")
+)
+
+
+def index_dir_for(version: str | None = None) -> str:
+    """The embedding folder for a given app version (default: the configured one).
+
+    An explicit DV_NLP_INDEX_DIR wins for either version, so a deployment that
+    already pins one folder is unaffected by this becoming version-aware.
+    """
+    if INDEX_DIR_OVERRIDE:
+        return INDEX_DIR_OVERRIDE
+    return INDEX_DIR_55 if is_legacy_mode(version) else INDEX_DIR_60
+
+
+# The paths below are read by `from .nlp_config import TABLE_INDEX_PATH` in
+# several modules, so they are frozen at import — same as BASE_PATH. That is
+# fine because VERSION is also read at import; it does mean a version switch
+# needs a process restart, not just an env change.
+INDEX_DIR: str = index_dir_for()
+
+
+def index_dir_problem() -> str:
+    """A one-line explanation if INDEX_DIR cannot serve this version, else "".
+
+    Without this, a version whose index folder was never populated surfaces as
+    five separate "index file MISSING" lines, which reads like a broken build
+    rather than "this deployment has no embeddings for the version it is set
+    to". The distinction matters because the fix is different: rebuild vs point
+    at the right folder.
+    """
+    if not os.path.isdir(INDEX_DIR):
+        return (
+            "No embedding folder for VERSION=" + APP_VERSION + " at " + INDEX_DIR
+            + " - build it, or set "
+            + ("DV_NLP_INDEX_DIR_55" if is_legacy_mode() else "DV_NLP_INDEX_DIR_60")
+            + " to where it lives."
+        )
+    # SCHEMA_JSON_PATH is defined below; this is only read at call time.
+    if not os.path.isfile(SCHEMA_JSON_PATH):
+        return (
+            INDEX_DIR + " exists but has no schema.json, so it is not an "
+            "embedding folder for VERSION=" + APP_VERSION + "."
+        )
+    return ""
 
 SCHEMA_JSON_PATH: str = os.path.join(INDEX_DIR, "schema.json")
 DESCRIPTION_SAMPLES_PATH: str = os.path.join(INDEX_DIR, "description_samples.json")

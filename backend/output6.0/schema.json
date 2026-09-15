@@ -1,0 +1,1724 @@
+[
+  {
+    "table": "qcb_f010_filing_info",
+    "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+    "description": "QCB_F010_FILING_INFO — qcb f010 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date.",
+    "is_backup": false,
+    "col_count": 4,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item name",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "value",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item value",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "IRIS code identifying the filing information item",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      }
+    ],
+    "text": "qcb_f010_filing_info | QCB_F010_Maturity Ladder of Assets & Liabilities | description value code rdate | Filing information item name | Filing information item value | IRIS code identifying the filing information item | Reporting date",
+    "summary_text": "qcb_f010_filing_info | QCB_F010_Maturity Ladder of Assets & Liabilities | QCB_F010_FILING_INFO — qcb f010 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date. | Columns: description, value, code, rdate"
+  },
+  {
+    "table": "qcb_f010_rcm_in_qtr",
+    "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+    "description": "QCB_F010_RCM_IN_QTR — qcb f010 rcm in qtr. Fields include: Sr No., Particulars, Overnight - LC, Overnight - USD, Overnight - Other FC, > 1 to 7 days - LC, > 1 to 7 days - USD, > 1 to 7 days - Other FC.",
+    "is_backup": false,
+    "col_count": 40,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "sr_no",
+        "type": "number(20)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Sr No.",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Particulars",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "overnight_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Overnight - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "overnight_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Overnight - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "overnight_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Overnight - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_7_days_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 7 days - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_7_days_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 7 days - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_7_days_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 7 days - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_7_to_15_days_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 7 to 15 days - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_7_to_15_days_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 7 to 15 days - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_7_to_15_days_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 7 to 15 days - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_15_to_30_days_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">15 to 30 days - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_15_to_30_days_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">15 to 30 days - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_15_to_30_days_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">15 to 30 days - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_months_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">1 to 3 months - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_months_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">1 to 3 months - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_months_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">1 to 3 months - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_6_months_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 6 months - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_6_months_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 6 months - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_6_months_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 6 months - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_6_to_12_months_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 6 to 12 months - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_6_to_12_months_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 6 to 12 months - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_6_to_12_months_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 6 to 12 months - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_years_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 3 years - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_years_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 3 years - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_years_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 3 years - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_5_years_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 5 years - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_5_years_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 5 years - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_5_years_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 5 years - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_5_years_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 5 years - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_5_years_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 5 years - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_5_years_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 5 years - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "no_contra_mat_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "No contractual maturity - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "no_contra_mat_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "No contractual maturity - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "no_contra_mat_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "No contractual maturity - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "total_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "TOTAL - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "total_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "TOTAL - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "total_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "TOTAL - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(20)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Row code",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      }
+    ],
+    "text": "qcb_f010_rcm_in_qtr | QCB_F010_Maturity Ladder of Assets & Liabilities | sr_no description overnight_lc overnight_usd overnight_other_fc gt_1_to_7_days_lc gt_1_to_7_days_usd gt_1_to_7_days_other_fc gt_7_to_15_days_lc gt_7_to_15_days_usd gt_7_to_15_days_other_fc gt_15_to_30_days_lc gt_15_to_30_days_usd gt_15_to_30_days_other_fc gt_1_to_3_months_lc gt_1_to_3_months_usd gt_1_to_3_months_other_fc gt_3_to_6_months_lc gt_3_to_6_months_usd gt_3_to_6_months_other_fc gt_6_to_12_months_lc gt_6_to_12_months_usd gt_6_to_12_months_other_fc gt_1_to_3_years_lc gt_1_to_3_years_usd gt_1_to_3_years_other_fc gt_3_to_5_years_lc gt_3_to_5_years_usd gt_3_to_5_years_other_fc gt_5_years_lc gt_5_years_usd gt_5_years_other_fc no_contra_mat_lc no_contra_mat_usd no_contra_mat_other_fc total_lc total_usd total_other_fc code rdate | Sr No. | Particulars | Overnight - LC | Overnight - USD | Overnight - Other FC | > 1 to 7 days - LC | > 1 to 7 days - USD | > 1 to 7 days - Other FC | > 7 to 15 days - LC | > 7 to 15 days - USD | > 7 to 15 days - Other FC | >15 to 30 days - LC | >15 to 30 days - USD | >15 to 30 days - Other FC | >1 to 3 months - LC | >1 to 3 months - USD | >1 to 3 months - Other FC | > 3 to 6 months - LC | > 3 to 6 months - USD | > 3 to 6 months - Other FC | > 6 to 12 months - LC | > 6 to 12 months - USD | > 6 to 12 months - Other FC | > 1 to 3 years - LC | > 1 to 3 years - USD | > 1 to 3 years - Other FC | > 3 to 5 years - LC | > 3 to 5 years - USD | > 3 to 5 years - Other FC | > 5 years - LC | > 5 years - USD | > 5 years - Other FC | No contractual maturity - LC | No contractual maturity - USD | No contractual maturity - Other FC | TOTAL - LC | TOTAL - USD | TOTAL - Other FC | Row code | Reporting date",
+    "summary_text": "qcb_f010_rcm_in_qtr | QCB_F010_Maturity Ladder of Assets & Liabilities | QCB_F010_RCM_IN_QTR — qcb f010 rcm in qtr. Fields include: Sr No., Particulars, Overnight - LC, Overnight - USD, Overnight - Other FC, > 1 to 7 days - LC, > 1 to 7 days - USD, > 1 to 7 days - Other FC. | Columns: sr_no, description, overnight_lc, overnight_usd, overnight_other_fc, gt_1_to_7_days_lc, gt_1_to_7_days_usd, gt_1_to_7_days_other_fc, gt_7_to_15_days_lc, gt_7_to_15_days_usd, gt_7_to_15_days_other_fc, gt_15_to_30_days_lc, gt_15_to_30_days_usd, gt_15_to_30_days_other_fc, gt_1_to_3_months_lc, gt_1_to_3_months_usd, gt_1_to_3_months_other_fc, gt_3_to_6_months_lc, gt_3_to_6_months_usd, gt_3_to_6_months_other_fc, gt_6_to_12_months_lc, gt_6_to_12_months_usd, gt_6_to_12_months_other_fc, gt_1_to_3_years_lc, gt_1_to_3_years_usd, gt_1_to_3_years_other_fc, gt_3_to_5_years_lc, gt_3_to_5_years_usd, gt_3_to_5_years_other_fc, gt_5_years_lc, gt_5_years_usd, gt_5_years_other_fc, no_contra_mat_lc, no_contra_mat_usd, no_contra_mat_other_fc, total_lc, total_usd, total_other_fc, code, rdate"
+  },
+  {
+    "table": "qcb_f010_rcm_out_qtr",
+    "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+    "description": "QCB_F010_RCM_OUT_QTR — qcb f010 rcm out qtr. Fields include: Sr No., Particulars, Overnight - LC, Overnight - USD, Overnight - Other FC, > 1 to 7 days - LC, > 1 to 7 days - USD, > 1 to 7 days - Other FC.",
+    "is_backup": false,
+    "col_count": 40,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "sr_no",
+        "type": "number(20)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Sr No.",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Particulars",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "overnight_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Overnight - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "overnight_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Overnight - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "overnight_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Overnight - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_7_days_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 7 days - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_7_days_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 7 days - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_7_days_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 7 days - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_7_to_15_days_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 7 to 15 days - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_7_to_15_days_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 7 to 15 days - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_7_to_15_days_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 7 to 15 days - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_15_to_30_days_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">15 to 30 days - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_15_to_30_days_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">15 to 30 days - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_15_to_30_days_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">15 to 30 days - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_months_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">1 to 3 months - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_months_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">1 to 3 months - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_months_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": ">1 to 3 months - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_6_months_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 6 months - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_6_months_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 6 months - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_6_months_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 6 months - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_6_to_12_months_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 6 to 12 months - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_6_to_12_months_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 6 to 12 months - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_6_to_12_months_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 6 to 12 months - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_years_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 3 years - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_years_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 3 years - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_1_to_3_years_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 1 to 3 years - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_5_years_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 5 years - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_5_years_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 5 years - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_3_to_5_years_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 3 to 5 years - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_5_years_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 5 years - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_5_years_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 5 years - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "gt_5_years_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "> 5 years - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "no_contra_mat_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "No contractual maturity - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "no_contra_mat_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "No contractual maturity - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "no_contra_mat_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "No contractual maturity - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "total_lc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "TOTAL - LC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "total_usd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "TOTAL - USD",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "total_other_fc",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "TOTAL - Other FC",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(20)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Row code",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities"
+      }
+    ],
+    "text": "qcb_f010_rcm_out_qtr | QCB_F010_Maturity Ladder of Assets & Liabilities | sr_no description overnight_lc overnight_usd overnight_other_fc gt_1_to_7_days_lc gt_1_to_7_days_usd gt_1_to_7_days_other_fc gt_7_to_15_days_lc gt_7_to_15_days_usd gt_7_to_15_days_other_fc gt_15_to_30_days_lc gt_15_to_30_days_usd gt_15_to_30_days_other_fc gt_1_to_3_months_lc gt_1_to_3_months_usd gt_1_to_3_months_other_fc gt_3_to_6_months_lc gt_3_to_6_months_usd gt_3_to_6_months_other_fc gt_6_to_12_months_lc gt_6_to_12_months_usd gt_6_to_12_months_other_fc gt_1_to_3_years_lc gt_1_to_3_years_usd gt_1_to_3_years_other_fc gt_3_to_5_years_lc gt_3_to_5_years_usd gt_3_to_5_years_other_fc gt_5_years_lc gt_5_years_usd gt_5_years_other_fc no_contra_mat_lc no_contra_mat_usd no_contra_mat_other_fc total_lc total_usd total_other_fc code rdate | Sr No. | Particulars | Overnight - LC | Overnight - USD | Overnight - Other FC | > 1 to 7 days - LC | > 1 to 7 days - USD | > 1 to 7 days - Other FC | > 7 to 15 days - LC | > 7 to 15 days - USD | > 7 to 15 days - Other FC | >15 to 30 days - LC | >15 to 30 days - USD | >15 to 30 days - Other FC | >1 to 3 months - LC | >1 to 3 months - USD | >1 to 3 months - Other FC | > 3 to 6 months - LC | > 3 to 6 months - USD | > 3 to 6 months - Other FC | > 6 to 12 months - LC | > 6 to 12 months - USD | > 6 to 12 months - Other FC | > 1 to 3 years - LC | > 1 to 3 years - USD | > 1 to 3 years - Other FC | > 3 to 5 years - LC | > 3 to 5 years - USD | > 3 to 5 years - Other FC | > 5 years - LC | > 5 years - USD | > 5 years - Other FC | No contractual maturity - LC | No contractual maturity - USD | No contractual maturity - Other FC | TOTAL - LC | TOTAL - USD | TOTAL - Other FC | Row code | Reporting date",
+    "summary_text": "qcb_f010_rcm_out_qtr | QCB_F010_Maturity Ladder of Assets & Liabilities | QCB_F010_RCM_OUT_QTR — qcb f010 rcm out qtr. Fields include: Sr No., Particulars, Overnight - LC, Overnight - USD, Overnight - Other FC, > 1 to 7 days - LC, > 1 to 7 days - USD, > 1 to 7 days - Other FC. | Columns: sr_no, description, overnight_lc, overnight_usd, overnight_other_fc, gt_1_to_7_days_lc, gt_1_to_7_days_usd, gt_1_to_7_days_other_fc, gt_7_to_15_days_lc, gt_7_to_15_days_usd, gt_7_to_15_days_other_fc, gt_15_to_30_days_lc, gt_15_to_30_days_usd, gt_15_to_30_days_other_fc, gt_1_to_3_months_lc, gt_1_to_3_months_usd, gt_1_to_3_months_other_fc, gt_3_to_6_months_lc, gt_3_to_6_months_usd, gt_3_to_6_months_other_fc, gt_6_to_12_months_lc, gt_6_to_12_months_usd, gt_6_to_12_months_other_fc, gt_1_to_3_years_lc, gt_1_to_3_years_usd, gt_1_to_3_years_other_fc, gt_3_to_5_years_lc, gt_3_to_5_years_usd, gt_3_to_5_years_other_fc, gt_5_years_lc, gt_5_years_usd, gt_5_years_other_fc, no_contra_mat_lc, no_contra_mat_usd, no_contra_mat_other_fc, total_lc, total_usd, total_other_fc, code, rdate"
+  },
+  {
+    "table": "qcb_f013_break_exposure",
+    "return_name": "QCB_F013_Breakdown of exposures by geography",
+    "description": "QCB_F013_BREAK_EXPOSURE — qcb f013 break exposure. Fields include: Country, Sovereigns, Multilateral Development Banks, Public Sector Entities, For-Profit Government-Related Entities, Banks, Private Sector - Large Corporates, Private Sector - SMEs.",
+    "is_backup": false,
+    "col_count": 12,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "country",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Country",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "sovereigns",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Sovereigns",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "multi_dev_banks",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Multilateral Development Banks",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "public_sector_ent",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Public Sector Entities",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "for_profit_gov_rltd_ent",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "For-Profit Government-Related Entities",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "banks",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Banks",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "pvt_sec_large_corp",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Private Sector - Large Corporates",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "pvt_sec_smes",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Private Sector - SMEs",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "nbf_institutions",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Non-Bank Financial Institutions",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "retail",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Retail",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Total",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      }
+    ],
+    "text": "qcb_f013_break_exposure | QCB_F013_Breakdown of exposures by geography | country sovereigns multi_dev_banks public_sector_ent for_profit_gov_rltd_ent banks pvt_sec_large_corp pvt_sec_smes nbf_institutions retail total rdate | Country | Sovereigns | Multilateral Development Banks | Public Sector Entities | For-Profit Government-Related Entities | Banks | Private Sector - Large Corporates | Private Sector - SMEs | Non-Bank Financial Institutions | Retail | Total | Reporting date",
+    "summary_text": "qcb_f013_break_exposure | QCB_F013_Breakdown of exposures by geography | QCB_F013_BREAK_EXPOSURE — qcb f013 break exposure. Fields include: Country, Sovereigns, Multilateral Development Banks, Public Sector Entities, For-Profit Government-Related Entities, Banks, Private Sector - Large Corporates, Private Sector - SMEs. | Columns: country, sovereigns, multi_dev_banks, public_sector_ent, for_profit_gov_rltd_ent, banks, pvt_sec_large_corp, pvt_sec_smes, nbf_institutions, retail, total, rdate"
+  },
+  {
+    "table": "qcb_f013_filing_info",
+    "return_name": "QCB_F013_Breakdown of exposures by geography",
+    "description": "QCB_F013_FILING_INFO — qcb f013 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date.",
+    "is_backup": false,
+    "col_count": 4,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item name",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "value",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item value",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "IRIS code identifying the filing information item",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F013_Breakdown of exposures by geography"
+      }
+    ],
+    "text": "qcb_f013_filing_info | QCB_F013_Breakdown of exposures by geography | description value code rdate | Filing information item name | Filing information item value | IRIS code identifying the filing information item | Reporting date",
+    "summary_text": "qcb_f013_filing_info | QCB_F013_Breakdown of exposures by geography | QCB_F013_FILING_INFO — qcb f013 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date. | Columns: description, value, code, rdate"
+  },
+  {
+    "table": "qcb_f014_filing_info",
+    "return_name": "QCB_F014_Breakdown of Funding by geography",
+    "description": "QCB_F014_FILING_INFO — qcb f014 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date.",
+    "is_backup": false,
+    "col_count": 4,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item name",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "value",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item value",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "IRIS code identifying the filing information item",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      }
+    ],
+    "text": "qcb_f014_filing_info | QCB_F014_Breakdown of Funding by geography | description value code rdate | Filing information item name | Filing information item value | IRIS code identifying the filing information item | Reporting date",
+    "summary_text": "qcb_f014_filing_info | QCB_F014_Breakdown of Funding by geography | QCB_F014_FILING_INFO — qcb f014 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date. | Columns: description, value, code, rdate"
+  },
+  {
+    "table": "qcb_f014_funding_geo",
+    "return_name": "QCB_F014_Breakdown of Funding by geography",
+    "description": "QCB_F014_FUNDING_GEO — qcb f014 funding geo. Fields include: Country, Sovereigns, Multilateral Development Banks, Public Sector Entities, For-Profit Government-Related Entities, Banks, Private Sector - Large Corporates, Private Sector - SMEs.",
+    "is_backup": false,
+    "col_count": 12,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "country",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Country",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "sovereigns",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Sovereigns",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "multi_dev_banks",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Multilateral Development Banks",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "public_sector_ent",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Public Sector Entities",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "for_profit_gov_rltd_ent",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "For-Profit Government-Related Entities",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "banks",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Banks",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "pvt_sec_large_corp",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Private Sector - Large Corporates",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "pvt_sec_smes",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Private Sector - SMEs",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "nbf_institutions",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Non-Bank Financial Institutions",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "retail",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Retail",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Total",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F014_Breakdown of Funding by geography"
+      }
+    ],
+    "text": "qcb_f014_funding_geo | QCB_F014_Breakdown of Funding by geography | country sovereigns multi_dev_banks public_sector_ent for_profit_gov_rltd_ent banks pvt_sec_large_corp pvt_sec_smes nbf_institutions retail total rdate | Country | Sovereigns | Multilateral Development Banks | Public Sector Entities | For-Profit Government-Related Entities | Banks | Private Sector - Large Corporates | Private Sector - SMEs | Non-Bank Financial Institutions | Retail | Total | Reporting date",
+    "summary_text": "qcb_f014_funding_geo | QCB_F014_Breakdown of Funding by geography | QCB_F014_FUNDING_GEO — qcb f014 funding geo. Fields include: Country, Sovereigns, Multilateral Development Banks, Public Sector Entities, For-Profit Government-Related Entities, Banks, Private Sector - Large Corporates, Private Sector - SMEs. | Columns: country, sovereigns, multi_dev_banks, public_sector_ent, for_profit_gov_rltd_ent, banks, pvt_sec_large_corp, pvt_sec_smes, nbf_institutions, retail, total, rdate"
+  },
+  {
+    "table": "qcb_f015_bank_cap_base",
+    "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+    "description": "QCB_F015_BANK_CAP_BASE — qcb f015 bank cap base. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date.",
+    "is_backup": false,
+    "col_count": 4,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item name",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "value",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item value",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "IRIS code identifying the filing information item",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      }
+    ],
+    "text": "qcb_f015_bank_cap_base | QCB_F015_Foreign Currency Net Open Positions | description value code rdate | Filing information item name | Filing information item value | IRIS code identifying the filing information item | Reporting date",
+    "summary_text": "qcb_f015_bank_cap_base | QCB_F015_Foreign Currency Net Open Positions | QCB_F015_BANK_CAP_BASE — qcb f015 bank cap base. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date. | Columns: description, value, code, rdate"
+  },
+  {
+    "table": "qcb_f015_filing_info",
+    "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+    "description": "QCB_F015_FILING_INFO — qcb f015 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date.",
+    "is_backup": false,
+    "col_count": 4,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "description",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item name",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "value",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Filing information item value",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "code",
+        "type": "varchar2(200)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "IRIS code identifying the filing information item",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      }
+    ],
+    "text": "qcb_f015_filing_info | QCB_F015_Foreign Currency Net Open Positions | description value code rdate | Filing information item name | Filing information item value | IRIS code identifying the filing information item | Reporting date",
+    "summary_text": "qcb_f015_filing_info | QCB_F015_Foreign Currency Net Open Positions | QCB_F015_FILING_INFO — qcb f015 filing information. Fields include: Filing information item name, Filing information item value, IRIS code identifying the filing information item, Reporting date. | Columns: description, value, code, rdate"
+  },
+  {
+    "table": "qcb_f015_foreign_cur_nop",
+    "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+    "description": "QCB_F015_FOREIGN_CUR_NOP — qcb f015 foreign cur nop. Fields include: Sr No, Currency, Assets - Cash and Cash Equivalents - Total, Assets - Cash and Cash Equivalents - Inside Qatar, Assets - Cash and Cash Equivalents - Outside Qatar, Assets - Claims on Central Banks - Total, Assets - Claims on Central Banks - Inside Qatar, Assets - Claims on Central Banks - Outside Qatar.",
+    "is_backup": false,
+    "col_count": 75,
+    "primary_key": [],
+    "foreign_keys": [],
+    "columns": [
+      {
+        "name": "sr_no",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Sr No",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "currency",
+        "type": "varchar2(50)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Currency",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "cash_eq_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Cash and Cash Equivalents - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "cash_eq_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Cash and Cash Equivalents - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "cash_eq_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Cash and Cash Equivalents - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "claims_cb_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Claims on Central Banks - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "claims_cb_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Claims on Central Banks - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "claims_cb_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Claims on Central Banks - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "claims_bank_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Claims on Banks - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "claims_bank_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Claims on Banks - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "claims_bank_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Claims on Banks - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_sec_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investment securities - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_sec_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investment securities - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_sec_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investment securities - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "loans_adv_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Loans and advances to customers - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "loans_adv_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Loans and advances to customers - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "loans_adv_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Loans and advances to customers - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_sub_assoc_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investments in Subsidiaries and Associates - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_sub_assoc_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investments in Subsidiaries and Associates - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_sub_assoc_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investments in Subsidiaries and Associates - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_re_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investment in Real Estates - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_re_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investment in Real Estates - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "invest_re_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Investment in Real Estates - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "net_fix_assets_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Net Fixed Assets - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "net_fix_assets_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Net Fixed Assets - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "net_fix_assets_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Net Fixed Assets - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "right_use_assets_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Right-of-use assets - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "right_use_assets_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Right-of-use assets - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "right_use_assets_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Right-of-use assets - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "intang_assets_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Intangible assets - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "intang_assets_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Intangible assets - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "intang_assets_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Intangible assets - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_assets_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Other assets - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_assets_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Other assets - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_assets_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Other assets - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_assets",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Assets - Total assets",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "forward_purchases",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Forward purchases (Value of hedging contracts)",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_assets_forwd_purch",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Total assets and forward purchases",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "due_cb_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Due to Central Banks - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "due_cb_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Due to Central Banks - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "due_cb_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Due to Central Banks - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "due_banks_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Due to Banks - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "due_banks_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Due to Banks - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "due_banks_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Due to Banks - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "cust_deposits_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Customer Deposits - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "cust_deposits_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Customer Deposits - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "cust_deposits_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Customer Deposits - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "sec_issued_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Securities Issued - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "sec_issued_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Securities Issued - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "sec_issued_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Securities Issued - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_borrow_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Other Borrowings / Finance - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_borrow_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Other Borrowings / Finance - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_borrow_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Other Borrowings / Finance - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "lease_liab_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Lease Liability - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "lease_liab_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Lease Liability - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "lease_liab_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Lease Liability - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "provisions_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Provisions - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "provisions_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Provisions - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "provisions_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Provisions - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_liab_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Other liabilities - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_liab_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Other liabilities - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "other_liab_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Other liabilities - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_liab",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Total liabilities",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_equity_total",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Total Equity - Total",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_equity_in_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Total Equity - Inside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_equity_out_qtr",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Total Equity - Outside Qatar",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_liab_equity",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Liabilities - Total liabilities and equity",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "deferred_sales",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Deferred sales (Value of hedging contracts)",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "total_equity_liab_defrd",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Total equity, liabilities and deferred sales",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "surplus_def",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Surplus/deficit",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "surplus_def_excl_equity",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Surplus/deficit (excluding equity)",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "surplus_def_excl_eq_inv",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Surplus/deficit (excluding equity and investments in subsidiaries and associates)",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "surplus_cap_base_ratio",
+        "type": "number(20,4)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Surplus/deficit (excluding equity and investments in subsidiaries and associates) to capital base ratio",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "exchange_rate",
+        "type": "number(20,2)",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Exchange rate",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      },
+      {
+        "name": "rdate",
+        "type": "date",
+        "nullable": true,
+        "is_primary_key": false,
+        "description": "Reporting date",
+        "return_name": "QCB_F015_Foreign Currency Net Open Positions"
+      }
+    ],
+    "text": "qcb_f015_foreign_cur_nop | QCB_F015_Foreign Currency Net Open Positions | sr_no currency cash_eq_total cash_eq_in_qtr cash_eq_out_qtr claims_cb_total claims_cb_in_qtr claims_cb_out_qtr claims_bank_total claims_bank_in_qtr claims_bank_out_qtr invest_sec_total invest_sec_in_qtr invest_sec_out_qtr loans_adv_total loans_adv_in_qtr loans_adv_out_qtr invest_sub_assoc_total invest_sub_assoc_in_qtr invest_sub_assoc_out_qtr invest_re_total invest_re_in_qtr invest_re_out_qtr net_fix_assets_total net_fix_assets_in_qtr net_fix_assets_out_qtr right_use_assets_total right_use_assets_in_qtr right_use_assets_out_qtr intang_assets_total intang_assets_in_qtr intang_assets_out_qtr other_assets_total other_assets_in_qtr other_assets_out_qtr total_assets forward_purchases total_assets_forwd_purch due_cb_total due_cb_in_qtr due_cb_out_qtr due_banks_total due_banks_in_qtr due_banks_out_qtr cust_deposits_total cust_deposits_in_qtr cust_deposits_out_qtr sec_issued_total sec_issued_in_qtr sec_issued_out_qtr other_borrow_total other_borrow_in_qtr other_borrow_out_qtr lease_liab_total lease_liab_in_qtr lease_liab_out_qtr provisions_total provisions_in_qtr provisions_out_qtr other_liab_total other_liab_in_qtr other_liab_out_qtr total_liab total_equity_total total_equity_in_qtr total_equity_out_qtr total_liab_equity deferred_sales total_equity_liab_defrd surplus_def surplus_def_excl_equity surplus_def_excl_eq_inv surplus_cap_base_ratio exchange_rate rdate | Sr No | Currency | Assets - Cash and Cash Equivalents - Total | Assets - Cash and Cash Equivalents - Inside Qatar | Assets - Cash and Cash Equivalents - Outside Qatar | Assets - Claims on Central Banks - Total | Assets - Claims on Central Banks - Inside Qatar | Assets - Claims on Central Banks - Outside Qatar | Assets - Claims on Banks - Total | Assets - Claims on Banks - Inside Qatar | Assets - Claims on Banks - Outside Qatar | Assets - Investment securities - Total | Assets - Investment securities - Inside Qatar | Assets - Investment securities - Outside Qatar | Assets - Loans and advances to customers - Total | Assets - Loans and advances to customers - Inside Qatar | Assets - Loans and advances to customers - Outside Qatar | Assets - Investments in Subsidiaries and Associates - Total | Assets - Investments in Subsidiaries and Associates - Inside Qatar | Assets - Investments in Subsidiaries and Associates - Outside Qatar | Assets - Investment in Real Estates - Total | Assets - Investment in Real Estates - Inside Qatar | Assets - Investment in Real Estates - Outside Qatar | Assets - Net Fixed Assets - Total | Assets - Net Fixed Assets - Inside Qatar | Assets - Net Fixed Assets - Outside Qatar | Assets - Right-of-use assets - Total | Assets - Right-of-use assets - Inside Qatar | Assets - Right-of-use assets - Outside Qatar | Assets - Intangible assets - Total | Assets - Intangible assets - Inside Qatar | Assets - Intangible assets - Outside Qatar | Assets - Other assets - Total | Assets - Other assets - Inside Qatar | Assets - Other assets - Outside Qatar | Assets - Total assets | Forward purchases (Value of hedging contracts) | Total assets and forward purchases | Liabilities - Due to Central Banks - Total | Liabilities - Due to Central Banks - Inside Qatar | Liabilities - Due to Central Banks - Outside Qatar | Liabilities - Due to Banks - Total | Liabilities - Due to Banks - Inside Qatar | Liabilities - Due to Banks - Outside Qatar | Liabilities - Customer Deposits - Total | Liabilities - Customer Deposits - Inside Qatar | Liabilities - Customer Deposits - Outside Qatar | Liabilities - Securities Issued - Total | Liabilities - Securities Issued - Inside Qatar | Liabilities - Securities Issued - Outside Qatar | Liabilities - Other Borrowings / Finance - Total | Liabilities - Other Borrowings / Finance - Inside Qatar | Liabilities - Other Borrowings / Finance - Outside Qatar | Liabilities - Lease Liability - Total | Liabilities - Lease Liability - Inside Qatar | Liabilities - Lease Liability - Outside Qatar | Liabilities - Provisions - Total | Liabilities - Provisions - Inside Qatar | Liabilities - Provisions - Outside Qatar | Liabilities - Other liabilities - Total | Liabilities - Other liabilities - Inside Qatar | Liabilities - Other liabilities - Outside Qatar | Liabilities - Total liabilities | Liabilities - Total Equity - Total | Liabilities - Total Equity - Inside Qatar | Liabilities - Total Equity - Outside Qatar | Liabilities - Total liabilities and equity | Deferred sales (Value of hedging contracts) | Total equity, liabilities and deferred sales | Surplus/deficit | Surplus/deficit (excluding equity) | Surplus/deficit (excluding equity and investments in subsidiaries and associates) | Surplus/deficit (excluding equity and investments in subsidiaries and associates) to capital base ratio | Exchange rate | Reporting date",
+    "summary_text": "qcb_f015_foreign_cur_nop | QCB_F015_Foreign Currency Net Open Positions | QCB_F015_FOREIGN_CUR_NOP — qcb f015 foreign cur nop. Fields include: Sr No, Currency, Assets - Cash and Cash Equivalents - Total, Assets - Cash and Cash Equivalents - Inside Qatar, Assets - Cash and Cash Equivalents - Outside Qatar, Assets - Claims on Central Banks - Total, Assets - Claims on Central Banks - Inside Qatar, Assets - Claims on Central Banks - Outside Qatar. | Columns: sr_no, currency, cash_eq_total, cash_eq_in_qtr, cash_eq_out_qtr, claims_cb_total, claims_cb_in_qtr, claims_cb_out_qtr, claims_bank_total, claims_bank_in_qtr, claims_bank_out_qtr, invest_sec_total, invest_sec_in_qtr, invest_sec_out_qtr, loans_adv_total, loans_adv_in_qtr, loans_adv_out_qtr, invest_sub_assoc_total, invest_sub_assoc_in_qtr, invest_sub_assoc_out_qtr, invest_re_total, invest_re_in_qtr, invest_re_out_qtr, net_fix_assets_total, net_fix_assets_in_qtr, net_fix_assets_out_qtr, right_use_assets_total, right_use_assets_in_qtr, right_use_assets_out_qtr, intang_assets_total, intang_assets_in_qtr, intang_assets_out_qtr, other_assets_total, other_assets_in_qtr, other_assets_out_qtr, total_assets, forward_purchases, total_assets_forwd_purch, due_cb_total, due_cb_in_qtr, due_cb_out_qtr, due_banks_total, due_banks_in_qtr, due_banks_out_qtr, cust_deposits_total, cust_deposits_in_qtr, cust_deposits_out_qtr, sec_issued_total, sec_issued_in_qtr, sec_issued_out_qtr, other_borrow_total, other_borrow_in_qtr, other_borrow_out_qtr, lease_liab_total, lease_liab_in_qtr, lease_liab_out_qtr, provisions_total, provisions_in_qtr, provisions_out_qtr, other_liab_total, other_liab_in_qtr, other_liab_out_qtr, total_liab, total_equity_total, total_equity_in_qtr, total_equity_out_qtr, total_liab_equity, deferred_sales, total_equity_liab_defrd, surplus_def, surplus_def_excl_equity, surplus_def_excl_eq_inv, surplus_cap_base_ratio, exchange_rate, rdate"
+  }
+]

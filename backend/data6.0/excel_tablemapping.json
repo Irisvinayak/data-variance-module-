@@ -1,0 +1,1829 @@
+{
+  "results": [
+    {
+      "columns": [
+        {
+          "name": "TABLE_NAME",
+          "type": "VARCHAR2"
+        },
+        {
+          "name": "column_name",
+          "type": "VARCHAR2"
+        },
+        {
+          "name": "column_Description",
+          "type": "VARCHAR2"
+        },
+        {
+          "name": "TEMPLATE_SHEET_NO",
+          "type": "NUMBER"
+        },
+        {
+          "name": "RETURN_NAME",
+          "type": "VARCHAR2"
+        },
+        {
+          "name": "ISACTIVE",
+          "type": "NUMBER"
+        },
+        {
+          "name": "SCALE",
+          "type": "VARCHAR2"
+        }
+      ],
+      "items": [
+        {
+          "table_name": "QCB_F010_FILING_INFO",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Filing information item name",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_FILING_INFO",
+          "column_name": "VALUE",
+          "column_Description": "Filing information item value",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_FILING_INFO",
+          "column_name": "CODE",
+          "column_Description": "IRIS code identifying the filing information item",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_FILING_INFO",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "SR_NO",
+          "column_Description": "Sr No.",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Particulars",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "OVERNIGHT_LC",
+          "column_Description": "Overnight - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "OVERNIGHT_USD",
+          "column_Description": "Overnight - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "OVERNIGHT_OTHER_FC",
+          "column_Description": "Overnight - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_7_DAYS_LC",
+          "column_Description": "> 1 to 7 days - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_7_DAYS_USD",
+          "column_Description": "> 1 to 7 days - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_7_DAYS_OTHER_FC",
+          "column_Description": "> 1 to 7 days - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_7_TO_15_DAYS_LC",
+          "column_Description": "> 7 to 15 days - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_7_TO_15_DAYS_USD",
+          "column_Description": "> 7 to 15 days - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_7_TO_15_DAYS_OTHER_FC",
+          "column_Description": "> 7 to 15 days - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_15_TO_30_DAYS_LC",
+          "column_Description": ">15 to 30 days - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_15_TO_30_DAYS_USD",
+          "column_Description": ">15 to 30 days - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_15_TO_30_DAYS_OTHER_FC",
+          "column_Description": ">15 to 30 days - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_3_MONTHS_LC",
+          "column_Description": ">1 to 3 months - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_3_MONTHS_USD",
+          "column_Description": ">1 to 3 months - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_3_MONTHS_OTHER_FC",
+          "column_Description": ">1 to 3 months - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_3_TO_6_MONTHS_LC",
+          "column_Description": "> 3 to 6 months - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_3_TO_6_MONTHS_USD",
+          "column_Description": "> 3 to 6 months - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_3_TO_6_MONTHS_OTHER_FC",
+          "column_Description": "> 3 to 6 months - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_6_TO_12_MONTHS_LC",
+          "column_Description": "> 6 to 12 months - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_6_TO_12_MONTHS_USD",
+          "column_Description": "> 6 to 12 months - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_6_TO_12_MONTHS_OTHER_FC",
+          "column_Description": "> 6 to 12 months - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_3_YEARS_LC",
+          "column_Description": "> 1 to 3 years - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_3_YEARS_USD",
+          "column_Description": "> 1 to 3 years - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_1_TO_3_YEARS_OTHER_FC",
+          "column_Description": "> 1 to 3 years - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_3_TO_5_YEARS_LC",
+          "column_Description": "> 3 to 5 years - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_3_TO_5_YEARS_USD",
+          "column_Description": "> 3 to 5 years - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_3_TO_5_YEARS_OTHER_FC",
+          "column_Description": "> 3 to 5 years - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_5_YEARS_LC",
+          "column_Description": "> 5 years - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_5_YEARS_USD",
+          "column_Description": "> 5 years - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "GT_5_YEARS_OTHER_FC",
+          "column_Description": "> 5 years - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "NO_CONTRA_MAT_LC",
+          "column_Description": "No contractual maturity - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "NO_CONTRA_MAT_USD",
+          "column_Description": "No contractual maturity - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "NO_CONTRA_MAT_OTHER_FC",
+          "column_Description": "No contractual maturity - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "TOTAL_LC",
+          "column_Description": "TOTAL - LC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "TOTAL_USD",
+          "column_Description": "TOTAL - USD",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "TOTAL_OTHER_FC",
+          "column_Description": "TOTAL - Other FC",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "CODE",
+          "column_Description": "Row code",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_IN_QTR",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "SR_NO",
+          "column_Description": "Sr No.",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Particulars",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "OVERNIGHT_LC",
+          "column_Description": "Overnight - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "OVERNIGHT_USD",
+          "column_Description": "Overnight - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "OVERNIGHT_OTHER_FC",
+          "column_Description": "Overnight - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_7_DAYS_LC",
+          "column_Description": "> 1 to 7 days - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_7_DAYS_USD",
+          "column_Description": "> 1 to 7 days - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_7_DAYS_OTHER_FC",
+          "column_Description": "> 1 to 7 days - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_7_TO_15_DAYS_LC",
+          "column_Description": "> 7 to 15 days - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_7_TO_15_DAYS_USD",
+          "column_Description": "> 7 to 15 days - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_7_TO_15_DAYS_OTHER_FC",
+          "column_Description": "> 7 to 15 days - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_15_TO_30_DAYS_LC",
+          "column_Description": ">15 to 30 days - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_15_TO_30_DAYS_USD",
+          "column_Description": ">15 to 30 days - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_15_TO_30_DAYS_OTHER_FC",
+          "column_Description": ">15 to 30 days - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_3_MONTHS_LC",
+          "column_Description": ">1 to 3 months - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_3_MONTHS_USD",
+          "column_Description": ">1 to 3 months - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_3_MONTHS_OTHER_FC",
+          "column_Description": ">1 to 3 months - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_3_TO_6_MONTHS_LC",
+          "column_Description": "> 3 to 6 months - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_3_TO_6_MONTHS_USD",
+          "column_Description": "> 3 to 6 months - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_3_TO_6_MONTHS_OTHER_FC",
+          "column_Description": "> 3 to 6 months - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_6_TO_12_MONTHS_LC",
+          "column_Description": "> 6 to 12 months - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_6_TO_12_MONTHS_USD",
+          "column_Description": "> 6 to 12 months - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_6_TO_12_MONTHS_OTHER_FC",
+          "column_Description": "> 6 to 12 months - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_3_YEARS_LC",
+          "column_Description": "> 1 to 3 years - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_3_YEARS_USD",
+          "column_Description": "> 1 to 3 years - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_1_TO_3_YEARS_OTHER_FC",
+          "column_Description": "> 1 to 3 years - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_3_TO_5_YEARS_LC",
+          "column_Description": "> 3 to 5 years - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_3_TO_5_YEARS_USD",
+          "column_Description": "> 3 to 5 years - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_3_TO_5_YEARS_OTHER_FC",
+          "column_Description": "> 3 to 5 years - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_5_YEARS_LC",
+          "column_Description": "> 5 years - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_5_YEARS_USD",
+          "column_Description": "> 5 years - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "GT_5_YEARS_OTHER_FC",
+          "column_Description": "> 5 years - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "NO_CONTRA_MAT_LC",
+          "column_Description": "No contractual maturity - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "NO_CONTRA_MAT_USD",
+          "column_Description": "No contractual maturity - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "NO_CONTRA_MAT_OTHER_FC",
+          "column_Description": "No contractual maturity - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "TOTAL_LC",
+          "column_Description": "TOTAL - LC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "TOTAL_USD",
+          "column_Description": "TOTAL - USD",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "TOTAL_OTHER_FC",
+          "column_Description": "TOTAL - Other FC",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "CODE",
+          "column_Description": "Row code",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F010_RCM_OUT_QTR",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 3,
+          "return_name": "QCB_F010_Maturity Ladder of Assets & Liabilities",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_FILING_INFO",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Filing information item name",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_FILING_INFO",
+          "column_name": "VALUE",
+          "column_Description": "Filing information item value",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_FILING_INFO",
+          "column_name": "CODE",
+          "column_Description": "IRIS code identifying the filing information item",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_FILING_INFO",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "COUNTRY",
+          "column_Description": "Country",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "SOVEREIGNS",
+          "column_Description": "Sovereigns",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "MULTI_DEV_BANKS",
+          "column_Description": "Multilateral Development Banks",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "PUBLIC_SECTOR_ENT",
+          "column_Description": "Public Sector Entities",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "FOR_PROFIT_GOV_RLTD_ENT",
+          "column_Description": "For-Profit Government-Related Entities",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "BANKS",
+          "column_Description": "Banks",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "PVT_SEC_LARGE_CORP",
+          "column_Description": "Private Sector - Large Corporates",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "PVT_SEC_SMES",
+          "column_Description": "Private Sector - SMEs",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "NBF_INSTITUTIONS",
+          "column_Description": "Non-Bank Financial Institutions",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "RETAIL",
+          "column_Description": "Retail",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "TOTAL",
+          "column_Description": "Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F013_BREAK_EXPOSURE",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F013_Breakdown of exposures by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FILING_INFO",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Filing information item name",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FILING_INFO",
+          "column_name": "VALUE",
+          "column_Description": "Filing information item value",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FILING_INFO",
+          "column_name": "CODE",
+          "column_Description": "IRIS code identifying the filing information item",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FILING_INFO",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "COUNTRY",
+          "column_Description": "Country",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "SOVEREIGNS",
+          "column_Description": "Sovereigns",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "MULTI_DEV_BANKS",
+          "column_Description": "Multilateral Development Banks",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "PUBLIC_SECTOR_ENT",
+          "column_Description": "Public Sector Entities",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "FOR_PROFIT_GOV_RLTD_ENT",
+          "column_Description": "For-Profit Government-Related Entities",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "BANKS",
+          "column_Description": "Banks",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "PVT_SEC_LARGE_CORP",
+          "column_Description": "Private Sector - Large Corporates",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "PVT_SEC_SMES",
+          "column_Description": "Private Sector - SMEs",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "NBF_INSTITUTIONS",
+          "column_Description": "Non-Bank Financial Institutions",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "RETAIL",
+          "column_Description": "Retail",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "TOTAL",
+          "column_Description": "Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F014_FUNDING_GEO",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F014_Breakdown of Funding by geography",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FILING_INFO",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Filing information item name",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FILING_INFO",
+          "column_name": "VALUE",
+          "column_Description": "Filing information item value",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FILING_INFO",
+          "column_name": "CODE",
+          "column_Description": "IRIS code identifying the filing information item",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FILING_INFO",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 1,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SR_NO",
+          "column_Description": "Sr No",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CURRENCY",
+          "column_Description": "Currency",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CASH_EQ_TOTAL",
+          "column_Description": "Assets - Cash and Cash Equivalents - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CASH_EQ_IN_QTR",
+          "column_Description": "Assets - Cash and Cash Equivalents - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CASH_EQ_OUT_QTR",
+          "column_Description": "Assets - Cash and Cash Equivalents - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CLAIMS_CB_TOTAL",
+          "column_Description": "Assets - Claims on Central Banks - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CLAIMS_CB_IN_QTR",
+          "column_Description": "Assets - Claims on Central Banks - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CLAIMS_CB_OUT_QTR",
+          "column_Description": "Assets - Claims on Central Banks - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CLAIMS_BANK_TOTAL",
+          "column_Description": "Assets - Claims on Banks - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CLAIMS_BANK_IN_QTR",
+          "column_Description": "Assets - Claims on Banks - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CLAIMS_BANK_OUT_QTR",
+          "column_Description": "Assets - Claims on Banks - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_SEC_TOTAL",
+          "column_Description": "Assets - Investment securities - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_SEC_IN_QTR",
+          "column_Description": "Assets - Investment securities - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_SEC_OUT_QTR",
+          "column_Description": "Assets - Investment securities - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "LOANS_ADV_TOTAL",
+          "column_Description": "Assets - Loans and advances to customers - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "LOANS_ADV_IN_QTR",
+          "column_Description": "Assets - Loans and advances to customers - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "LOANS_ADV_OUT_QTR",
+          "column_Description": "Assets - Loans and advances to customers - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_SUB_ASSOC_TOTAL",
+          "column_Description": "Assets - Investments in Subsidiaries and Associates - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_SUB_ASSOC_IN_QTR",
+          "column_Description": "Assets - Investments in Subsidiaries and Associates - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_SUB_ASSOC_OUT_QTR",
+          "column_Description": "Assets - Investments in Subsidiaries and Associates - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_RE_TOTAL",
+          "column_Description": "Assets - Investment in Real Estates - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_RE_IN_QTR",
+          "column_Description": "Assets - Investment in Real Estates - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INVEST_RE_OUT_QTR",
+          "column_Description": "Assets - Investment in Real Estates - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "NET_FIX_ASSETS_TOTAL",
+          "column_Description": "Assets - Net Fixed Assets - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "NET_FIX_ASSETS_IN_QTR",
+          "column_Description": "Assets - Net Fixed Assets - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "NET_FIX_ASSETS_OUT_QTR",
+          "column_Description": "Assets - Net Fixed Assets - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "RIGHT_USE_ASSETS_TOTAL",
+          "column_Description": "Assets - Right-of-use assets - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "RIGHT_USE_ASSETS_IN_QTR",
+          "column_Description": "Assets - Right-of-use assets - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "RIGHT_USE_ASSETS_OUT_QTR",
+          "column_Description": "Assets - Right-of-use assets - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INTANG_ASSETS_TOTAL",
+          "column_Description": "Assets - Intangible assets - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INTANG_ASSETS_IN_QTR",
+          "column_Description": "Assets - Intangible assets - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "INTANG_ASSETS_OUT_QTR",
+          "column_Description": "Assets - Intangible assets - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_ASSETS_TOTAL",
+          "column_Description": "Assets - Other assets - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_ASSETS_IN_QTR",
+          "column_Description": "Assets - Other assets - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_ASSETS_OUT_QTR",
+          "column_Description": "Assets - Other assets - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_ASSETS",
+          "column_Description": "Assets - Total assets",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "FORWARD_PURCHASES",
+          "column_Description": "Forward purchases (Value of hedging contracts)",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_ASSETS_FORWD_PURCH",
+          "column_Description": "Total assets and forward purchases",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DUE_CB_TOTAL",
+          "column_Description": "Liabilities - Due to Central Banks - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DUE_CB_IN_QTR",
+          "column_Description": "Liabilities - Due to Central Banks - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DUE_CB_OUT_QTR",
+          "column_Description": "Liabilities - Due to Central Banks - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DUE_BANKS_TOTAL",
+          "column_Description": "Liabilities - Due to Banks - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DUE_BANKS_IN_QTR",
+          "column_Description": "Liabilities - Due to Banks - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DUE_BANKS_OUT_QTR",
+          "column_Description": "Liabilities - Due to Banks - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CUST_DEPOSITS_TOTAL",
+          "column_Description": "Liabilities - Customer Deposits - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CUST_DEPOSITS_IN_QTR",
+          "column_Description": "Liabilities - Customer Deposits - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "CUST_DEPOSITS_OUT_QTR",
+          "column_Description": "Liabilities - Customer Deposits - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SEC_ISSUED_TOTAL",
+          "column_Description": "Liabilities - Securities Issued - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SEC_ISSUED_IN_QTR",
+          "column_Description": "Liabilities - Securities Issued - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SEC_ISSUED_OUT_QTR",
+          "column_Description": "Liabilities - Securities Issued - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_BORROW_TOTAL",
+          "column_Description": "Liabilities - Other Borrowings / Finance - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_BORROW_IN_QTR",
+          "column_Description": "Liabilities - Other Borrowings / Finance - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_BORROW_OUT_QTR",
+          "column_Description": "Liabilities - Other Borrowings / Finance - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "LEASE_LIAB_TOTAL",
+          "column_Description": "Liabilities - Lease Liability - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "LEASE_LIAB_IN_QTR",
+          "column_Description": "Liabilities - Lease Liability - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "LEASE_LIAB_OUT_QTR",
+          "column_Description": "Liabilities - Lease Liability - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "PROVISIONS_TOTAL",
+          "column_Description": "Liabilities - Provisions - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "PROVISIONS_IN_QTR",
+          "column_Description": "Liabilities - Provisions - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "PROVISIONS_OUT_QTR",
+          "column_Description": "Liabilities - Provisions - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_LIAB_TOTAL",
+          "column_Description": "Liabilities - Other liabilities - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_LIAB_IN_QTR",
+          "column_Description": "Liabilities - Other liabilities - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "OTHER_LIAB_OUT_QTR",
+          "column_Description": "Liabilities - Other liabilities - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_LIAB",
+          "column_Description": "Liabilities - Total liabilities",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_EQUITY_TOTAL",
+          "column_Description": "Liabilities - Total Equity - Total",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_EQUITY_IN_QTR",
+          "column_Description": "Liabilities - Total Equity - Inside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_EQUITY_OUT_QTR",
+          "column_Description": "Liabilities - Total Equity - Outside Qatar",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_LIAB_EQUITY",
+          "column_Description": "Liabilities - Total liabilities and equity",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "DEFERRED_SALES",
+          "column_Description": "Deferred sales (Value of hedging contracts)",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "TOTAL_EQUITY_LIAB_DEFRD",
+          "column_Description": "Total equity, liabilities and deferred sales",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SURPLUS_DEF",
+          "column_Description": "Surplus/deficit",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SURPLUS_DEF_EXCL_EQUITY",
+          "column_Description": "Surplus/deficit (excluding equity)",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SURPLUS_DEF_EXCL_EQ_INV",
+          "column_Description": "Surplus/deficit (excluding equity and investments in subsidiaries and associates)",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "SURPLUS_CAP_BASE_RATIO",
+          "column_Description": "Surplus/deficit (excluding equity and investments in subsidiaries and associates) to capital base ratio",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "EXCHANGE_RATE",
+          "column_Description": "Exchange rate",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_FOREIGN_CUR_NOP",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 2,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_BANK_CAP_BASE",
+          "column_name": "DESCRIPTION",
+          "column_Description": "Filing information item name",
+          "template_sheet_no": 0,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_BANK_CAP_BASE",
+          "column_name": "VALUE",
+          "column_Description": "Filing information item value",
+          "template_sheet_no": 0,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_BANK_CAP_BASE",
+          "column_name": "CODE",
+          "column_Description": "IRIS code identifying the filing information item",
+          "template_sheet_no": 0,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        },
+        {
+          "table_name": "QCB_F015_BANK_CAP_BASE",
+          "column_name": "RDATE",
+          "column_Description": "Reporting date",
+          "template_sheet_no": 0,
+          "return_name": "QCB_F015_Foreign Currency Net Open Positions",
+          "isactive": 1,
+          "scale": "Actuals"
+        }
+      ]
+    }
+  ]
+}

@@ -90,3 +90,40 @@ def fuse_best_hit_per_table(
             signal_leaders.add(tbl)
         scored.add(tbl)
         scores[tbl] = scores.get(tbl, 0.0) + rrf(rank) * weight
+
+
+# Words that mean the user genuinely wants the submission header rather than
+# the reported figures. Kept deliberately narrow: these are the labels that
+# only ever appear in a FILING_INFO table, so a query containing one is asking
+# for it on purpose.
+_FILING_INTENT_TOKENS = frozenset({
+    "filing", "filed", "submission", "header", "metadata",
+    "institution", "reporting currency", "return code", "return name",
+    "reporting scale", "reporting frequency", "identification code",
+})
+
+# Chosen to be larger than the lexical-overlap bonus (0.03/token) can readily
+# offset, so a metadata table cannot climb back purely on sharing the return's
+# name with the query, but small enough that it still ranks ABOVE tables with
+# no signal at all — it remains a legitimate answer when nothing else matches.
+METADATA_PENALTY = 0.25
+
+
+def wants_filing_metadata(query_text: str) -> bool:
+    """True when the query explicitly asks about the submission header."""
+    low = (query_text or "").lower()
+    return any(tok in low for tok in _FILING_INTENT_TOKENS)
+
+
+def metadata_demotion(table: str, query_text: str) -> float:
+    """Score penalty for a key-value submission-header table, else 0.0.
+
+    Applied at ranking time rather than by excluding these tables outright:
+    "show me the reporting currency for f015" is a real question whose answer
+    lives only in FILING_INFO, so the table has to stay reachable.
+    """
+    from . import schema_info
+
+    if wants_filing_metadata(query_text):
+        return 0.0
+    return METADATA_PENALTY if schema_info.is_metadata_table(table) else 0.0
