@@ -5,6 +5,12 @@
 .env.development
 .env.production
 .env.test
+# Per-instance overlays for running 5.5 and 6.0 side by side (see
+# backend/config/settings.py DV_ENV_FILE) — the real files carry no secrets
+# of their own (those stay in the shared root .env) but are still local
+# deployment config, not template files.
+.env.55
+.env.60
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local

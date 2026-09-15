@@ -24,6 +24,25 @@ load_dotenv(
     override=True,
 )
 
+# ── Per-instance overlay (running two host versions side by side) ─────────────
+# The app is one-process-per-version by design: VERSION is read once at import
+# time and every setting below (DB, paths, port, ...) is fixed for the life of
+# the process. Serving 5.5 and 6.0 from the SAME process is not supported —
+# whichever VERSION it started with silently answers requests meant for the
+# other host's repo/DB.
+#
+# To run both at once, start two backend processes on two ports, each pointed
+# at its own overlay .env file via a real OS environment variable named
+# DV_ENV_FILE (set on the process launch, not inside a .env — it must exist
+# before this module ever loads one). The overlay is loaded AFTER the base
+# .env with override=True, so it only needs to carry the handful of keys that
+# must differ per instance (VERSION, DV_SERVER_PORT, DV_API_BASE_PATH); every
+# other setting (DB_*_55/_60, BASE_PATH_55/_60, ...) is already shared and
+# version-keyed in the base .env. See .env.55.example / .env.60.example.
+_ENV_OVERLAY = os.environ.get("DV_ENV_FILE", "").strip()
+if _ENV_OVERLAY:
+    load_dotenv(dotenv_path=_ENV_OVERLAY, override=True)
+
 
 def _flag(name: str, default: str = "false") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}

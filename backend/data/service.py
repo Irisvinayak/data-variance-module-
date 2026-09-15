@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import (
@@ -557,6 +558,62 @@ def _resolve_physical_table_name(
     return table_name
 
 
+def _actual_previous_dates(
+    resolved_table_name: str,
+    filter_col: str,
+    reporting_date: str,
+    periods: int,
+    execute_query_fn: Callable,
+) -> List[str]:
+    """The `periods` reporting dates immediately before `reporting_date`.
+
+    Reads the dates that exist in the table instead of deriving them from
+    RepFreq, so "previous period" means "the previous submission" — which
+    is what the user selecting a period count actually means, and what the
+    date dropdown already shows them.
+
+    Returns [] when the table cannot be queried or has no earlier date, so
+    the caller falls back to the original frequency arithmetic rather than
+    failing.
+    """
+    try:
+        anchor = datetime.strptime(reporting_date.strip().upper(), "%d-%b-%Y")
+    except (ValueError, AttributeError):
+        return []
+
+    sql = (
+        f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
+        f"WHERE {filter_col} < TO_DATE('{anchor.strftime('%d-%b-%Y').upper()}', 'DD-MON-YYYY') "
+        f"ORDER BY {filter_col} DESC FETCH FIRST {max(int(periods), 1)} ROWS ONLY"
+    )
+    cols, rows, err = execute_query_fn(sql)
+    if err:
+        # Older Oracle without FETCH FIRST — same fallback shape used above.
+        sql = (
+            f"SELECT {filter_col} FROM ("
+            f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
+            f"WHERE {filter_col} < TO_DATE('{anchor.strftime('%d-%b-%Y').upper()}', 'DD-MON-YYYY') "
+            f"ORDER BY {filter_col} DESC) WHERE ROWNUM <= {max(int(periods), 1)}"
+        )
+        cols, rows, err = execute_query_fn(sql)
+        if err:
+            logger.warning(
+                "[service] Could not read previous reporting dates for %s (%s) — "
+                "falling back to frequency arithmetic",
+                resolved_table_name, err,
+            )
+            return []
+
+    out: List[str] = []
+    for r in rows or []:
+        v = r[0] if not isinstance(r, dict) else list(r.values())[0]
+        if v is None:
+            continue
+        out.append(v.strftime("%d-%b-%Y").upper()
+                   if hasattr(v, "strftime") else str(v))
+    return out
+
+
 def get_available_dates(
     return_id: str,
     return_tbl_path: str,
@@ -754,6 +811,29 @@ def compute_variance(
             for ri in range(len(rows))
         ]
 
+    # No explicit dates from the caller -> resolve the period count against
+    # the table's real reporting dates. Without this, calculate_variance
+    # derives them from RepFreq, which is daily for the QCB returns even
+    # though they file monthly, so every comparison lands on an empty date.
+    effective_comparison_dates = comparison_dates
+    if not effective_comparison_dates:
+        previous = _actual_previous_dates(
+            resolved_table_name, metadata["filter_col"], reporting_date,
+            reporting_period, execute_query_fn,
+        )
+        if previous:
+            effective_comparison_dates = [reporting_date] + previous
+            logger.info(
+                "[service] previous period(s) resolved from actual data: %s vs %s "
+                "(RepFreq=%s arithmetic bypassed)",
+                reporting_date, previous, report_freq,
+            )
+        else:
+            logger.info(
+                "[service] no earlier reporting date found in %s — using "
+                "RepFreq=%s arithmetic", resolved_table_name, report_freq,
+            )
+
     return calculate_variance(
         return_code=return_id,
         table_name=resolved_table_name,
@@ -764,5 +844,5 @@ def compute_variance(
         reporting_period=reporting_period,
         selected_columns=selected_columns,
         comparison_mode=comparison_mode,
-        comparison_dates=comparison_dates,
+        comparison_dates=effective_comparison_dates,
     )

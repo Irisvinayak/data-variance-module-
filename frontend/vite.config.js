@@ -11,8 +11,12 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
 
-    // IMPORTANT: IIS Virtual Directory
-    base: '/DataVar/',
+    // IMPORTANT: IIS Virtual Directory. Driven by VITE_BASE_PATH (see
+    // frontend/.env.production) so a differently-named IIS site/vdir — e.g.
+    // running 5.5 and 6.0 side by side under /DataVar6.0/ vs /DataVar55/ —
+    // needs only an env change, not an edit here. './' (dev default) keeps
+    // asset URLs relative for `vite dev`/`preview`.
+    base: env.VITE_BASE_PATH || './',
 
     server: {
       port: Number(env.VITE_PORT || 3001),
