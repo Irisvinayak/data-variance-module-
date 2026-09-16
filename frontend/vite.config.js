@@ -19,15 +19,15 @@ export default defineConfig(({ mode }) => {
 
       proxy: {
         '/variance': {
-          target: env.VITE_PROXY_TARGET || 'http://localhost:8000',
+          target: env.VITE_PROXY_TARGET || 'http://localhost:8002',
           changeOrigin: true,
         },
         '/auth': {
-          target: env.VITE_PROXY_TARGET || 'http://localhost:8000',
+          target: env.VITE_PROXY_TARGET || 'http://localhost:8002',
           changeOrigin: true,
         },
         '/health': {
-          target: env.VITE_PROXY_TARGET || 'http://localhost:8000',
+          target: env.VITE_PROXY_TARGET || 'http://localhost:8002',
           changeOrigin: true,
         },
       },
