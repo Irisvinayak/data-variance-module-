@@ -18,6 +18,8 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from backend.config import SERVER_HOST, SERVER_PORT
+
 # -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
@@ -42,8 +44,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=SERVER_HOST,
+        port=SERVER_PORT,
 
         reload=reload_enabled,
 
