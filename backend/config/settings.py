@@ -207,19 +207,57 @@ AUTH_TTL_SEC: float = float(os.getenv("AUTH_TTL_SEC", "3600"))
 # can never widen access in a real deployment.
 DEV_TENANT_ID: str = os.getenv("DV_DEV_TENANT_ID", "").strip()
 
+# ── Per-version routing/server settings ────────────────────────────────────────
+# Port, reverse-proxy prefix and CORS origins differ per host for the same
+# reason the DB and repository root do: the two hosts are two separate IIS
+# sites, reached under different virtual directories, and — when both are
+# deployed on one box — answered by two backend processes that cannot share a
+# port. Keying them the same way as DV_DB_*/DV_BASE_PATH means VERSION stays
+# the only edit: flipping it moves the port, the root_path and the allowed
+# origins together.
+#
+# It also makes the side-by-side overlay files (.env.55 / .env.60, selected
+# with DV_ENV_FILE) trivial — an overlay that sets only VERSION now lands on
+# the right port automatically, instead of having to restate it and risk two
+# instances racing for the same socket.
+#
+#   DV_<NAME>      — explicit override, wins for either version
+#   DV_<NAME>_55   — used when VERSION is 5.5
+#   DV_<NAME>_60   — used when VERSION is 6.0
+def _versioned(name: str, default_55: str, default_60: str) -> tuple[str, str, str]:
+    """(resolved_for_current_version, value_55, value_60) for one DV_* setting."""
+    override = os.getenv(f"DV_{name}", "").strip()
+    v55 = os.getenv(f"DV_{name}_55", "").strip() or override or default_55
+    v60 = os.getenv(f"DV_{name}_60", "").strip() or override or default_60
+    return (v55 if is_legacy_mode() else v60), v55, v60
+
+
 # ── API base path ──────────────────────────────────────────────────────────────
-# Set DV_API_BASE_PATH=/Datavariance/api when served behind a reverse proxy.
-API_BASE_PATH: str = os.getenv("DV_API_BASE_PATH", "").strip()
+# Set when served behind a reverse proxy, so FastAPI generates correct URLs:
+# /Datavariance/api under the 5.5 site, /DataVar6.0/api under the 6.0 site.
+# Defaults stay empty so a direct-to-uvicorn deployment is unaffected.
+API_BASE_PATH, API_BASE_PATH_55, API_BASE_PATH_60 = _versioned("API_BASE_PATH", "", "")
 
 # ── Server settings ────────────────────────────────────────────────────────────
-SERVER_HOST : str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
-SERVER_PORT : int = int(os.getenv("DV_SERVER_PORT", "8000"))
+# 5.5 -> 8002, 6.0 -> 8003. Distinct by default so both can run at once on one
+# box without configuration; 8000/8001 are avoided because they collide with
+# other iDEAL services already on these servers.
+SERVER_HOST: str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
+
+_PORT, _PORT_55, _PORT_60 = _versioned("SERVER_PORT", "8002", "8003")
+SERVER_PORT: int = int(_PORT)
+SERVER_PORT_55: int = int(_PORT_55)
+SERVER_PORT_60: int = int(_PORT_60)
 
 # ── CORS origins ───────────────────────────────────────────────────────────────
-CORS_ORIGINS: list[str] = [
-    o.strip()
-    for o in os.getenv(
-        "DV_CORS_ORIGINS", "http://localhost:5173,http://localhost:3001"
-    ).split(",")
-    if o.strip()
-]
+_DEFAULT_CORS = "http://localhost:5173,http://localhost:3001"
+_CORS, _CORS_55, _CORS_60 = _versioned("CORS_ORIGINS", _DEFAULT_CORS, _DEFAULT_CORS)
+
+
+def _origins(raw: str) -> list[str]:
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+CORS_ORIGINS: list[str] = _origins(_CORS)
+CORS_ORIGINS_55: list[str] = _origins(_CORS_55)
+CORS_ORIGINS_60: list[str] = _origins(_CORS_60)

@@ -5,8 +5,27 @@ import react from '@vitejs/plugin-react'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// The dev proxy target follows the SAME switch as the backend: VERSION in the
+// root .env. Hardcoding a port here (or pinning one in frontend/.env) means
+// flipping VERSION silently points the proxy at a dead port, and every request
+// fails with ECONNREFUSED — which reads like the backend is down rather than
+// like a config mismatch. Precedence mirrors backend/config/settings.py
+// exactly (DV_SERVER_PORT_<v> -> DV_SERVER_PORT -> default) so the two cannot
+// drift. VITE_PROXY_TARGET still wins when set, for pointing dev at a backend
+// on another host.
+function backendTarget(mode) {
+  const root = loadEnv(mode, path.resolve(__dirname, '..'), '')
+  const isLegacy = (root.VERSION || '5.5').trim().startsWith('5')
+  const port =
+    (isLegacy ? root.DV_SERVER_PORT_55 : root.DV_SERVER_PORT_60) ||
+    root.DV_SERVER_PORT ||
+    (isLegacy ? '8002' : '8003')
+  return `http://localhost:${String(port).trim()}`
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
+  const target = env.VITE_PROXY_TARGET || backendTarget(mode)
 
   return {
     plugins: [react()],
@@ -34,7 +53,7 @@ export default defineConfig(({ mode }) => {
           .map((route) => [
             route,
             {
-              target: env.VITE_PROXY_TARGET || 'http://localhost:8000',
+              target,
               changeOrigin: true,
             },
           ]),
