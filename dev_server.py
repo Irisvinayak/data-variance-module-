@@ -24,23 +24,33 @@ if ROOT_DIR not in sys.path:
 
 if __name__ == "__main__":
 
+    # Reload spawns a separate reloader process + child server process.
+    # That's convenient for interactive dev (edit-and-reload) but breaks
+    # process lifecycle under Task Scheduler / service hosting: only the
+    # reloader is the tracked process, so stopping the task can leave the
+    # child server running and holding port 8000.
+    #
+    # Default: reload OFF (single process, clean start/stop — Task Scheduler).
+    # Opt in for local dev with:  DEV_SERVER_RELOAD=1 python dev_server.py
+    reload_enabled = os.getenv("DEV_SERVER_RELOAD", "0").strip().lower() in {"1", "true", "yes", "on"}
+
     print("\n[DEV SERVER] Starting Data Variance FastAPI backend...")
-    print("[DEV SERVER] Reload watching enabled")
-    print("[DEV SERVER] Watching only: backend/")
-    print("[DEV SERVER] Excluding logs, frontend, pycache, temp files\n")
+    print(f"[DEV SERVER] Reload watching {'enabled' if reload_enabled else 'disabled'}")
+    if reload_enabled:
+        print("[DEV SERVER] Watching only: backend/")
+        print("[DEV SERVER] Excluding logs, frontend, pycache, temp files\n")
 
     uvicorn.run(
         "backend.main:app",
         host="0.0.0.0",
         port=8000,
 
-        # Auto reload
-        reload=True,
+        reload=reload_enabled,
 
-        # ONLY watch backend folder
+        # ONLY watch backend folder (only relevant when reload_enabled)
         reload_dirs=[
             os.path.join(ROOT_DIR, "backend")
-        ],
+        ] if reload_enabled else None,
 
         # IMPORTANT:
         # Keep this SMALL on Windows
@@ -52,9 +62,9 @@ if __name__ == "__main__":
             ".venv",
             "temp",
             "tmp",
-        ],
+        ] if reload_enabled else None,
 
-        reload_delay=1.0,
+        reload_delay=1.0 if reload_enabled else None,
 
         log_level="info",
     )
