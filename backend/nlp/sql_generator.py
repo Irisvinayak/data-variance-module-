@@ -16,12 +16,14 @@ import logging
 import os
 import re
 import threading
+import time
 from collections import defaultdict
 from datetime import date
 from typing import Any, Dict, List, Optional
 
 import requests
 
+from .. import ai_audit
 from .nlp_config import (
     DESCRIPTION_SAMPLES_PATH,
     MODEL_PROFILES,
@@ -604,7 +606,22 @@ Allowed tables: {valid_tables}
 SQL:"""
 
 
-def _call_ollama(prompt_text: str, model_name: str, model_profile: dict) -> str:
+def _strip_sql_fences(raw: str) -> str:
+    """Strip ```sql fences and a trailing semicolon from a model response."""
+    raw = re.sub(r'^```(?:sql)?\s*', '', raw.strip(), flags=re.IGNORECASE)
+    raw = re.sub(r'```\s*$', '', raw).strip()
+    return raw.rstrip().rstrip(';')
+
+
+def _call_ollama(
+    prompt_text: str, model_name: str, model_profile: dict, attempt: int = 1
+) -> tuple:
+    """Returns (response_text, latency_ms).
+
+    `attempt` is logged so the retry is distinguishable from the first call —
+    both used to emit byte-identical lines, which made two interleaved
+    requests impossible to tell apart from one request that retried.
+    """
     options = {}
     if model_profile.get("temperature") is not None:
         options["temperature"] = model_profile["temperature"]
@@ -615,17 +632,29 @@ def _call_ollama(prompt_text: str, model_name: str, model_profile: dict) -> str:
     if options:
         payload["options"] = options
 
-    logger.info("[nlp.sql_generator] Calling Ollama | model=%s | prompt_chars=%d", model_name, len(prompt_text))
+    logger.info(
+        "[nlp.sql_generator] Calling Ollama | model=%s | attempt=%d | prompt_chars=%d",
+        model_name, attempt, len(prompt_text),
+    )
+    started = time.monotonic()
     try:
         response = _session.post(OLLAMA_URL, json=payload, timeout=OLLAMA_TIMEOUT_SEC)
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
-        logger.error("[nlp.sql_generator] Ollama call failed | model=%s | %s", model_name, exc)
+        latency_ms = int((time.monotonic() - started) * 1000)
+        logger.error(
+            "[nlp.sql_generator] Ollama call failed | model=%s | attempt=%d | ms=%d | %s",
+            model_name, attempt, latency_ms, exc,
+        )
         raise RuntimeError(f"Ollama request failed: {exc}") from exc
 
+    latency_ms = int((time.monotonic() - started) * 1000)
     text = response.json().get("response", "")
-    logger.info("[nlp.sql_generator] Ollama responded | model=%s | response_chars=%d", model_name, len(text))
-    return text
+    logger.info(
+        "[nlp.sql_generator] Ollama responded | model=%s | attempt=%d | ms=%d | response_chars=%d",
+        model_name, attempt, latency_ms, len(text),
+    )
+    return text, latency_ms
 
 
 def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None, matched_labels=None) -> Dict[str, Any]:
@@ -637,20 +666,46 @@ def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None,
     model_name = OLLAMA_MODEL
     model_profile = _get_model_profile(model_name)
 
+    # Fields common to every audit record this call emits. The model profile is
+    # included because it changes the prompt materially (prompt_style,
+    # temperature) — without it, two runs of the same model that behaved
+    # differently are indistinguishable in the trail.
+    audit = {
+        "caller":       "sql_generator.generate_sql",
+        "model":        model_name,
+        "query":        user_query,
+        "prompt_style": model_profile.get("prompt_style"),
+        "temperature":  model_profile.get("temperature"),
+        "prompt_chars": len(prompt),
+    }
+
     try:
-        raw = _call_ollama(prompt, model_name, model_profile)
+        raw, latency_ms = _call_ollama(prompt, model_name, model_profile, attempt=1)
     except RuntimeError as exc:
         logger.error("[nlp.sql_generator] %s", exc)
+        ai_audit.record(**audit, attempt=1, ok=False, error=str(exc))
         return {"sql": "", "warnings": [str(exc)]}
 
-    raw = re.sub(r'^```(?:sql)?\s*', '', raw.strip(), flags=re.IGNORECASE)
-    raw = re.sub(r'```\s*$', '', raw).strip()
-    raw = raw.rstrip().rstrip(";")
+    raw = _strip_sql_fences(raw)
 
     is_valid, reason = validate_sql(raw, tables, columns)
     warnings: List[str] = []
+    retried = False
 
     if not is_valid:
+        # The FIRST validation failure used to be logged at no level at all, so
+        # a model that failed here and passed on retry left zero trace — a
+        # silently degrading model stayed invisible until it failed twice.
+        logger.warning(
+            "[nlp.sql_generator] attempt 1 SQL rejected | model=%s | reason=%s",
+            model_name, reason,
+        )
+        ai_audit.record(
+            **audit, attempt=1, latency_ms=latency_ms, sql=raw,
+            valid=False, validation_reason=reason,
+            failure_category=_validation_failure_category(reason),
+        )
+        retried = True
         retry_prompt = (
             "The previous SQL was invalid. Return ONLY the corrected SQL.\n\n"
             f"Original prompt:\n{prompt}\n\n"
@@ -659,22 +714,34 @@ def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None,
             "Corrected SQL:"
         )
         try:
-            raw = _call_ollama(retry_prompt, model_name, model_profile)
+            raw, latency_ms = _call_ollama(retry_prompt, model_name, model_profile, attempt=2)
         except RuntimeError as exc:
             logger.error("[nlp.sql_generator] Retry failed: %s", exc)
+            ai_audit.record(**audit, attempt=2, ok=False, error=str(exc), retried=True)
             return {"sql": "", "warnings": [str(exc)]}
-        raw = re.sub(r'^```(?:sql)?\s*', '', raw.strip(), flags=re.IGNORECASE)
-        raw = re.sub(r'```\s*$', '', raw).strip()
-        raw = raw.rstrip().rstrip(";")
+        raw = _strip_sql_fences(raw)
         is_valid, reason = validate_sql(raw, tables, columns)
+
+    attempt = 2 if retried else 1
 
     if not is_valid:
         category = _validation_failure_category(reason)
         warning = f"Model '{model_name}' generated invalid SQL; probable failure category: {category}. Reason: {reason}"
         warnings.append(warning)
         logger.warning("[nlp.sql_generator] %s", warning)
+        ai_audit.record(
+            **audit, attempt=attempt, latency_ms=latency_ms, sql=raw,
+            valid=False, retried=retried, validation_reason=reason,
+            failure_category=category, warnings=warnings,
+        )
         return {"sql": "", "warnings": warnings}
 
+    # The ACCEPTED SQL was previously never logged by this module at all — it
+    # became visible only because one caller happened to log it afterwards.
+    ai_audit.record(
+        **audit, attempt=attempt, latency_ms=latency_ms, sql=raw,
+        valid=True, retried=retried, validation_reason=None, warnings=warnings,
+    )
     return {"sql": raw, "warnings": warnings}
 
 
@@ -692,6 +759,15 @@ def validate_sql(sql, tables, columns):
 
     for word in BANNED_KEYWORDS:
         if re.search(rf'\b{word}\b', q):
+            # The SQL-safety boundary firing, not an ordinary validation
+            # miss. It used to reach the log only folded into the generic
+            # "invalid SQL" warning, indistinguishable from a column typo;
+            # a model emitting DML/DDL against the live Oracle connection
+            # deserves its own line.
+            logger.error(
+                "[nlp.sql_generator] BANNED KEYWORD rejected | keyword=%r | sql=%r",
+                word, sql,
+            )
             return False, f"Dangerous keyword detected: '{word}'"
 
     valid_table_names = {t["table"].lower() for t in tables}

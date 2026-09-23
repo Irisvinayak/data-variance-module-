@@ -24,6 +24,25 @@ from .service import get_allowed_form_ids, is_return_allowed
 logger = logging.getLogger(__name__)
 
 
+# Emitted once per process rather than once per request: "auth is disabled" is
+# a property of the deployment, not of any one call. Repeating it three times
+# per request buried genuine WARNINGs (an access denial, a missing user) in
+# noise that never changes.
+_auth_disabled_announced = False
+
+
+def _announce_auth_disabled() -> None:
+    global _auth_disabled_announced
+    if _auth_disabled_announced:
+        return
+    _auth_disabled_announced = True
+    logger.warning(
+        "[AUTH_DEP] AUTH_DISABLED (DV_AUTH_ENABLED=false) — login validation and "
+        "return-access checks are BYPASSED for every request in this process. "
+        "This must never be the case in production."
+    )
+
+
 def require_login(
     loginId: str = Query(
         default="",
@@ -59,12 +78,13 @@ def require_login(
                     ),
                 )
             ctx = RequestContext(login_id=ctx.login_id, tenant_id=DEV_TENANT_ID)
-            logger.warning(
+            logger.debug(
                 "[AUTH_DEP] AUTH_DISABLED — assuming DV_DEV_TENANT_ID=%r | %s",
                 DEV_TENANT_ID, ctx,
             )
 
-        logger.warning("[AUTH_DEP] AUTH_DISABLED — bypassing login validation | %s", ctx)
+        _announce_auth_disabled()
+        logger.debug("[AUTH_DEP] AUTH_DISABLED — bypassing login validation | %s", ctx)
         return ctx
 
     if not ctx.login_id:
@@ -105,7 +125,8 @@ def require_login(
 
 def require_return_access(ctx: RequestContext, return_id: str) -> None:
     if not AUTH_ENABLED:
-        logger.warning("[AUTH_DEP] AUTH_DISABLED — bypassing return access validation")
+        _announce_auth_disabled()
+        logger.debug("[AUTH_DEP] AUTH_DISABLED — bypassing return access validation")
         return
 
     if not is_return_allowed(ctx, return_id):

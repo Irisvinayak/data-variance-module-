@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from .. import ai_audit
 from .nlp_config import (
     INTENT_FAILURE_COOLDOWN_SEC,
     INTENT_MAX_COLS_PER_TABLE,
@@ -194,9 +195,13 @@ def _start_cooldown() -> None:
     )
 
 
-def _call_ollama(prompt: str) -> str:
+def _call_ollama(prompt: str, attempt: int = 1) -> tuple:
+    """Returns (response_text, latency_ms)."""
     started = time.monotonic()
-    logger.info("[nlp.intent_resolver] Calling Ollama | model=%s | prompt_chars=%d", INTENT_MODEL, len(prompt))
+    logger.info(
+        "[nlp.intent_resolver] Calling Ollama | model=%s | attempt=%d | prompt_chars=%d",
+        INTENT_MODEL, attempt, len(prompt),
+    )
     try:
         response = _session.post(
             OLLAMA_URL,
@@ -211,17 +216,23 @@ def _call_ollama(prompt: str) -> str:
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
         logger.error(
-            "[nlp.intent_resolver] Ollama call failed after %.1fs | model=%s | %s",
-            time.monotonic() - started, INTENT_MODEL, exc,
+            "[nlp.intent_resolver] Ollama call failed after %.1fs | model=%s | attempt=%d | %s",
+            time.monotonic() - started, INTENT_MODEL, attempt, exc,
+        )
+        ai_audit.record(
+            caller="intent_resolver.resolve_intent", model=INTENT_MODEL,
+            attempt=attempt, prompt_chars=len(prompt), ok=False, error=str(exc),
+            latency_ms=int((time.monotonic() - started) * 1000),
         )
         raise _TransportError(f"Ollama request failed: {exc}") from exc
 
     text = response.json().get("response", "")
+    latency_ms = int((time.monotonic() - started) * 1000)
     logger.info(
-        "[nlp.intent_resolver] Ollama responded in %.1fs | model=%s | response_chars=%d",
-        time.monotonic() - started, INTENT_MODEL, len(text),
+        "[nlp.intent_resolver] Ollama responded in %.1fs | model=%s | attempt=%d | response_chars=%d",
+        time.monotonic() - started, INTENT_MODEL, attempt, len(text),
     )
-    return text
+    return text, latency_ms
 
 
 def _parse_json_response(raw: str) -> Optional[Dict[str, Any]]:
@@ -459,7 +470,7 @@ def resolve_intent(
     prompt = _build_prompt(query, shortlist, rank_text)
 
     try:
-        raw = _call_ollama(prompt)
+        raw, latency_ms = _call_ollama(prompt, attempt=1)
     except _TransportError as exc:
         # Nothing answered — a retry would just pay the timeout twice.
         logger.error("[nlp.intent_resolver] %s", exc)
@@ -476,7 +487,7 @@ def resolve_intent(
         logger.warning("[nlp.intent_resolver] First attempt ungrounded/invalid (%r), retrying once", raw[:200])
         retry_prompt = _build_retry_prompt(query, shortlist, raw, rank_text)
         try:
-            raw = _call_ollama(retry_prompt)
+            raw, latency_ms = _call_ollama(retry_prompt, attempt=2)
             parsed = _parse_json_response(raw)
             resolved = _validate_grounding(parsed, shortlist) if parsed else None
         except _TransportError as exc:
@@ -490,6 +501,16 @@ def resolve_intent(
             "falling back to deterministic resolution",
             query,
         )
+        ai_audit.record(
+            caller="intent_resolver.resolve_intent", model=INTENT_MODEL, query=query,
+            attempt=2, latency_ms=latency_ms, raw=raw[:500],
+            grounded=False, fell_back_to_deterministic=True,
+        )
         return _resolve_deterministic(rank_text, shortlist)
 
+    ai_audit.record(
+        caller="intent_resolver.resolve_intent", model=INTENT_MODEL, query=query,
+        latency_ms=latency_ms, grounded=True, fell_back_to_deterministic=False,
+        resolved=resolved,
+    )
     return resolved

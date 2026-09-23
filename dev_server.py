@@ -49,6 +49,15 @@ if __name__ == "__main__":
         "host": SERVER_HOST,
         "port": SERVER_PORT,
         "log_level": "info",
+        # log_config=None stops uvicorn installing its OWN handlers on the
+        # `uvicorn`, `uvicorn.error` and `uvicorn.access` loggers with
+        # propagate=False. That default meant uvicorn's output never reached
+        # backend/logging_config.py's handlers, so the log FILE contained no
+        # HTTP status or latency line for any request — every response code
+        # had to be inferred from hand-written [main] lines. With this, those
+        # loggers propagate to root and are formatted, dated and pruned like
+        # everything else.
+        "log_config": None,
     }
 
     if reload_enabled:

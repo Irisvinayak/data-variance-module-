@@ -13,7 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS, RequestContext
-from .logging_config import configure_logging
+from .logging_config import (
+    configure_logging,
+    login_id_var,
+    new_request_id,
+    request_id_var,
+    tenant_id_var,
+)
 from .data.models import NLResolveRequest, VarianceComputeRequest
 from .data import service
 from .data.db import execute_query
@@ -43,6 +49,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Request correlation ───────────────────────────────────────────────────────
+# Stamps one id on every log line a request produces. Without it, lines from
+# concurrent requests interleave with nothing to separate them: login_id is
+# the only shared field and it is identical for two requests from one user —
+# and most of the call tree (db.py, calculate_variance.py, the nlp modules)
+# never receives even that.
+#
+# Identity is read from the query string rather than from require_login
+# because that dependency is a `def`, so it runs in a threadpool worker whose
+# context does NOT propagate back here. This middleware runs on the event loop
+# in the request's own context, so what it sets is visible to the handler and
+# to everything the handler calls, including the threadpool.
+#
+# An inbound X-Request-ID wins, so a trace started by the .NET host or a proxy
+# carries through instead of being renamed at this boundary.
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = (request.headers.get("X-Request-ID") or "").strip()[:32] or new_request_id()
+    request_id_var.set(request_id)
+    login_id_var.set((request.query_params.get("loginId") or "").strip())
+    tenant_id_var.set((request.query_params.get("tenantId") or "").strip())
+
+    response = await call_next(request)
+    # Echo it so a caller can quote the id when reporting a problem.
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 # ── Catch-all exception handler ───────────────────────────────────────────────

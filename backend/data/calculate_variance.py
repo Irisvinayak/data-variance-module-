@@ -408,7 +408,7 @@ def _parse_date_like(value: Any) -> Optional[datetime]:
             return datetime.strptime(s, fmt)
         except Exception:
             pass
-    logger.error("[variance] *** COULD NOT PARSE DATE value=%r", value)
+    logger.debug("[variance] *** COULD NOT PARSE DATE value=%r", value)
     return None
 
 

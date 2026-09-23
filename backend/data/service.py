@@ -73,12 +73,12 @@ def _run_table_diagnostics(
         sql = f"SELECT COUNT(*) AS CNT FROM {table_name}"
         cols, rows, err = execute_query_fn(sql)
         if err:
-            logger.error("[DIAG] Step1 ERROR: %s", err)
+            logger.warning("[DIAG] Step1 could not count rows: %s", err)
         else:
             cnt = rows[0][0] if rows else "N/A"
-            logger.error("[DIAG] Step1 — table=%s total_rows=%s", table_name, cnt)
+            logger.info("[DIAG] Step1 — table=%s total_rows=%s", table_name, cnt)
     except Exception as exc:
-        logger.error("[DIAG] Step1 EXCEPTION: %s", exc)
+        logger.warning("[DIAG] Step1 EXCEPTION: %s", exc)
 
     # Step 2: distinct date values
     try:
@@ -95,14 +95,14 @@ def _run_table_diagnostics(
             )
             cols, rows, err2 = execute_query_fn(sql)
         if rows:
-            logger.error("[DIAG] Step2 — distinct %s values: %s",
-                         filter_col, [str(r[0]) for r in rows])
+            logger.info("[DIAG] Step2 — distinct %s values: %s",
+                        filter_col, [str(r[0]) for r in rows])
         else:
-            logger.error("[DIAG] Step2 — no distinct date values found")
+            logger.info("[DIAG] Step2 — no distinct date values found")
     except Exception as exc:
-        logger.error("[DIAG] Step2 EXCEPTION: %s", exc)
+        logger.warning("[DIAG] Step2 EXCEPTION: %s", exc)
 
-    logger.error("[DIAG] %s diagnostics complete.", sep)
+    logger.info("[DIAG] %s diagnostics complete.", sep)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -360,7 +360,10 @@ def get_relevant_schema(
     # ── Authorization filter — reuse the existing, untouched auth function ────
     # Runs over the whole candidate pool, BEFORE the top-K cut below.
     if not AUTH_ENABLED:
-        logger.warning(
+        # DEBUG, not WARNING: auth being off is announced once per process by
+        # backend/auth/deps.py. Repeating it per NL request (with the query
+        # text attached) only added noise to the same standing fact.
+        logger.debug(
             "[nlp.retriever] AUTH_DISABLED — skipping return-access filtering for query=%r",
             query,
         )
