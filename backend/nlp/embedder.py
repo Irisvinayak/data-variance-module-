@@ -1,5 +1,5 @@
 # embedder.py — text -> query vector, at runtime. Embeddings themselves are
-# now built by an external tool and dropped into backend/output/ (see
+# now built by an external tool and dropped into artifacts/nlp-index/ (see
 # nlp_config.INDEX_DIR) — this module only ever embeds the user's live NL
 # query so it can be compared against those pre-built vectors. The
 # SentenceTransformer model is loaded lazily so importing this module doesn't

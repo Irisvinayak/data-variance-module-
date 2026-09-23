@@ -61,7 +61,7 @@ That is exactly the shape that belongs behind one interface.
 ### 1.3 What each branch has that the other lacks
 
 - **`5-final-55-and-60`** (current HEAD, richest): the whole `backend/nlp/`
-  package, `period_lookup.py`, `query_xml_lookup.py`, the `backend/output/`
+  package, `period_lookup.py`, `query_xml_lookup.py`, the `artifacts/nlp-index/`
   FAISS/BM25 indices, the reworked React UI, `dev_server.py`. **Zero** tenant
   awareness — auth and all path constants are module-level globals.
 - **`2-data-variance-ideal-60`**: full tenant plumbing — `tenant_id` threaded
@@ -139,8 +139,8 @@ backend/
   main.py                  # routes only
 env/
   .env.example
-  .env.55.example
-  .env.60.example
+  config/env/.env.55.example
+  config/env/.env.60.example
 frontend/src/
   auth/
     index.js               # resolveAuth() -> {loginId, tenantId} + authQuery()
@@ -228,7 +228,7 @@ JWT bootstrap from the 6.0 branch, remove the debug logging.
 proxy per host (`DV_API_BASE_PATH`, `VITE_API_BASE_URL`, `VITE_BASE_PATH`, and
 6.0's `frontend/public/web.config`).
 
-**Phase 7 — NLP under 6.0.** The indices in `backend/output/` were built from one
+**Phase 7 — NLP under 6.0.** The indices in `artifacts/nlp-index/` were built from one
 5.5 schema. Under multi-tenancy, decide whether they are shared or per-tenant,
 and whether `nlresolve` filters candidate returns by the tenant's allowed set.
 This is the one phase with genuine unknowns — see Q4.
@@ -330,7 +330,7 @@ treat 1002 as the negative test case.
    `XML_Query.xml`, but e.g. `4061\` uses `Query.xml`. Is that a naming
    migration in progress, or two distinct roles? Affects whether
    `query_xml_lookup` needs a candidate list.
-4. **Q4 — NLP indices under multi-tenancy.** The `backend/output/` indices were
+4. **Q4 — NLP indices under multi-tenancy.** The `artifacts/nlp-index/` indices were
    built from one 5.5 schema. Tenant 1001's `Return.xml` is a *different* return
    set (QFCRA/banking taxonomies) from 5.5's (RBI). A shared index will surface
    tables that do not exist for the caller. Likely needs per-tenant indices, not

@@ -1,7 +1,7 @@
 """
 eval_retrieval.py — fast, no-LLM, no-Oracle retrieval accuracy check.
 
-get_relevant_schema() only touches the FAISS/BM25 indices in backend/output/
+get_relevant_schema() only touches the FAISS/BM25 indices in artifacts/nlp-index/
 and this app's own XML config (Returns.xml, table-mapping files, XML_User.xml)
 for return_id/auth resolution — no Ollama call, no Oracle connection. That
 makes it cheap enough to run after every embedding rebuild or retriever.py

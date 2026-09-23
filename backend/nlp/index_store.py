@@ -2,7 +2,7 @@
 # Building (write side) now happens outside this project entirely — an
 # external tool produces table_index.faiss/column_index.faiss/
 # row_label_index.faiss + their *_meta.pkl files and they get dropped into
-# backend/output/ (nlp_config.INDEX_DIR). This module only ever reads them.
+# artifacts/nlp-index/ (nlp_config.INDEX_DIR). This module only ever reads them.
 #
 # Indices are cached in memory per (index_path, meta_path) after first load —
 # search() used to call faiss.read_index()+pickle.load() from disk on EVERY

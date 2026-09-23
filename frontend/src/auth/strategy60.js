@@ -32,7 +32,7 @@
  *
  * SECURITY: decoding here is for convenience only — it tells the UI who it is
  * talking about. It is NOT authentication. The backend must verify the token's
- * signature itself; see INTEGRATION_PLAN.md section 4. Until it does, these
+ * signature itself; see docs/integration-plan.md section 4. Until it does, these
  * claims (JWT or fallback) are self-asserted and the API is open to anyone who
  * supplies a loginId and tenantId directly.
  */

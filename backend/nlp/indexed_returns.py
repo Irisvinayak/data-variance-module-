@@ -1,7 +1,7 @@
 # indexed_returns.py — the authoritative answer to "which returns/tables does
 # the embedding index actually cover?"
 #
-# Why this exists: the embedding index in backend/output/ is built by an
+# Why this exists: the embedding index in artifacts/nlp-index/ is built by an
 # EXTERNAL tool and covers only a SUBSET of the returns in Returns.xml — at
 # time of writing, 51 tables belonging to 3 returns out of 281. Every other
 # return is invisible to the NLP layer: there is no vector for its tables, no
@@ -44,7 +44,7 @@ from .nlp_config import TABLE_INDEX_PATH, TABLE_META_PATH
 logger = logging.getLogger(__name__)
 
 # Cache keyed on the table index's mtime, matching index_store's own
-# invalidation rule — dropping in a freshly-rebuilt backend/output/ folder is
+# invalidation rule — dropping in a freshly-rebuilt artifacts/nlp-index/ folder is
 # picked up on the next request with no restart, exactly like the FAISS
 # indices themselves.
 # Keyed by tenant ("" under 5.5): the coverage map is derived from a

@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+# The repo root is the import root: tests import `backend.*`, and the backend
+# package is only importable from here. Pinning it means `pytest` works the
+# same from any working directory.
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

@@ -29,8 +29,8 @@ QUERY_PREFIX: str = os.getenv(
 # Resolved PER VERSION, the same way settings.BASE_PATH is, so that flipping
 # VERSION is the only edit needed:
 #   DV_NLP_INDEX_DIR     — explicit override, wins for either version
-#   DV_NLP_INDEX_DIR_55  — used when VERSION is 5.5   (default backend/output)
-#   DV_NLP_INDEX_DIR_60  — used when VERSION is 6.0   (default backend/output6.0)
+#   DV_NLP_INDEX_DIR_55  — VERSION 5.5 (default artifacts/nlp-index/ideal-55)
+#   DV_NLP_INDEX_DIR_60  — VERSION 6.0 (default artifacts/nlp-index/ideal-60)
 #
 # The two versions describe different databases: 5.5's index covers the CIMS
 # returns, 6.0's the QCB ones. They share no tables, so serving one version's
@@ -47,14 +47,34 @@ from ..config.settings import APP_VERSION, is_legacy_mode
 
 NLP_DIR: str = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR: str = os.path.dirname(NLP_DIR)
+ROOT_DIR: str = os.path.dirname(BACKEND_DIR)
+
+# Generated artifacts live OUTSIDE the source tree — artifacts/nlp-index/ —
+# because they are built by an external tool and dropped in wholesale, not
+# edited alongside the code that reads them. They used to sit at
+# backend/output/ and backend/output6.0/, and a deployment may still have
+# a rebuilt folder sitting in the old place, so the old location is kept as a
+# fallback: the new path wins whenever it exists, otherwise the legacy one is
+# used if it does. Neither present -> the new path is reported, because that is
+# where a rebuild should be dropped. index_dir_problem() then names it.
+INDEX_ROOT: str = os.path.join(ROOT_DIR, "artifacts", "nlp-index")
+
+
+def _default_index_dir(current: str, legacy: str) -> str:
+    """`current` unless only the pre-refactor `legacy` folder is populated."""
+    if os.path.isdir(current):
+        return current
+    if os.path.isdir(legacy):
+        return legacy
+    return current
+
 
 INDEX_DIR_OVERRIDE: str = os.getenv("DV_NLP_INDEX_DIR", "").strip()
-INDEX_DIR_55: str = (
-    os.getenv("DV_NLP_INDEX_DIR_55", "").strip() or os.path.join(BACKEND_DIR, "output")
+INDEX_DIR_55: str = os.getenv("DV_NLP_INDEX_DIR_55", "").strip() or _default_index_dir(
+    os.path.join(INDEX_ROOT, "ideal-55"), os.path.join(BACKEND_DIR, "output")
 )
-INDEX_DIR_60: str = (
-    os.getenv("DV_NLP_INDEX_DIR_60", "").strip()
-    or os.path.join(BACKEND_DIR, "output6.0")
+INDEX_DIR_60: str = os.getenv("DV_NLP_INDEX_DIR_60", "").strip() or _default_index_dir(
+    os.path.join(INDEX_ROOT, "ideal-60"), os.path.join(BACKEND_DIR, "output6.0")
 )
 
 

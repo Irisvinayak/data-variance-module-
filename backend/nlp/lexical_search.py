@@ -1,6 +1,6 @@
 # lexical_search.py — BM25 + QA-pairs signals, additive to retriever.py's
 # dense FAISS search. Built by the SAME external tool that drops FAISS
-# indices into backend/output/ (nlp_config.INDEX_DIR) — this module only
+# indices into artifacts/nlp-index/ (nlp_config.INDEX_DIR) — this module only
 # ever reads bm25_table_index.pkl / qa_pairs.json, never builds them.
 #
 # Why these exist: dense cosine similarity smooths over exact structural

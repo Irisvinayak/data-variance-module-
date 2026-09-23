@@ -68,7 +68,7 @@ def _load_json_cached(path: str, default: Any) -> Any:
 
 def load_samples(path: str = DESCRIPTION_SAMPLES_PATH) -> Dict[str, Dict[str, List[str]]]:
     """Load the full row-label samples dict the external build tool produced
-    (backend/output/description_samples.json) — supplements the FAISS top-K
+    (INDEX_DIR/description_samples.json) — supplements the FAISS top-K
     matches with every known label value for a matched table. Returns {} if
     the file doesn't exist. Cached by file mtime — a freshly rebuilt file is
     picked up on the next call, no restart needed."""
@@ -256,7 +256,7 @@ _SQL_KEYWORDS = {
 def _load_all_columns(table_names, schema_path: str = SCHEMA_JSON_PATH):
     """Return all columns for the given table names, loaded from schema.json
     (produced by the external embedding-build tool, dropped into
-    backend/output/) — the LLM sees every column of a matched table, not
+    INDEX_DIR) — the LLM sees every column of a matched table, not
     just the top-K the embedding retrieval happened to surface. schema.json
     itself is cached by mtime (see _load_json_cached) — this function still
     re-filters per call since the requested table_names differ per call, but

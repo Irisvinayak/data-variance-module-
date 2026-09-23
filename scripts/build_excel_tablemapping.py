@@ -30,7 +30,7 @@ HEADER LAYOUT (detected, not assumed)
 
 USAGE
     python scripts/build_excel_tablemapping.py <file.xlsx> [more.xlsx ...] \
-        [--out backend/data6.0/excel_tablemapping.json]
+        [--out data/mappings/excel_tablemapping.json]
 """
 
 from __future__ import annotations
@@ -398,8 +398,8 @@ def main() -> int:
     )
     ap.add_argument("workbooks", nargs="+", help="QCB template .xlsx files")
     ap.add_argument(
-        "--out", default="backend/data6.0/excel_tablemapping.json",
-        help="output path (default: backend/data6.0/excel_tablemapping.json)",
+        "--out", default="data/mappings/excel_tablemapping.json",
+        help="output path (default: data/mappings/excel_tablemapping.json)",
     )
     ap.add_argument("--schema", default="IDEALCRILC", help="Oracle owner")
     ap.add_argument(

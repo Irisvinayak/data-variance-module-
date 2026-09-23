@@ -14,8 +14,8 @@ import sys
 
 import pytest
 
-ROOT = os.path.dirname(  # repo root: nlp/tests -> nlp -> backend -> root
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(  # repo root: tests/nlp -> tests -> root
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -31,16 +31,31 @@ def test_each_version_resolves_to_its_own_folder():
     assert nlp_config.index_dir_for("5.5") != nlp_config.index_dir_for("6.0")
 
 
-def test_5_5_defaults_to_backend_output():
-    assert nlp_config.index_dir_for("5.5") == os.path.join(
-        nlp_config.BACKEND_DIR, "output"
+def test_5_5_defaults_to_the_ideal_55_index_folder():
+    assert nlp_config.index_dir_for("5.5") in (
+        os.path.join(nlp_config.INDEX_ROOT, "ideal-55"),
+        os.path.join(nlp_config.BACKEND_DIR, "output"),  # pre-refactor fallback
     )
 
 
-def test_6_0_defaults_to_backend_output_6_0():
-    assert nlp_config.index_dir_for("6.0") == os.path.join(
-        nlp_config.BACKEND_DIR, "output6.0"
+def test_6_0_defaults_to_the_ideal_60_index_folder():
+    assert nlp_config.index_dir_for("6.0") in (
+        os.path.join(nlp_config.INDEX_ROOT, "ideal-60"),
+        os.path.join(nlp_config.BACKEND_DIR, "output6.0"),  # pre-refactor fallback
     )
+
+
+def test_the_legacy_backend_output_folder_is_still_honoured(tmp_path):
+    """A box that drops a rebuilt index into the old backend/output/ keeps
+    working: the new path wins when it exists, the old one when it does not."""
+    current, legacy = tmp_path / "current", tmp_path / "legacy"
+    assert nlp_config._default_index_dir(str(current), str(legacy)) == str(current)
+
+    legacy.mkdir()
+    assert nlp_config._default_index_dir(str(current), str(legacy)) == str(legacy)
+
+    current.mkdir()
+    assert nlp_config._default_index_dir(str(current), str(legacy)) == str(current)
 
 
 @pytest.mark.parametrize("raw,expected", [

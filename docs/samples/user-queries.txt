@@ -3,7 +3,7 @@ SAMPLE USER QUERIES — Data Variance Module, NLP ("Ask...") bar
 ================================================================================
 
 Full, copy-paste-ready questions phrased the way a user would actually type
-them. Companion to SAMPLE_NLP_QUERIES.txt, which is a structured checklist of
+them. Companion to docs/samples/nlp-queries.txt, which is a structured checklist of
 short fragments plus the manual-section tests; this file is the natural-language
 set.
 
@@ -288,7 +288,7 @@ Show me the NRD-CSR statement figures
 ================================================================================
 13. MANUAL SECTION — works for ALL returns, not just the 3 indexed ones
 ================================================================================
-See SAMPLE_NLP_QUERIES.txt section 9 for the full manual checklist. The
+See docs/samples/nlp-queries.txt section 9 for the full manual checklist. The
 essentials:
 
   Return search   : "cims raq", "cims ror", "cims nrd-csr", "rca3"

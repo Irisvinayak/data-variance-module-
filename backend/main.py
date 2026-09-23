@@ -55,7 +55,7 @@ app.add_middleware(
 # reads `body.detail` (see frontend/src/api.js) and, finding none, could
 # only show a bare "NL resolve error (500)" — hiding the actual cause, which
 # on a fresh server deployment is usually a missing NLP dependency
-# (sentence-transformers / faiss-cpu / rank-bm25), an absent backend/output/
+# (sentence-transformers / faiss-cpu / rank-bm25), an absent artifacts/nlp-index/
 # embedding index, or an embedding model that can't be downloaded.
 #
 # This handler makes every such crash self-reporting: the full traceback goes
@@ -94,7 +94,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 # /variance/nlresolve doesn't require shell access to read the server log.
 # Reports each prerequisite separately: the three optional-but-required NLP
 # packages, the embedding index files the external build tool drops into
-# backend/output/, and whether the embedding model itself can actually load
+# artifacts/nlp-index/, and whether the embedding model itself can actually load
 # (the expensive one — a ~1.3GB download on first use, so it is only probed
 # when ?check_model=true is passed).
 @app.get("/variance/nlp-health", tags=["Meta"])

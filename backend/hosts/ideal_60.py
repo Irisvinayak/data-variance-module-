@@ -13,7 +13,7 @@
 #   <Base>\<TenantId>\Instance\<returnId>\
 #
 # Four things here differ from what the earlier 6.0 branch assumed, each
-# verified against the repository rather than inferred. See INTEGRATION_PLAN.md
+# verified against the repository rather than inferred. See docs/integration-plan.md
 # section 5 for the full findings:
 #
 #   B1  Department.xml separates return ids with COMMAS, not pipes.
@@ -46,7 +46,7 @@ _DB_FOLDER = "DataBase"
 # names ("CreateInstance"); 6.0 uses opaque integers, and the mapping is owned
 # by the .NET application, not by this module. Configure via env once the .NET
 # team confirms the ids — until then option_id() returns None and callers treat
-# the permission as indeterminate rather than denied (INTEGRATION_PLAN B3/Q1).
+# the permission as indeterminate rather than denied (docs/integration-plan.md B3/Q1).
 _OPTION_ID_ENV = {
     "CreateInstance": "DV_OPTION_ID_CREATE_INSTANCE",
     "DataVariation":  "DV_OPTION_ID_DATA_VARIATION",

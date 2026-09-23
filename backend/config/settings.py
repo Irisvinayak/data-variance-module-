@@ -38,7 +38,7 @@ load_dotenv(
 # .env with override=True, so it only needs to carry the handful of keys that
 # must differ per instance (VERSION, DV_SERVER_PORT, DV_API_BASE_PATH); every
 # other setting (DB_*_55/_60, BASE_PATH_55/_60, ...) is already shared and
-# version-keyed in the base .env. See .env.55.example / .env.60.example.
+# version-keyed in the base .env. See config/env/.env.55.example / config/env/.env.60.example.
 _ENV_OVERLAY = os.environ.get("DV_ENV_FILE", "").strip()
 if _ENV_OVERLAY:
     load_dotenv(dotenv_path=_ENV_OVERLAY, override=True)

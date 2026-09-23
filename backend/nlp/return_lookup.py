@@ -3,7 +3,7 @@
 # mapping XML, at retrieval time.
 #
 # Why this exists: embeddings can now be built by ANY external tool and just
-# dropped into backend/output/ (see nlp_config.INDEX_DIR) — e.g. the pasted
+# dropped into artifacts/nlp-index/ (see nlp_config.INDEX_DIR) — e.g. the pasted
 # table_meta.pkl/column_meta.pkl records only carry {"text", "table"}, no
 # return_id at all. retriever.py used to expect return_id to already be
 # baked into the embedding metadata; that only worked when this project's own

@@ -4,7 +4,7 @@
 # the seam between "vectors" and "what this specific user is allowed to see".
 #
 # The embedding index itself is built by an EXTERNAL tool and just dropped
-# into backend/output/ (nlp_config.INDEX_DIR) — its records only carry
+# into artifacts/nlp-index/ (nlp_config.INDEX_DIR) — its records only carry
 # {"text", "table"} / {"text", "table", "column"}, no return_id. So this
 # module never trusts return_id from the embedding metadata; it always
 # resolves table_name -> return_id live via return_lookup.py (this app's own

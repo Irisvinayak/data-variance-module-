@@ -11,14 +11,16 @@
 # deployment config, not template files.
 .env.55
 .env.60
+config/env/.env.55
+config/env/.env.60
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 frontend/.env.development
 frontend/.env.production
 frontend/.env.test
-!.env.example
-!.frontend/.env.example
+!config/env/*.example
+!frontend/.env.example
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -62,3 +64,10 @@ htmlcov/
 # ── Local databases ───────────────────────────────────────────────────────────
 *.db
 *.sqlite
+
+# ── Generated artifacts ───────────────────────────────────────────────────────
+# artifacts/nlp-index/ IS tracked: the FAISS/BM25 folders are produced by an
+# external build tool, not by this repo's own build, and the application cannot
+# start without them. Only scratch output below it is ignored.
+artifacts/**/*.tmp
+artifacts/**/.cache/

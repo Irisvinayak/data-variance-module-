@@ -13,7 +13,7 @@
 #
 # The 5.5 and 6.0 repositories differ in more than base path: filenames, XML
 # root/row element names, attribute names, AND the delimiter inside a single
-# attribute value all vary. See INTEGRATION_PLAN.md section 1 for the verified
+# attribute value all vary. See docs/integration-plan.md section 1 for the verified
 # comparison, and section 5 for the bugs that arose from assuming they didn't.
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ class HostProfile(ABC):
         5.5 uses '|' ("2001|2007|2002"); 6.0 uses ',' ("2029,4089,4070").
         Getting this wrong does not raise — it yields one nonsense token that
         matches no return id, so every user silently resolves to an empty
-        allow-list and every request 403s. See INTEGRATION_PLAN.md B1.
+        allow-list and every request 403s. See docs/integration-plan.md B1.
         """
 
     # ── File shapes: period master ─────────────────────────────────────────────

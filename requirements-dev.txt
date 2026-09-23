@@ -1,0 +1,9 @@
+-r requirements.txt
+
+# Test suite (tests/)
+pytest>=8.0.0
+
+# scripts/build_excel_tablemapping.py — reads the QCB template workbooks.
+# Not needed to run the application, only to regenerate
+# data/mappings/excel_tablemapping.json.
+openpyxl>=3.1.0

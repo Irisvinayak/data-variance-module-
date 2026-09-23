@@ -14,7 +14,7 @@
 # latter on "|" does not raise — it yields one token, "2029,4089,4070", which
 # matches no return id. Every user then resolves to an empty allow-list and
 # every request 403s with a message about department access. See
-# INTEGRATION_PLAN.md B1.
+# docs/integration-plan.md B1.
 
 from __future__ import annotations
 
@@ -246,7 +246,7 @@ def validate_create_instance_access(role_id: str, ctx: RequestContext = ANONYMOU
     if option is None:
         logger.warning(
             "[AUTH_ROLE] profile=%s has no OptionId mapped for CreateInstance — "
-            "cannot evaluate (see INTEGRATION_PLAN.md B3/Q1)", profile.name,
+            "cannot evaluate (see docs/integration-plan.md B3/Q1)", profile.name,
         )
         return None
 

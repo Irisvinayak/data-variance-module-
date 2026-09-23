@@ -8,7 +8,7 @@
 # SECURITY NOTE: these values are taken on trust from the query string. Under
 # 6.0 the React app decodes the JWT client-side and forwards the claims as
 # plain params, so anyone can call the API directly with any loginId/tenantId
-# they like. Verifying the token server-side is Phase 4 of INTEGRATION_PLAN.md
+# they like. Verifying the token server-side is Phase 4 of docs/integration-plan.md
 # (see section 4) and belongs here, in the profile-aware layer.
 
 from __future__ import annotations
