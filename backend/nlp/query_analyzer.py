@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
 from ..config import ANONYMOUS, RequestContext
-from ..data.report_lookup import _parse_returns
+from ..data.report_lookup import parse_returns
 from . import indexed_returns, schema_info
 from .query_normalizer import normalize_query
 
@@ -427,7 +427,7 @@ def analyze_query(
     raw = (query or "").strip()
     normalized = normalize_query(raw)
 
-    corpus = [r for r in _parse_returns(ctx) if r.get("Id") and r.get("Name")]
+    corpus = [r for r in parse_returns(ctx) if r.get("Id") and r.get("Name")]
     candidates = list(corpus)
     if allowed_return_ids is not None:
         candidates = [r for r in candidates if str(r["Id"]) in allowed_return_ids]

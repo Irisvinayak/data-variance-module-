@@ -24,7 +24,6 @@ from . import return_lookup
 from .embedder import embed_query
 from .index_store import meta_by_table, search
 from .lexical_search import search_bm25, search_qa_strong_match
-from .query_normalizer import normalize_query
 from .query_analyzer import QueryAnalysis, analyze_query
 from . import confidence as confidence_mod
 from . import ranking
@@ -42,7 +41,6 @@ from .nlp_config import (
     QA_PREFILTER_TOP_N,
     QA_STRONG_MATCH_BONUS,
     QA_STRONG_MATCH_THRESHOLD,
-    RRF_K,
     ROW_LABEL_INDEX_PATH,
     ROW_LABEL_META_PATH,
     TABLE_INDEX_PATH,
@@ -311,7 +309,7 @@ def get_relevant_schema(
 
     # A table whose return_id never resolved (return_lookup.get_return_for_table()
     # found no loadable table-mapping file for it) can never be used downstream —
-    # main.py's later _parse_returns() lookup and compute_variance() both need a
+    # main.py's later parse_returns() lookup and compute_variance() both need a
     # real return_id. Drop these unconditionally, BEFORE the auth filter, so they
     # never reach intent_resolver as a candidate — this matters especially with
     # AUTH_ENABLED=false, where the auth filter below is skipped entirely and would

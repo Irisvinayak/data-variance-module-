@@ -63,7 +63,7 @@ _non_xbrl_returns_cache = _TTLCache(ttl=_returns_ttl)
 
 # ── Parsers ────────────────────────────────────────────────────────────────────
 
-def _parse_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
+def parse_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
     """Parse the XBRL returns master; one attribute dict per return row.
 
     The filename and the row element name both come from the host profile:
@@ -192,7 +192,7 @@ def _normalised_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
             extract_keyword(r.get("Name", "")),
             r,
         )
-        for r in _parse_returns(ctx)
+        for r in parse_returns(ctx)
         if r.get("Name", "")
     )
     return _norm_cache.set(result, key)
@@ -256,17 +256,6 @@ def search_returns_scored(
     return scored
 
 
-def find_matching_reports(
-    user_input: str, ctx: RequestContext = ANONYMOUS
-) -> List[Dict[str, Any]]:
-    """
-    Backward-compatible wrapper — returns a flat list of raw return dicts.
-    Preserves original call-sites that only want the raw list.
-    """
-    scored = search_returns_scored(user_input, ctx)
-    return [item["return"] for item in scored]
-
-
 def get_is_excel_by_return_code(
     return_code: Any, is_non_xbrl: bool = False, ctx: RequestContext = ANONYMOUS
 ) -> bool:
@@ -296,7 +285,7 @@ def get_is_excel_by_return_code(
         profile.non_xbrl_returns_xml_path(ctx) if is_non_xbrl
         else profile.returns_xml_path(ctx)
     )
-    source = _parse_non_xbrl_returns(ctx) if is_non_xbrl else _parse_returns(ctx)
+    source = _parse_non_xbrl_returns(ctx) if is_non_xbrl else parse_returns(ctx)
 
     # Primary lookup: Id attribute (same as .NET)
     for row in source:

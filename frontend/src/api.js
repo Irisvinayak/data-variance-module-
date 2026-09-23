@@ -2,11 +2,13 @@
  * HTTP helpers for the standalone Data Variance application.
  *
  * HOW ROUTING WORKS:
- *   Dev  : Vite proxy in vite.config.js forwards /variance/* and /auth/*
- *          to http://localhost:8000 automatically.
- *          BASE_URL must be '' (empty) so requests go to same origin.
+ *   Dev  : the Vite proxy in vite.config.js forwards every backend route
+ *          prefix to the port VERSION selects in the root .env (5.5 -> 8002,
+ *          6.0 -> 8003). BASE_URL must be '' (empty) so requests go to the
+ *          same origin and the proxy sees them.
  *
- *   Prod : Set VITE_API_BASE_URL=http://your-backend-server:8002 in .env
+ *   Prod : set VITE_API_BASE_URL (e.g. /DataVar/api) to match the IIS virtual
+ *          directory and the web.config rewrite prefix.
  *
  * AUTH: every request carries loginId and tenantId, built by src/auth/. This
  * module does not know or care which iDEAL host supplied them — 5.5 reads a

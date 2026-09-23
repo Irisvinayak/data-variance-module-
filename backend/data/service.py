@@ -20,7 +20,7 @@ from ..hosts import get_profile
 from .xml_loader import load_xml_tree
 from . import query_xml_lookup
 from .report_lookup import (
-    find_matching_reports, _parse_returns, get_is_excel_by_return_code,
+    parse_returns, get_is_excel_by_return_code,
     search_returns_scored, AUTO_SELECT_THRESHOLD,
 )
 from .calculate_variance import calculate_variance, validate_reporting_date
@@ -28,33 +28,6 @@ from .calculate_variance import calculate_variance, validate_reporting_date
 logger = logging.getLogger(__name__)
 
 
-def _resolve_report_table_name(
-    return_id: str,
-    table_name: str,
-    is_non_xbrl: bool = False,
-    ctx: RequestContext = ANONYMOUS,
-) -> str:
-    """
-    Mirror of the .NET table-name resolution block:
-
-        bool isExcel = GetIsExcelByReturnCode(returnCode, isNonXbrl);
-        string reportName = tableName;
-        if (isSpTableDataEnabled && !isExcel)
-            reportName = tableName + "_DP";
-    """
-    is_excel = get_is_excel_by_return_code(return_id, is_non_xbrl=is_non_xbrl, ctx=ctx)
-
-    report_name = table_name
-    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
-        report_name = f"{table_name}_DP"
-
-    logger.debug("[table_resolution] ReturnCode=%s", return_id)
-    logger.debug("[table_resolution] IsExcel=%s", is_excel)
-    logger.debug("[table_resolution] IsSpTableDataEnabled=%s", IS_SP_TABLE_DATA_ENABLED)
-    logger.debug("[table_resolution] OriginalTable=%s", table_name)
-    logger.debug("[table_resolution] FinalReportName=%s", report_name)
-
-    return report_name
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -687,7 +660,7 @@ def get_available_dates(
 
     # Same lookup compute_variance() itself uses to decide report_freq for this
     # return — one source of truth, not a second copy of the RepFreq census.
-    return_meta = next((r for r in _parse_returns(ctx) if r.get("Id") == str(return_id)), None)
+    return_meta = next((r for r in parse_returns(ctx) if r.get("Id") == str(return_id)), None)
     report_freq = ((return_meta.get("RepFreq") or "").strip().upper() if return_meta else "")
 
     if report_freq:
@@ -733,7 +706,7 @@ def compute_variance(
     no decisions about it."""
     logger.info("[service] compute_variance started")
 
-    parsed      = _parse_returns(ctx)
+    parsed      = parse_returns(ctx)
     return_meta = next((r for r in parsed if r.get("Id") == str(return_id)), None)
     report_freq = (
         (return_meta.get("RepFreq") or "").strip().upper()

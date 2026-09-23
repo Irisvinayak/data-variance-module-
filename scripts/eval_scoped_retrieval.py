@@ -32,11 +32,14 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from backend.config import ANONYMOUS                                # noqa: E402
 from _bench_cases import build_cases                                # noqa: E402
 from backend.nlp import nlp_config as cfg                           # noqa: E402
 from backend.nlp import schema_info                                 # noqa: E402
 
-LOGIN_ID = "iris810"        # a real active user in this deployment's XML_User.xml
+# backend/config/context.py:ANONYMOUS exists for exactly this —
+# offline scripts with no request identity.
+CTX = ANONYMOUS        # a real active user in this deployment's XML_User.xml
 
 
 def _rank_of(names, wanted) -> int | None:
@@ -56,13 +59,13 @@ def main() -> int:
     import inspect
     import logging
 
-    import backend.main as main_mod
+    import backend.api.nlp as main_mod
 
     # The XML sweep behind return resolution logs a WARNING per unmappable
     # return (~150 of them) which buries the actual results.
-    logging.getLogger("backend.service").setLevel(logging.ERROR)
+    logging.getLogger("backend.data.service").setLevel(logging.ERROR)
     logging.getLogger("backend.nlp.return_lookup").setLevel(logging.ERROR)
-    logging.getLogger("backend.query_xml_lookup").setLevel(logging.ERROR)
+    logging.getLogger("backend.data.query_xml_lookup").setLevel(logging.ERROR)
 
     # Signature-tolerant on purpose: this harness has to grade the BEFORE
     # (where _shortlist_for_return takes only return_id and ignores the query
@@ -74,7 +77,7 @@ def main() -> int:
 
     def shortlist_for(return_id: str, query: str):
         if takes_query:
-            return main_mod._shortlist_for_return(return_id, query, LOGIN_ID)
+            return main_mod._shortlist_for_return(return_id, query, CTX)
         return main_mod._shortlist_for_return(return_id)
 
     cases = build_cases(sample=args.sample, seed=args.seed)

@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from ..config import ANONYMOUS, RequestContext
 from ..data import query_xml_lookup
-from ..data.report_lookup import _parse_returns
+from ..data.report_lookup import parse_returns
 from ..data.service import _load_table_mapping
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def _build_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, A
     correctly. See _select_candidate()."""
     lookup: Dict[str, List[Dict[str, Any]]] = {}
 
-    for ret in _parse_returns(ctx):
+    for ret in parse_returns(ctx):
         return_id = ret.get("Id")
         return_name = ret.get("Name", "")
         report_freq = ret.get("RepFreq", "")

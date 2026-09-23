@@ -47,6 +47,7 @@ CASES = [
 
 
 def main() -> int:
+    from backend.config import RequestContext
     from backend.nlp.retriever import get_relevant_schema
 
     top1_hits = 0
@@ -56,7 +57,7 @@ def main() -> int:
 
     for query, expected_table, login_id in CASES:
         start = time.perf_counter()
-        result = get_relevant_schema(query, login_id)
+        result = get_relevant_schema(query, RequestContext(login_id=login_id))
         elapsed = time.perf_counter() - start
         total_elapsed += elapsed
 

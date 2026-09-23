@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from ..config import ANONYMOUS, RequestContext
 from . import return_lookup

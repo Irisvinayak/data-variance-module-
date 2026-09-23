@@ -19,7 +19,7 @@ from dateutil.relativedelta import relativedelta
 from ..data.calculate_variance import get_previous_dates
 from ..config import ANONYMOUS, DP_TABLE_SCHEMA, IS_SP_TABLE_DATA_ENABLED, RequestContext
 from ..data.db import execute_query
-from ..data.report_lookup import _parse_returns, get_is_excel_by_return_code
+from ..data.report_lookup import parse_returns, get_is_excel_by_return_code
 from .query_normalizer import normalize_query
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def _resolve_physical_table_name(
     Duplicated here deliberately, read-only use only (a MAX() lookup) —
     service._resolve_report_table_name() is dead/incomplete code (it's
     missing the DP_TABLE_SCHEMA prefix), so it is not reused."""
-    return_meta = next((r for r in _parse_returns(ctx) if r.get("Id") == str(return_id)), None)
+    return_meta = next((r for r in parse_returns(ctx) if r.get("Id") == str(return_id)), None)
     is_excel = (
         str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
         if return_meta

@@ -1,8 +1,12 @@
 """_bench_cases.py — shared ground truth for the retrieval benchmarks.
 
-Both scripts/eval_retrieval.py (global path) and
-scripts/eval_scoped_retrieval.py (return-scoped path) grade against this, so
-neither can be tuned on a different set than the other.
+Used by scripts/eval_scoped_retrieval.py (return-scoped path).
+
+NOTE: scripts/eval_retrieval.py (global path) does NOT use this module — it
+hardcodes its own six-case CASES list. The docstring here used to claim both
+graded against this set "so neither can be tuned on a different set than the
+other", which was the opposite of the truth. Wire eval_retrieval.py up to
+build_cases() if you need the two harnesses comparable.
 
 Where the ground truth comes from: every record in column_meta.pkl carries a
 "text" field shaped
@@ -31,7 +35,7 @@ import os
 import pickle
 import random
 import sys
-from typing import Dict, List, NamedTuple, Set, Tuple
+from typing import Dict, List, NamedTuple, Set
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
