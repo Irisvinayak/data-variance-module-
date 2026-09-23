@@ -14,6 +14,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ── Why these handlers are `def`, not `async def` ─────────────────────────────
+# Every route here does BLOCKING work: synchronous Oracle round-trips via
+# oracledb, requests.post to Ollama, FAISS search, and os.listdir/isfile against
+# a network share. FastAPI runs an `async def` handler ON the event loop, so a
+# blocking body stalls the entire process - every other request, including
+# /health, waits behind it.
+#
+# That was not theoretical. With a slow /variance/compute in flight, /health
+# timed out at 30s three times in a row, then answered in 10.1s the moment
+# compute released the loop, then in 0.002s once idle.
+#
+# Declaring them `def` makes FastAPI run them in its threadpool instead, so
+# concurrent requests are served. The bodies are unchanged - there is no
+# `await` anywhere in backend/, so nothing depended on being a coroutine.
+
 
 # ── GET /variance/nlp-health ──────────────────────────────────────────────────
 # Deployment self-check for the NL query path, so diagnosing a 500 from
@@ -24,7 +39,7 @@ router = APIRouter()
 # (the expensive one — a ~1.3GB download on first use, so it is only probed
 # when ?check_model=true is passed).
 @router.get("/variance/nlp-health", tags=["Meta"])
-async def nlp_health(check_model: bool = False) -> dict:
+def nlp_health(check_model: bool = False) -> dict:
     import importlib
     import os
 
@@ -133,7 +148,7 @@ async def nlp_health(check_model: bool = False) -> dict:
 
 # ── Health check (no auth — used by infra/monitoring probes) ──────────────────
 @router.get("/health", tags=["Meta"])
-async def health():
+def health():
     from ..config import ANONYMOUS, APP_VERSION
     from ..hosts import HostProfileError, get_profile
 
@@ -157,7 +172,7 @@ async def health():
 
 # ── GET /app-config ────────────────────────────────────────────────────────────
 @router.get("/app-config", tags=["Meta"])
-async def app_config():
+def app_config():
     """Which iDEAL host this backend is configured for.
 
     The React app fetches this once at startup to pick its authentication

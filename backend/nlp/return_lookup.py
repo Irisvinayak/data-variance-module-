@@ -312,7 +312,20 @@ def invalidate() -> None:
     """Force the next get_return_for_table() call to re-read the XML
     synchronously (bypasses stale-while-revalidate — the caller explicitly
     wants a guaranteed-fresh read, e.g. tests or an admin action)."""
-    global _cache, _cache_ts
+    # _cache and _cache_ts are DICTS, keyed per tenant (see their declarations
+    # above). Rebinding them to None/0.0 - as this did - left the module in a
+    # state where the next _get_lookup() raised
+    # `TypeError: argument of type 'NoneType' is not iterable`.
+    # Nothing calls invalidate() today, so this never fired in production; it
+    # would have on the first use. .clear() keeps the per-tenant shape, which
+    # is what indexed_returns.invalidate() already does correctly.
+    # _cache and _cache_ts are DICTS, keyed per tenant (see their declarations
+    # above). Rebinding them to None/0.0 - as this did - left the module in a
+    # state where the next _get_lookup() raised
+    # `TypeError: argument of type 'NoneType' is not iterable`.
+    # Nothing calls invalidate() today, so this never fired in production; it
+    # would have on the first use. .clear() keeps the per-tenant shape, which
+    # is what indexed_returns.invalidate() already does correctly.
     with _lock:
-        _cache = None
-        _cache_ts = 0.0
+        _cache.clear()
+        _cache_ts.clear()

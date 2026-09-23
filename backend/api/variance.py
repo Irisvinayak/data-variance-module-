@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..auth.deps import require_login, require_return_access
@@ -15,17 +17,31 @@ from ..config import RequestContext
 from ..data import service
 from ..data.db import execute_query
 from ..data.models import VarianceComputeRequest
-from ..hosts import HostProfileError
 from .errors import http_error
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ── Why these handlers are `def`, not `async def` ─────────────────────────────
+# Every route here does BLOCKING work: synchronous Oracle round-trips via
+# oracledb, requests.post to Ollama, FAISS search, and os.listdir/isfile against
+# a network share. FastAPI runs an `async def` handler ON the event loop, so a
+# blocking body stalls the entire process - every other request, including
+# /health, waits behind it.
+#
+# That was not theoretical. With a slow /variance/compute in flight, /health
+# timed out at 30s three times in a row, then answered in 10.1s the moment
+# compute released the loop, then in 0.002s once idle.
+#
+# Declaring them `def` makes FastAPI run them in its threadpool instead, so
+# concurrent requests are served. The bodies are unchanged - there is no
+# `await` anywhere in backend/, so nothing depended on being a coroutine.
+
 
 # ── GET /variance/find ─────────────────────────────────────────────────────────
 @router.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"])
-async def variance_find(
+def variance_find(
     return_name: str,
     ctx: RequestContext = Depends(require_login),     # ← validates loginId param & user exists
 ) -> dict:
@@ -88,7 +104,7 @@ MAX_COMPARISON_DATES = 3
 
 
 @router.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
-async def variance_compute(
+def variance_compute(
     payload: VarianceComputeRequest,
     ctx: RequestContext = Depends(require_login),     # ← step 1: user must exist in XML_User.xml
 ) -> dict:
@@ -158,7 +174,7 @@ async def variance_compute(
 
 # ── GET /variance/dates ─────────────────────────────────────────────────────────
 @router.get("/variance/dates", status_code=status.HTTP_200_OK, tags=["Variance"])
-async def variance_dates(
+def variance_dates(
     return_id: str,
     table_mapping_path: str,
     table_name: str,

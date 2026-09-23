@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import threading
 from typing import Any, List, Optional, Tuple
 
 import oracledb
@@ -14,6 +16,25 @@ from ..config import DB_HOST, DB_PORT, DB_SERVICE, DB_USER, DB_PASSWORD, DB_MAX_
 logger = logging.getLogger(__name__)
 
 _pool: oracledb.ConnectionPool | None = None
+
+# Guards _pool creation. Routes run in FastAPI's threadpool, so several
+# first-requests can reach _get_pool() concurrently; without this each one sees
+# `_pool is None` and calls create_pool(), and every pool but the last is
+# orphaned - real Oracle sessions that are never closed and never reachable,
+# plus N times the connect latency.
+_pool_lock = threading.Lock()
+
+# Pure function of three module constants, so there is no reason to rebuild it
+# per pool creation or per fallback connect.
+_DSN: str = oracledb.makedsn(DB_HOST, DB_PORT, service_name=DB_SERVICE)
+
+# Sized against the request threadpool, not left at 5. FastAPI runs the `def`
+# routes in a threadpool of ~40; with max=5 the 6th concurrent query blocks on
+# acquire, and get_connection()'s fallback then opens UNPOOLED direct
+# connections, so load overflow silently became unbounded Oracle sessions
+# instead of a queue.
+DB_POOL_MIN: int = int(os.getenv("DV_DB_POOL_MIN", "1"))
+DB_POOL_MAX: int = int(os.getenv("DV_DB_POOL_MAX", "20"))
 
 
 def _nls_session_callback(conn, requested_tag, actual_tag):
@@ -30,17 +51,24 @@ def _nls_session_callback(conn, requested_tag, actual_tag):
 
 def _get_pool() -> oracledb.ConnectionPool:
     global _pool
-    if _pool is None:
-        dsn = oracledb.makedsn(DB_HOST, DB_PORT, service_name=DB_SERVICE)
-        _pool = oracledb.create_pool(
-            user=DB_USER,
-            password=DB_PASSWORD,
-            dsn=dsn,
-            min=1,
-            max=5,
-            increment=1,
-            session_callback=_nls_session_callback,
-        )
+    # Double-checked: the fast path stays lock-free once the pool exists.
+    if _pool is not None:
+        return _pool
+    with _pool_lock:
+        if _pool is None:
+            _pool = oracledb.create_pool(
+                user=DB_USER,
+                password=DB_PASSWORD,
+                dsn=_DSN,
+                min=DB_POOL_MIN,
+                max=DB_POOL_MAX,
+                increment=1,
+                session_callback=_nls_session_callback,
+            )
+            logger.info(
+                "[db] connection pool created | min=%d max=%d | %s@%s:%s/%s",
+                DB_POOL_MIN, DB_POOL_MAX, DB_USER, DB_HOST, DB_PORT, DB_SERVICE,
+            )
     return _pool
 
 
@@ -55,8 +83,7 @@ def get_connection():
             "[db] Pool acquire failed (%s) — falling back to direct connect", pool_exc
         )
         try:
-            dsn = oracledb.makedsn(DB_HOST, DB_PORT, service_name=DB_SERVICE)
-            conn = oracledb.connect(user=DB_USER, password=DB_PASSWORD, dsn=dsn)
+            conn = oracledb.connect(user=DB_USER, password=DB_PASSWORD, dsn=_DSN)
             logger.info("[db] Direct connection established (fallback)")
             return conn
         except oracledb.DatabaseError as direct_exc:
@@ -89,6 +116,9 @@ def execute_query(sql: str) -> Tuple[List[str], List[Any], Optional[str]]:
     try:
         cursor = conn.cursor()
         cursor.callTimeout = 60_000  # 60-second timeout
+        # Default arraysize is 100, so fetching DB_MAX_ROWS=5000 took ~50 network
+        # round-trips. Purely a transport batching hint - same rows, same order.
+        cursor.arraysize = min(DB_MAX_ROWS, 1000)
         clean_sql = sql.rstrip().rstrip(";")
         logger.debug("[db] Executing SQL:\n%s", clean_sql)
         cursor.execute(clean_sql)
@@ -125,6 +155,15 @@ def execute_query(sql: str) -> Tuple[List[str], List[Any], Optional[str]]:
         return [], [], f"Unexpected error: {exc}"
 
     finally:
-        if cursor is not None:
-            cursor.close()
-        conn.close()
+        # cursor.close() CAN raise - DPY-1001 on a dead connection, ORA-03113
+        # after a network blip, i.e. exactly when things are already going
+        # wrong. When it did, conn.close() was skipped and the connection was
+        # never returned to the pool; a handful of those exhausted the pool for
+        # the life of the process. Nesting guarantees the release.
+        try:
+            if cursor is not None:
+                cursor.close()
+        except Exception as close_exc:
+            logger.warning("[db] cursor.close() failed: %s", close_exc)
+        finally:
+            conn.close()
