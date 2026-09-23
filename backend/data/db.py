@@ -37,8 +37,21 @@ DB_POOL_MIN: int = int(os.getenv("DV_DB_POOL_MIN", "1"))
 DB_POOL_MAX: int = int(os.getenv("DV_DB_POOL_MAX", "20"))
 
 
-def _nls_session_callback(conn, requested_tag, actual_tag):
-    """Set NLS parameters once per new physical connection."""
+def _nls_session_callback(conn, requested_tag, actual_tag=None):
+    """Set NLS parameters once per new physical connection.
+
+    `actual_tag` is optional: python-oracledb's pool invokes this callback as
+    `session_callback(connection, requested_tag)` -- two positional args, not
+    three -- confirmed against the installed oracledb (thin mode) source at
+    connection.py:907 (`pool.session_callback(self, params_impl.tag)`).
+    A 3-required-arg signature meant EVERY pooled acquire raised
+    `TypeError: _nls_session_callback() missing 1 required positional
+    argument: 'actual_tag'`, which was silently caught by get_connection()'s
+    except block and treated as "pool acquire failed" -> fell back to an
+    unpooled direct connect for every single query. That defeated pooling
+    entirely and, more importantly, meant the NLS session setup below (date
+    format, decimal point) was NEVER actually applied to any connection.
+    This predates the pool-locking fix; it was equally broken before."""
     cursor = conn.cursor()
     for stmt in [
         "ALTER SESSION SET NLS_DATE_LANGUAGE  = 'AMERICAN'",
