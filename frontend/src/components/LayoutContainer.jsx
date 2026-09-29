@@ -70,18 +70,16 @@ function saveHiddenCols(tableName, hidden) {
   }
 }
 
-// loginId/tenantId are the RESOLVED identity from src/auth/, passed in for
-// display and access gating only — api.js reads them from the auth module
-// itself, so no call site needs to forward them.
-export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' }) {
+// loginId is the RESOLVED identity from src/auth/, passed in for access gating
+// only — api.js reads the identity from the auth module itself, so no call site
+// needs to forward it.
+export default function LayoutContainer({ loginId = '' }) {
 
   // ─── Allowed form IDs for this user ──────────────────────────────────────
   // Populated once on mount from GET /auth/my-returns
   // e.g. Set { "2001", "2007", "4016", "6001", ... }
   const [allowedFormIds,    setAllowedFormIds]    = useState(null)   // null = not loaded yet
-  const [allowedFormNames,  setAllowedFormNames]  = useState(null)   // null = not loaded yet
   const [authLoading,       setAuthLoading]       = useState(true)
-  const [authError,         setAuthError]         = useState('')
 
   // ─── NLP bar state ───────────────────────────────────────────────────────
   const [nlpQuery, setNlpQuery] = useState('')
@@ -133,6 +131,16 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
   // ─── Panel state ─────────────────────────────────────────────────────────
   const tablePanelRef = useRef(null)
   const vizPanelRef   = useRef(null)
+  // Both the manual Compute and the NLP bar write `result`. Each request takes
+  // a ticket; a response whose ticket is no longer the latest is dropped, so a
+  // slow earlier request can't overwrite a newer answer (or clear `loading`
+  // while the newer one is still running).
+  const requestSeqRef = useRef(0)
+  // Only one answer is ever on screen, and it must be attributable to the
+  // section that produced it: 'manual' | 'nlp' | null.
+  const resultSourceRef = useRef(null)
+  // The query text the current NLP result/clarification belongs to.
+  const lastNlpQueryRef = useRef('')
   const [tableState,    setTableState]    = useState('normal')
   const [vizState,      setVizState]      = useState('normal')
   const [vizOpen,       setVizOpen]       = useState(false)
@@ -219,6 +227,8 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
   useEffect(() => {
     if (!returnInfo || !tableName) {
       setAvailableDates([])
+      // A fetch cancelled by this change never reaches its own reset.
+      setDatesLoading(false)
       return
     }
 
@@ -241,32 +251,35 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
       })
 
     return () => { cancelled = true }
-  }, [returnInfo, tableName, loginId])
+  }, [returnInfo, tableName])
 
   // ─── Step 1: Fetch allowed form IDs on mount ─────────────────────────────
   useEffect(() => {
     if (!loginId) {
       setAllowedFormIds(new Set())
       setAuthLoading(false)
-      setAuthError('')
       return
     }
 
+    let cancelled = false
     setAuthLoading(true)
     getMyReturns()
       .then((data) => {
+        if (cancelled) return
         // data.allowed_forms = ["2001", "2007", "4016", ...]
         setAllowedFormIds(new Set(data.allowed_forms || []))
-        setAuthLoading(false)
-        setAuthError('')
       })
       .catch((err) => {
+        if (cancelled) return
         // If the backend auth layer is disabled, allow the app to proceed without access filtering.
         setAllowedFormIds(new Set())
-        setAuthLoading(false)
-        setAuthError('')
         console.warn('Auth permissions unavailable, continuing without access filtering:', err.message)
       })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false)
+      })
+
+    return () => { cancelled = true }
   }, [loginId])
 
   // ─── Filter helper — check if a return_id is allowed ─────────────────────
@@ -312,6 +325,21 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
 
   // ─── API handlers ────────────────────────────────────────────────────────
 
+  // Load one specific return picked from a candidate list. Searching by its
+  // name alone is not enough: the backend answers with candidates again
+  // whenever the name ties with another return, and the old fallback then took
+  // the first allowed candidate (not the clicked one) or stored the candidate
+  // list itself as returnInfo, leaving return_id undefined. The numeric id is
+  // searchable too and identifies the return exactly.
+  const loadCandidate = async (candidate) => {
+    let info = await findReturnTables(candidate.return_name)
+    if (info.candidates) info = await findReturnTables(String(candidate.return_id))
+    if (info.candidates || String(info.return_id) !== String(candidate.return_id)) {
+      throw new Error(`Could not load return "${candidate.return_name}". Please search by its exact name.`)
+    }
+    return info
+  }
+
   const handleFindReturn = async () => {
     const name = returnName.trim()
     if (!name) return
@@ -334,8 +362,7 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
       if (info.candidates) {
         // If only 1 allowed candidate, auto-select instead of showing pick-list
         if (info._autoSelect) {
-          const only = info.candidates[0]
-          const full = await findReturnTables(only.return_name)
+          const full = await loadCandidate(info.candidates[0])
           setReturnInfo(full)
           setTableName(full.tables?.[0]?.table_name ?? '')
           setStep(VARIANCE_STEPS.TABLE)
@@ -361,17 +388,9 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
     setCandidates(null)
     setNlColumns(null)
     try {
-      const info = await findReturnTables(candidate.return_name)
-      if (info.candidates) {
-        const best = info.candidates.find(c => c.has_mapping && isAllowed(c.return_id))
-        if (!best) throw new Error('No accessible table mapping available for this return.')
-        const retry = await findReturnTables(best.return_name)
-        setReturnInfo(retry)
-        setTableName(retry.tables?.[0]?.table_name ?? '')
-      } else {
-        setReturnInfo(info)
-        setTableName(info.tables?.[0]?.table_name ?? '')
-      }
+      const info = await loadCandidate(candidate)
+      setReturnInfo(info)
+      setTableName(info.tables?.[0]?.table_name ?? '')
       setStep(VARIANCE_STEPS.TABLE)
     } catch (err) {
       setError(err.message || 'Failed to load return.')
@@ -397,6 +416,7 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
 
   const handleCompute = async () => {
     if (!returnInfo || !tableName || selectedDates.length === 0) return
+    const seq = ++requestSeqRef.current
     setLoading(true)
     setError('')
     try {
@@ -421,7 +441,12 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
         selected_columns:   selectedColumns,
         comparison_mode:    comparisonMode,
       })
+      if (seq !== requestSeqRef.current) return
       setResult(res)
+      resultSourceRef.current = 'manual'
+      setNlpQuery('')
+      lastNlpQueryRef.current = ''
+      setNlpClarification(null)
       // A manual compute replaces the table on screen, so the "Understood as"
       // chips from an earlier NLP query would now be describing a different
       // result. Clearing them keeps the attribution honest — the chips are the
@@ -433,13 +458,28 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
       setVizState('normal')
       setVizOpen(true)
     } catch (err) {
-      setError(err.message || 'Failed to compute variance.')
+      if (seq === requestSeqRef.current) setError(err.message || 'Failed to compute variance.')
     } finally {
-      setLoading(false)
+      if (seq === requestSeqRef.current) setLoading(false)
     }
   }
 
-  const handleReset = () => {
+  // ─── Keeping the manual and NLP sections apart ────────────────────────────
+  // Everything a previous answer left on the page: result, chart, notices,
+  // errors, NLP chips/prompts, and the manual wizard's selections (which would
+  // otherwise sit next to an NLP answer describing a different table).
+  const clearPage = () => {
+    requestSeqRef.current += 1   // drop any response still in flight
+    setLoading(false)
+    setResult(null)
+    resultSourceRef.current = null
+    setError('')
+    setNotice('')
+    setNlpClarification(null)
+    setNlpInterpretation(null)
+    setVizOpen(false)
+    setTableState('normal')
+    setVizState('normal')
     setStep(VARIANCE_STEPS.RETURN_NAME)
     setReturnName('')
     setReturnInfo(null)
@@ -447,16 +487,44 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
     setSelectedDates([])
     setPeriods(1)
     setComparisonMode(COMPARISON_MODES.VS_CURRENT)
-    setResult(null)
-    setError('')
-    setNotice('')
     setCandidates(null)
     setNlColumns(null)
-    setNlpClarification(null)
-    setNlpInterpretation(null)
-    setVizOpen(false)
-    setTableState('normal')
-    setVizState('normal')
+  }
+
+  // Full reset: everything clearPage() drops, plus the NLP query text itself.
+  const handleReset = () => {
+    clearPage()
+    setNlpQuery('')
+    lastNlpQueryRef.current = ''
+  }
+
+  // Typing a NEW question clears the previous one's content straight away,
+  // rather than leaving it on screen looking like the answer to what is being
+  // typed. It also ends a pending clarification: new text is a new question,
+  // not an answer to the old prompt.
+  const handleNlpQueryChange = (value) => {
+    setNlpQuery(value)
+    const hasPrevious =
+      result || nlpClarification || nlpInterpretation || error || notice || returnInfo || returnName
+    if (hasPrevious && value.trim() !== lastNlpQueryRef.current) clearPage()
+  }
+
+  // Starting on the manual side clears whatever the NLP bar left behind.
+  const handleManualReturnNameChange = (value) => {
+    setReturnName(value)
+    if (nlpQuery || nlpInterpretation || nlpClarification) {
+      setNlpQuery('')
+      lastNlpQueryRef.current = ''
+      setNlpClarification(null)
+      setNlpInterpretation(null)
+    }
+    if (resultSourceRef.current === 'nlp') {
+      setResult(null)
+      resultSourceRef.current = null
+      setVizOpen(false)
+      setNotice('')
+      setError('')
+    }
   }
 
   // ─── NLP handlers ────────────────────────────────────────────────────────
@@ -497,16 +565,10 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
     //
     // Answering a pending clarification is NOT a new question: it is the
     // second half of the one already in flight, so its state is left alone.
-    if (!activeClarification) {
-      setResult(null)
-      setNotice('')
-      setNlpClarification(null)
-      setNlpInterpretation(null)
-      setVizOpen(false)
-      setTableState('normal')
-      setVizState('normal')
-    }
+    if (!activeClarification) clearPage()
+    lastNlpQueryRef.current = trimmed
 
+    const seq = ++requestSeqRef.current
     setLoading(true)
     setError('')
 
@@ -516,6 +578,7 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
         clarificationAnswer:  selectedOption?.id,
         resolvedContext:      activeClarification?.resolvedContext,
       })
+      if (seq !== requestSeqRef.current) return
 
       // Set before the clarification early-return so the chips render on a
       // clarification round too — that's exactly when knowing what was
@@ -536,14 +599,15 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
 
       setNlpClarification(null)
       setResult(res)
+      resultSourceRef.current = 'nlp'
       applyMissingPeriodsNotice(res)
       setTableState('normal')
       setVizState('normal')
       setVizOpen(true)
     } catch (err) {
-      setError(err.message || 'Could not resolve this query.')
+      if (seq === requestSeqRef.current) setError(err.message || 'Could not resolve this query.')
     } finally {
-      setLoading(false)
+      if (seq === requestSeqRef.current) setLoading(false)
     }
   }
 
@@ -658,24 +722,13 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
     )
   }
 
-  // If auth completely failed (no loginId, user not found)
-  if (authError && !allowedFormIds) {
-    return (
-      <div className="lc-idle">
-        <div className="lc-idle-icon">🔒</div>
-        <div className="lc-idle-title">Access Error</div>
-        <div className="lc-idle-sub">{authError}</div>
-      </div>
-    )
-  }
-
   return (
     <div className="lc-root">
 
       {/* ── Compact control toolbar ─────────────────────────────────── */}
       <ControlBar
         step={step}
-        returnName={returnName}   setReturnName={setReturnName}
+        returnName={returnName}   setReturnName={handleManualReturnNameChange}
         returnInfo={returnInfo}   tables={tables}
         tableName={tableName}     setTableName={setTableName}
         selectedDates={selectedDates} setSelectedDates={setSelectedDates}
@@ -691,7 +744,7 @@ export default function LayoutContainer({ loginId = '', tenantId = '', uid = '' 
         onVisualize={handleToggleViz}
         vizOpen={vizOpen}
         nlpQuery={nlpQuery}
-        setNlpQuery={setNlpQuery}
+        setNlpQuery={handleNlpQueryChange}
         handleNlpSearch={handleNlpSearch}
         handleVoiceInput={handleVoiceInput}
         nlpClarification={nlpClarification}

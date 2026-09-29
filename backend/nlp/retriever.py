@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from ..auth.service import get_allowed_form_ids
 from ..config import AUTH_ENABLED, RequestContext
@@ -69,7 +69,7 @@ _lexical_overlap = ranking.lexical_overlap
 
 def get_relevant_schema(
     query: str, ctx: RequestContext, analysis: "QueryAnalysis | None" = None,
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Embed `query`, search the table/column FAISS indices, RRF-fuse them into
     a ranked table shortlist, then filter that shortlist down to only tables
     belonging to return_ids the caller's department is allowed to access
@@ -126,8 +126,8 @@ def get_relevant_schema(
     table_hits = search(TABLE_INDEX_PATH, TABLE_META_PATH, q_vec, TOP_K_TABLES * 3, min_score=MIN_TABLE_SCORE)
     bm25_hits = search_bm25(BM25_INDEX_PATH, normalized_query, BM25_TOP_K) if BM25_SIGNAL_WEIGHT else []
 
-    all_table_meta: Dict[str, Dict[str, Any]] = {}
-    scores: Dict[str, float] = {}
+    all_table_meta: dict[str, dict[str, Any]] = {}
+    scores: dict[str, float] = {}
 
     # The table holding the #1 hit in each individual signal. This turned out
     # to be the single strongest predictor of a correct answer, and it is NOT
@@ -170,7 +170,7 @@ def get_relevant_schema(
     # Secondary/supporting signal: table description similarity — breaks ties
     # and surfaces tables whose only good match is the description, but no
     # longer dominates over an actual column/value hit.
-    texts_by_table: Dict[str, List[str]] = {}
+    texts_by_table: dict[str, list[str]] = {}
     for rank, (_, t) in enumerate(table_hits):
         if rank == 0:
             signal_leaders.add(t["table"])   # best table-description hit
@@ -238,7 +238,7 @@ def get_relevant_schema(
     # of cosine similarity, not a replacement for it. See _lexical_overlap.
     # Also kept per-table (not just folded into `scores`) since confidence.py
     # reuses it as a small standalone signal on the winning candidate.
-    lexical_overlap_by_table: Dict[str, float] = {}
+    lexical_overlap_by_table: dict[str, float] = {}
     for tbl in scores:
         overlap = _lexical_overlap(query_tokens, " ".join(texts_by_table.get(tbl, [])))
         lexical_overlap_by_table[tbl] = overlap
@@ -259,7 +259,7 @@ def get_relevant_schema(
     # for confidence scoring only — that bonus deliberately dwarfs every other
     # signal so it can win the ranking below, but it would otherwise saturate
     # confidence.table_confidence()'s normalization to a meaningless 0/1 split.
-    scores_for_confidence: Dict[str, float] = dict(scores)
+    scores_for_confidence: dict[str, float] = dict(scores)
     if canonical_qa_table and canonical_qa_table in scores_for_confidence:
         scores_for_confidence[canonical_qa_table] -= QA_STRONG_MATCH_BONUS
 
@@ -267,7 +267,7 @@ def get_relevant_schema(
     # suffix) down to their best-scoring variant BEFORE the top-K cutoff, so
     # 2-3 near-identical copies of one section don't crowd out a genuinely
     # different candidate table.
-    canonical_best: Dict[str, str] = {}
+    canonical_best: dict[str, str] = {}
     for tbl, score in scores.items():
         canon = _BACKUP_SUFFIX_RE.sub("", tbl)
         if canon not in canonical_best or scores[canonical_best[canon]] < score:
@@ -369,7 +369,7 @@ def get_relevant_schema(
     else:
         allowed_returns = get_allowed_form_ids(ctx) or set()
 
-        def _is_authorized(table_meta: Dict[str, Any]) -> bool:
+        def _is_authorized(table_meta: dict[str, Any]) -> bool:
             rid = table_meta.get("return_id")
             return rid is not None and str(rid) in allowed_returns
 

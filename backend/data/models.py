@@ -2,25 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
 class VarianceComputeRequest(BaseModel):
     return_id:          str
+    # Still required for backward compatibility, but no longer used to locate
+    # files: the server resolves the mapping from the return's own TblPath
+    # (see service._trusted_tbl_path).
     table_mapping_path: str
     table_name:         str
     reporting_date:     str
     reporting_period:   int = 1
-    selected_columns:   Optional[List[str]] = None
+    selected_columns:   Optional[list[str]] = None
     comparison_mode:    str = "vs_current"
     # Exact reporting dates to compare, "DD-MON-YYYY", newest treated as the
     # current period. When present it REPLACES reporting_period's derived
     # comparison periods (the manual UI's date checkboxes — ControlBar's
     # DateField); reporting_period is then ignored. Capped at
-    # MAX_COMPARISON_DATES in main.py, matching the Periods chips' own 1-3
+    # MAX_COMPARISON_DATES in backend/api/variance.py, matching the Periods chips' own 1-3
     # range, because the result table renders one column group per period.
-    comparison_dates:   Optional[List[str]] = None
+    comparison_dates:   Optional[list[str]] = None
 
 
 class NLResolveRequest(BaseModel):
@@ -35,4 +38,4 @@ class NLResolveRequest(BaseModel):
     # needed between requests.
     dimension:            Optional[str] = None
     clarification_answer: Optional[str] = None
-    resolved_context:     Optional[Dict[str, Any]] = None
+    resolved_context:     Optional[dict[str, Any]] = None

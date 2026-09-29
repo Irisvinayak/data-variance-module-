@@ -46,7 +46,7 @@ import os
 import re
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ..config import ANONYMOUS, RequestContext
 from ..hosts import get_profile
@@ -69,7 +69,7 @@ _FROM_RE = re.compile(r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_$#]*)", re.IGNORE
 _NON_TABLES = {"DUAL", "SELECT", "TABLE", "LATERAL"}
 
 _TTL = float(os.getenv("DV_XML_QUERY_TTL_SEC", "3600"))
-_cache: Dict[tuple, tuple] = {}
+_cache: dict[tuple, tuple] = {}
 _lock = threading.Lock()
 
 
@@ -119,7 +119,7 @@ def _extract_tables(select_query: str) -> list:
     return names
 
 
-def _build(return_id: str, ctx: RequestContext) -> Dict[str, Dict[str, Any]]:
+def _build(return_id: str, ctx: RequestContext) -> dict[str, dict[str, Any]]:
     """{UPPERCASE table name: {"table_name", "filter_col", "return_id"}}"""
     path = _xml_query_path(return_id, ctx)
     if path is None:
@@ -129,7 +129,7 @@ def _build(return_id: str, ctx: RequestContext) -> Dict[str, Dict[str, Any]]:
     if root is None:
         return {}
 
-    tables: Dict[str, Dict[str, Any]] = {}
+    tables: dict[str, dict[str, Any]] = {}
     for row in root.findall("Row"):
         select_query = row.findtext("SelectQuery") or ""
         filter_col = (row.attrib.get("RptDtClmnName") or "").strip().upper()
@@ -169,7 +169,7 @@ def _build(return_id: str, ctx: RequestContext) -> Dict[str, Dict[str, Any]]:
 
 def tables_for_return(
     return_id: str, ctx: RequestContext = ANONYMOUS
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     """Cached {UPPERCASE table name: metadata} parsed from the return's
     XML_Query.xml. Empty dict when the file is absent/unparseable — callers
     must treat that as "no fallback available", not an error."""
@@ -190,7 +190,7 @@ def tables_for_return(
 
 def get_table_metadata(
     return_id: str, table_name: str, ctx: RequestContext = ANONYMOUS
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """Metadata for one table, or None if this return's XML_Query.xml doesn't
     mention it. Shaped to match service._get_table_metadata()'s return value
     so it can be used as a drop-in fallback."""

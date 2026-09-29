@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 import oracledb
 
@@ -35,6 +35,18 @@ _DSN: str = oracledb.makedsn(DB_HOST, DB_PORT, service_name=DB_SERVICE)
 # instead of a queue.
 DB_POOL_MIN: int = int(os.getenv("DV_DB_POOL_MIN", "1"))
 DB_POOL_MAX: int = int(os.getenv("DV_DB_POOL_MAX", "20"))
+
+# Per-round-trip ceiling for a query, in milliseconds. Set on the CONNECTION:
+# oracledb has no cursor-level timeout, and the `cursor.callTimeout = 60_000`
+# this replaces only created a stray Python attribute, so no query was ever
+# bounded and a runaway one pinned a threadpool worker and a pooled session.
+DB_CALL_TIMEOUT_MS: int = int(os.getenv("DV_DB_CALL_TIMEOUT_MS", "60000"))
+
+_MISSING_CONFIG = [
+    name for name, value in (
+        ("DV_DB_HOST", DB_HOST), ("DV_DB_USER", DB_USER), ("DV_DB_PASSWORD", DB_PASSWORD),
+    ) if not value
+]
 
 
 def _nls_session_callback(conn, requested_tag, actual_tag=None):
@@ -107,13 +119,20 @@ def get_connection():
             raise
 
 
-def execute_query(sql: str) -> Tuple[List[str], List[Any], Optional[str]]:
+def execute_query(sql: str) -> tuple[list[str], list[Any], Optional[str]]:
     """Execute a SELECT query against Oracle DB.
 
     Returns
     -------
     (columns, rows, error)  — error is None on success.
     """
+    if _MISSING_CONFIG:
+        logger.error(
+            "[db] Database is not configured — set %s (or the _55/_60 variant for "
+            "this VERSION) in .env", ", ".join(_MISSING_CONFIG),
+        )
+        return [], [], f"Database is not configured: {', '.join(_MISSING_CONFIG)} missing"
+
     # ── Step 1: acquire connection ────────────────────────────────────────────
     try:
         conn = get_connection()
@@ -127,8 +146,8 @@ def execute_query(sql: str) -> Tuple[List[str], List[Any], Optional[str]]:
     # ── Step 2: execute query ─────────────────────────────────────────────────
     cursor = None
     try:
+        conn.call_timeout = DB_CALL_TIMEOUT_MS
         cursor = conn.cursor()
-        cursor.callTimeout = 60_000  # 60-second timeout
         # Default arraysize is 100, so fetching DB_MAX_ROWS=5000 took ~50 network
         # round-trips. Purely a transport batching hint - same rows, same order.
         cursor.arraysize = min(DB_MAX_ROWS, 1000)

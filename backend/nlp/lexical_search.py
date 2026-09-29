@@ -22,25 +22,25 @@ import os
 import pickle
 import re
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
-_bm25_cache: Dict[str, Tuple[float, Any, List[Dict[str, Any]]]] = {}
-_qa_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+_bm25_cache: dict[str, tuple[float, Any, list[dict[str, Any]]]] = {}
+_qa_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 # index_paths whose load already failed — keeps the warning above to one
 # line per path instead of one per NL query.
 _bm25_failed: set[str] = set()
 _cache_lock = threading.Lock()
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
 
 
-def _load_bm25_cached(index_path: str) -> Tuple[Optional[Any], List[Dict[str, Any]]]:
+def _load_bm25_cached(index_path: str) -> tuple[Optional[Any], list[dict[str, Any]]]:
     if not os.path.isfile(index_path):
         return None, []
 
@@ -86,7 +86,7 @@ def search_bm25(
     index_path: str,
     query_text: str,
     top_k: int,
-) -> List[Tuple[float, Dict[str, Any]]]:
+) -> list[tuple[float, dict[str, Any]]]:
     """BM25 lexical search over the table-document corpus. Returns
     (raw_bm25_score, record) tuples sorted descending, capped at top_k.
     Raw score is returned AS-IS — it is unbounded (roughly 0-20+) and not
@@ -112,7 +112,7 @@ def search_bm25(
     return results
 
 
-def _load_qa_cached(qa_path: str) -> List[Dict[str, Any]]:
+def _load_qa_cached(qa_path: str) -> list[dict[str, Any]]:
     if not os.path.isfile(qa_path):
         return []
 

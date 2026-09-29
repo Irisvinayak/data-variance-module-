@@ -24,7 +24,7 @@ import threading
 import time
 
 from ..config import ANONYMOUS, AUTH_TTL_SEC, RequestContext
-from ..data.xml_loader import load_xml_tree
+from ..data.xml_loader import load_xml_tree, max_mtime
 from ..hosts import get_profile
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,12 @@ _AUTH_TTL = AUTH_TTL_SEC
 _forms_cache: dict = {}
 _create_cache: dict = {}
 _lock = threading.Lock()
+
+
+class _MasterUnavailable(Exception):
+    """A user/department master could not be read at all. Distinct from "user
+    not found" so the failure is not cached: a transient network-share error
+    must not lock every user out for AUTH_TTL_SEC."""
 
 
 # ── Attribute resolution ───────────────────────────────────────────────────────
@@ -95,18 +101,40 @@ def get_allowed_form_ids(ctx: RequestContext = ANONYMOUS):
         return None
 
     key = ctx.cache_key
+    profile = get_profile()
+    profile.validate_context(ctx)
+    mtime = max_mtime(profile.user_xml_path(ctx), profile.department_xml_path(ctx))
+
     with _lock:
         entry = _forms_cache.get(key)
-    if entry and (time.monotonic() - entry[1]) < _AUTH_TTL:
+    if entry and (time.monotonic() - entry[1]) < _AUTH_TTL and entry[2] == mtime:
         return entry[0]
 
-    result = _resolve_allowed_forms(ctx)
-    with _lock:
-        _forms_cache[key] = (result, time.monotonic())
-    logger.info(
-        "[AUTH] resolved | %s | result=%s", ctx,
-        f"{len(result)} form(s)" if result is not None else "USER NOT FOUND",
+    reason = (
+        "first load" if entry is None
+        else "file changed" if entry[2] != mtime
+        else "ttl expired"
     )
+
+    try:
+        result = _resolve_allowed_forms(ctx)
+    except _MasterUnavailable:
+        return None
+    with _lock:
+        _forms_cache[key] = (result, time.monotonic(), mtime)
+    logger.info(
+        "[AUTH] resolved | %s | result=%s | reload_reason=%s | mtime %s -> %s",
+        ctx, f"{len(result)} form(s)" if result is not None else "USER NOT FOUND",
+        reason, entry[2] if entry else None, mtime,
+    )
+    if reason == "file changed" and entry is not None and entry[0] is not None and result is not None:
+        added   = sorted(result - entry[0])
+        removed = sorted(entry[0] - result)
+        if added or removed:
+            logger.info(
+                "[AUTH] allowed return-ids changed | %s | added=%s | removed=%s",
+                ctx, added, removed,
+            )
     return result
 
 
@@ -143,10 +171,10 @@ def _resolve_allowed_forms(ctx: RequestContext):
     user_root = load_xml_tree(user_path, os.path.basename(user_path))
     if user_root is None:
         logger.error(
-            "[AUTH] Cannot load user master (path=%s) — denying all access | %s",
+            "[AUTH] Cannot load user master (path=%s) — denying this request | %s",
             user_path, ctx,
         )
-        return None
+        raise _MasterUnavailable(user_path)
 
     login_lower = ctx.login_id.lower()
     dept_id = None
@@ -178,7 +206,7 @@ def _resolve_allowed_forms(ctx: RequestContext):
     dept_root = load_xml_tree(dept_path, os.path.basename(dept_path))
     if dept_root is None:
         logger.error("[AUTH] Cannot load department master (path=%s) | %s", dept_path, ctx)
-        return None
+        raise _MasterUnavailable(dept_path)
 
     delimiter = profile.forms_delimiter
     for el in dept_root.findall("Row"):
@@ -282,10 +310,20 @@ def can_generate_instance(ctx: RequestContext) -> bool:
         return False
 
     key = ctx.cache_key
+    profile = get_profile()
+    profile.validate_context(ctx)
+    mtime = max_mtime(profile.user_xml_path(ctx), profile.role_access_xml_path(ctx))
+
     with _lock:
         entry = _create_cache.get(key)
-    if entry and (time.monotonic() - entry[1]) < _AUTH_TTL:
+    if entry and (time.monotonic() - entry[1]) < _AUTH_TTL and entry[2] == mtime:
         return entry[0]
+
+    reason = (
+        "first load" if entry is None
+        else "file changed" if entry[2] != mtime
+        else "ttl expired"
+    )
 
     role_id = get_user_role_id(ctx)
     verdict = validate_create_instance_access(role_id, ctx) if role_id else False
@@ -295,11 +333,17 @@ def can_generate_instance(ctx: RequestContext) -> bool:
     result = bool(verdict)
 
     with _lock:
-        _create_cache[key] = (result, time.monotonic())
+        _create_cache[key] = (result, time.monotonic(), mtime)
     logger.info(
-        "[AUTH_ROLE] %s role_id=%r can_generate_instance=%s (verdict=%r)",
-        ctx, role_id, result, verdict,
+        "[AUTH_ROLE] %s role_id=%r can_generate_instance=%s (verdict=%r) | "
+        "reload_reason=%s | mtime %s -> %s",
+        ctx, role_id, result, verdict, reason, entry[2] if entry else None, mtime,
     )
+    if reason == "file changed" and entry is not None and entry[0] != result:
+        logger.info(
+            "[AUTH_ROLE] can_generate_instance changed | %s | role_id=%r | %s -> %s",
+            ctx, role_id, entry[0], result,
+        )
     return result
 
 

@@ -28,14 +28,7 @@ def get_profile(version: str | None = None) -> HostProfile:
 
         profile: HostProfile = Ideal55Profile()
     else:
-        try:
-            from .ideal_60 import Ideal60Profile
-        except ImportError as exc:  # pragma: no cover - until Phase 4 lands
-            raise HostProfileError(
-                f"VERSION={resolved!r} selects the iDEAL 6.0 host profile, which is "
-                "not implemented yet (Phase 4 of docs/integration-plan.md). Set VERSION=5.5 "
-                "to run against a single-tenant repository."
-            ) from exc
+        from .ideal_60 import Ideal60Profile
 
         profile = Ideal60Profile()
 

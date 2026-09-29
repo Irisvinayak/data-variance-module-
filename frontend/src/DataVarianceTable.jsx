@@ -1,52 +1,82 @@
 /**
  * DataVarianceTable — display components for variance results.
- * All styles are self-contained in App.css (no chatbot CSS required).
+ * All styles are self-contained in App.css.
  */
 
 import { useState } from 'react'
 import { freqLabel } from './types.js'
+
+// One SVG triangle for both directions, rotated for a decrease. The ↑/↓ text
+// glyphs used before come from different font glyphs, so the two rendered at
+// visibly different sizes and weights.
+function TrendArrow({ arrow }) {
+  if (arrow !== '▲' && arrow !== '▼') return arrow || null
+  const down = arrow === '▼'
+  return (
+    <svg
+      className="vt-trend-svg"
+      viewBox="0 0 10 10"
+      width="0.8em"
+      height="0.8em"
+      aria-label={down ? 'decrease' : 'increase'}
+      style={down ? { transform: 'rotate(180deg)' } : undefined}
+    >
+      <path d="M5 1 L9.5 9 L0.5 9 Z" fill="currentColor" />
+    </svg>
+  )
+}
 
 // Module-level so the default `hiddenCols` prop keeps a stable identity across
 // renders — a fresh [] literal in the signature would be a new value every
 // time and defeat any memoization a caller adds later.
 const EMPTY_COLS = []
 
-// ── VarianceFindBlock ─────────────────────────────────────────────────────────
-export function VarianceFindBlock({ info, onSelect }) {
-  const tables = (info?.tables || []).filter(
-    (t, i, arr) =>
-      t.table_name && arr.findIndex((x) => x.table_name === t.table_name) === i
-  )
-  const [selected, setSelected] = useState(tables[0]?.table_name ?? '')
+// Rows shown before the "Show all" toggle.
+const ROW_PREVIEW = 20
 
+const orDash = (v) => (v != null ? v : '—')
+
+const cellClass = (color) => {
+  if (color === 'success') return 'vt-pos'
+  if (color === 'danger')  return 'vt-neg'
+  return ''
+}
+
+// Current-side cell of one comparison pair: the value plus its trend arrow,
+// % change and delta. Shared by the sequential and vs_current layouts.
+function VarianceCell({ value, metric }) {
+  const vs = metric?.variance_summary
+  const cc = cellClass(vs?.color ?? '')
   return (
-    <div className="vfb-card">
-      <div className="vfb-meta">
-        <span><strong>Return:</strong> {info.return_name}</span>
-        <span><strong>Frequency:</strong> {freqLabel(info.report_freq)}</span>
-      </div>
-      <p className="vfb-label">Select a table:</p>
-      <div className="table-list">
-        {tables.map((t) => (
-          <div
-            key={t.table_name}
-            className={`table-item${selected === t.table_name ? ' selected' : ''}`}
-            onClick={() => setSelected(t.table_name)}
-          >
-            {t.table_name}
+    <td className={`vt-num vt-curr-cell ${cc}`} title={vs?.text ?? ''}>
+      <div className="vt-curr-wrap">
+        <span className="vt-curr-val">{orDash(value)}</span>
+        {(vs?.arrow || metric?.pct_change?.value || metric?.change?.value) && (
+          <div className="vt-metrics-row">
+            {vs?.arrow && (
+              <span className={`vt-arrow-icon ${cc}`}>
+                <TrendArrow arrow={vs.arrow} />
+              </span>
+            )}
+            {metric?.pct_change?.value && (
+              <span className={`vt-pct-badge ${cc}`}>{metric.pct_change.value}</span>
+            )}
+            <span className={`vt-diff-val ${cc}`}>
+              Δ&thinsp;{metric?.change?.value ?? '0'}
+            </span>
           </div>
-        ))}
+        )}
       </div>
-      <div className="row-end">
-        <button
-          className="btn"
-          disabled={!selected}
-          onClick={() => onSelect?.(info, selected)}
-        >
-          Use this table →
-        </button>
-      </div>
-    </div>
+    </td>
+  )
+}
+
+function ShowAllToggle({ total, showAll, onToggle }) {
+  if (total <= ROW_PREVIEW) return null
+  return (
+    <button className="btn btn-secondary btn-sm" onClick={onToggle}>
+      {showAll ? '▲ Show less' : `▼ Show all ${total} rows`}
+    </button>
   )
 }
 
@@ -103,16 +133,14 @@ export function VarianceHeaderMeta({ result }) {
 }
 
 // ── DataVarianceBlock ─────────────────────────────────────────────────────────
-// `showHeader={false}` when the caller has already rendered VarianceHeaderMeta
-// somewhere else (TablePanel puts it in the panel header) — without it the
-// name and badges would appear twice.
+// The table name and period badges are not rendered here: TablePanel shows
+// them in its panel header via VarianceHeaderMeta.
 //
 // `hiddenCols` / `onHideCol` are the column-visibility feature. Both default to
 // inert values so this component stays usable standalone (and so the feature
 // could be removed by deleting the two props at the call site).
 export function DataVarianceBlock({
   result,
-  showHeader = true,
   hiddenCols = EMPTY_COLS,
   onHideCol,
 }) {
@@ -123,7 +151,6 @@ export function DataVarianceBlock({
   }
 
   const {
-    table_name,
     reporting_date,
     comparison_periods = [],
     columns = [],
@@ -133,7 +160,7 @@ export function DataVarianceBlock({
     chain_dates = [],
   } = result
 
-  const displayRows    = showAll ? rows : rows.slice(0, 20)
+  const displayRows    = showAll ? rows : rows.slice(0, ROW_PREVIEW)
   const periodCount    = comparison_periods.length
   const colSpanWidth   = periodCount * 2
 
@@ -185,12 +212,6 @@ export function DataVarianceBlock({
       </button>
     ) : null
 
-  const cellClass = (color) => {
-    if (color === 'success') return 'vt-pos'
-    if (color === 'danger')  return 'vt-neg'
-    return ''
-  }
-
   // ── Sequential mode rendering ─────────────────────────────────────────────
   if (comparison_mode === 'sequential' && chain_dates.length >= 2) {
     const links = chain_dates.slice(0, -1).map((fromDate, i) => ({
@@ -202,20 +223,6 @@ export function DataVarianceBlock({
 
     return (
       <div className="variance-block">
-
-        {/* ── Title + chain badges ── */}
-        {showHeader && (
-          <div className="variance-header">
-            <div className="variance-title">📊 {table_name}</div>
-            <div className="vt-period-row">
-              {links.map((lk, i) => (
-                <span key={i} className="vt-badge vt-badge-prev">
-                  {lk.fromDate} → <strong>{lk.toDate}</strong>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="variance-table-wrapper">
           <table className="variance-table">
@@ -269,54 +276,26 @@ export function DataVarianceBlock({
                     const isComparable = comparableSet.has(col.toUpperCase())
 
                     if (!isComparable) {
-                      const val = row.current?.[col]
                       return (
                         <td key={col} className="vt-info-cell">
-                          {val != null ? val : '—'}
+                          {orDash(row.current?.[col])}
                         </td>
                       )
                     }
 
                     return links.map((lk, li) => {
-                      const linkData = row[lk.key]
-                      const m   = linkData?.metrics?.[col]
-                      const vs  = m?.variance_summary
-                      const cc  = cellClass(vs?.color ?? '')
+                      const m = row[lk.key]?.metrics?.[col]
+                      // A link's "to" value is the next link's "from" value;
+                      // the last link ends at the current period.
+                      const toValue = li === links.length - 1
+                        ? row.current?.[col]
+                        : row[`link_${li + 2}`]?.metrics?.[col]?.value
 
                       return [
                         <td key={`${col}_${li}_from`} className="vt-num vt-prev-cell">
-                          {m?.value != null ? m.value : '—'}
+                          {orDash(m?.value)}
                         </td>,
-                        <td
-                          key={`${col}_${li}_to`}
-                          className={`vt-num vt-curr-cell ${cc}`}
-                          title={vs?.text ?? ''}
-                        >
-                          <div className="vt-curr-wrap">
-                            <span className="vt-curr-val">
-                              {li === links.length - 1
-                                ? (row.current?.[col] != null ? row.current[col] : '—')
-                                : (row[`link_${li + 2}`]?.metrics?.[col]?.value != null
-                                    ? row[`link_${li + 2}`].metrics[col].value
-                                    : '—')}
-                            </span>
-                            {(vs?.arrow || m?.pct_change?.value || m?.change?.value) && (
-                              <div className="vt-metrics-row">
-                                {vs?.arrow && (
-                                  <span className={`vt-arrow-icon ${cc}`}>
-                                    {vs.arrow === '▲' ? '↑' : vs.arrow === '▼' ? '↓' : vs.arrow}
-                                  </span>
-                                )}
-                                {m?.pct_change?.value && (
-                                  <span className={`vt-pct-badge ${cc}`}>{m.pct_change.value}</span>
-                                )}
-                                <span className={`vt-diff-val ${cc}`}>
-                                  Δ&thinsp;{m?.change?.value ?? '0'}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </td>,
+                        <VarianceCell key={`${col}_${li}_to`} value={toValue} metric={m} />,
                       ]
                     })
                   })}
@@ -326,14 +305,7 @@ export function DataVarianceBlock({
           </table>
         </div>
 
-        {rows.length > 20 && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowAll((v) => !v)}
-          >
-            {showAll ? '▲ Show less' : `▼ Show all ${rows.length} rows`}
-          </button>
-        )}
+        <ShowAllToggle total={rows.length} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
       </div>
     )
   }
@@ -341,23 +313,6 @@ export function DataVarianceBlock({
   // ── vs_current mode (default / existing rendering) ────────────────────────
   return (
     <div className="variance-block">
-
-      {/* ── Title + period badges ── */}
-      {showHeader && (
-        <div className="variance-header">
-          <div className="variance-title">📊 {table_name}</div>
-          <div className="vt-period-row">
-            {comparison_periods.map((p, i) => (
-              <span key={i} className="vt-badge vt-badge-prev">
-                <strong>{p}</strong>
-              </span>
-            ))}
-            <span className="vt-badge vt-badge-curr">
-              <strong>{reporting_date}</strong>
-            </span>
-          </div>
-        </div>
-      )}
 
       <div className="variance-table-wrapper">
         <table className="variance-table">
@@ -414,50 +369,21 @@ export function DataVarianceBlock({
 
                   if (!isComparable) {
                     // Display-only: show current value only, no comparison
-                    const val = row.current?.[col]
                     return (
                       <td key={col} className="vt-info-cell">
-                        {val != null ? val : '—'}
+                        {orDash(row.current?.[col])}
                       </td>
                     )
                   }
 
                   // Comparable: [Prev | Current+arrow] per period
                   return comparison_periods.map((_, pi) => {
-                    const pKey  = `previous_${pi + 1}`
-                    const m     = row.previous?.[pKey]?.[col]
-                    const currV = row.current?.[col]
-                    const vs    = m?.variance_summary
-                    const cc    = cellClass(vs?.color ?? '')
-
+                    const m = row.previous?.[`previous_${pi + 1}`]?.[col]
                     return [
                       <td key={`${col}_${pi}_prev`} className="vt-num vt-prev-cell">
-                        {m?.value != null ? m.value : '—'}
+                        {orDash(m?.value)}
                       </td>,
-                      <td
-                        key={`${col}_${pi}_curr`}
-                        className={`vt-num vt-curr-cell ${cc}`}
-                        title={vs?.text ?? ''}
-                      >
-                        <div className="vt-curr-wrap">
-                          <span className="vt-curr-val">{currV != null ? currV : '—'}</span>
-                          {(vs?.arrow || m?.pct_change?.value || m?.change?.value) && (
-                            <div className="vt-metrics-row">
-                              {vs?.arrow && (
-                                <span className={`vt-arrow-icon ${cc}`}>
-                                  {vs.arrow === '▲' ? '↑' : vs.arrow === '▼' ? '↓' : vs.arrow}
-                                </span>
-                              )}
-                              {m?.pct_change?.value && (
-                                <span className={`vt-pct-badge ${cc}`}>{m.pct_change.value}</span>
-                              )}
-                              <span className={`vt-diff-val ${cc}`}>
-                                Δ&thinsp;{m?.change?.value ?? '0'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </td>,
+                      <VarianceCell key={`${col}_${pi}_curr`} value={row.current?.[col]} metric={m} />,
                     ]
                   })
                 })}
@@ -467,14 +393,7 @@ export function DataVarianceBlock({
         </table>
       </div>
 
-      {rows.length > 20 && (
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setShowAll((v) => !v)}
-        >
-          {showAll ? '▲ Show less' : `▼ Show all ${rows.length} rows`}
-        </button>
-      )}
+      <ShowAllToggle total={rows.length} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
     </div>
   )
 }

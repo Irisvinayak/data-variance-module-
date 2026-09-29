@@ -16,9 +16,7 @@
    [BOTTOM-AREA]  — LayoutContainer  (.lc-bottom, .lc-idle, resize handles)
    [PANEL-SHELL]  — bottom-panel-shell, PanelHeader (.ph-*), panel body
    [VIZ-PANEL]    — VisualizationPanel  (.viz-*)
-   [OLD-PANELS]   — legacy top/input/search panel styles (kept for compatibility)
    ═══════════════════════════════════════════════════════════════════════════ */
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [SHELL] — App shell & root layout container
@@ -37,7 +35,6 @@
   height: 100%;
   overflow: hidden;
 }
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-BAR] — ControlBar.jsx — outer container & row layout
@@ -61,74 +58,9 @@
   min-height: 34px;
 }
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    [NLP-BAR] — ControlBar.jsx — NLP mini query bar (top row of ctrl-bar)
    ════════════════════════════════════════════════════════════════════════════ */
-.nlp-bar {
-  width: 100%;
-}
-
-.nlp-query-container {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  background: #f5f5f5;
-  border: 1px solid #cccccc;
-  border-radius: 9px;
-  padding: 4px 6px 4px 12px;
-  gap: 6px;
-  transition: border-color 0.15s;
-}
-.nlp-query-container:focus-within {
-  border-color: #888888;
-  background: #ffffff;
-}
-
-.nlp-query-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: #111111;
-  font-size: 0.86rem;
-  padding: 6px 0;
-  line-height: 1.4;
-}
-.nlp-query-input::placeholder {
-  color: rgba(0, 0, 0, 0.4);
-  opacity: 1;
-}
-
-.nlp-query-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.nlp-voice-btn,
-.nlp-search-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid #cccccc;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  flex-shrink: 0;
-  background: #f0f0f0;
-  color: #333333;
-}
-.nlp-voice-btn:hover { background: #e4e4e4; border-color: #aaaaaa; }
-
-.nlp-search-btn { background: #e8e8e8; }
-.nlp-search-btn:hover:not(:disabled) { background: #d8d8d8; border-color: #999999; }
-.nlp-search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
 /* ── NLP mini bar (compact version used in ControlBar rows) ─────────────── */
 .nlp-mini-bar {
   display: flex;
@@ -177,11 +109,6 @@
 .nlp-mini-btn:hover { background: #e2e2e2; border-color: #aaaaaa; }
 .nlp-mini-btn.nlp-search { background: #e8e8e8; }
 .nlp-mini-btn.nlp-search:hover { background: #d8d8d8; }
-
-@media (max-width: 600px) {
-  .nlp-query-input    { font-size: 0.8rem; }
-  .nlp-query-container { padding: 3px 4px 3px 8px; }
-}
 
 /* ── NLP clarification panel (rendered below .nlp-mini-bar) ─────────────────
    A single free-text box (reuses .disambig-search-input) plus skip/cancel —
@@ -251,7 +178,6 @@
   border-color: rgba(192, 57, 43, 0.35);
   color: #a93226;
 }
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-LABELS] — ControlBar.jsx — labels, text inputs, date input, select
@@ -413,7 +339,6 @@
   margin: 0 2px;
 }
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-RETURN] — ControlBar.jsx — selected return info tag
    ════════════════════════════════════════════════════════════════════════════ */
@@ -441,7 +366,6 @@
   border-color: #cccccc;
   color: #333333;
 }
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-CHIPS] — ControlBar.jsx — period selector chip buttons (1 / 2 / 3)
@@ -488,7 +412,6 @@
   color: #ffffff;
 }
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-ACTIONS] — ControlBar.jsx — action buttons & .btn overrides
    ════════════════════════════════════════════════════════════════════════════ */
@@ -518,23 +441,6 @@
   color: #111111;
 }
 
-/* "Visualize Data" button — distinct green tone */
-.ctrl-viz-btn {
-  background: rgba(22, 135, 60, 0.08);
-  color: #166534;
-  border: 1px solid rgba(22, 135, 60, 0.3);
-}
-.ctrl-viz-btn:not(:disabled):hover {
-  background: rgba(22, 135, 60, 0.15);
-  border-color: rgba(22, 135, 60, 0.5);
-}
-.ctrl-viz-btn-on {
-  background: rgba(22, 135, 60, 0.14);
-  color: #166534;
-  border: 1px solid rgba(22, 135, 60, 0.45);
-}
-.ctrl-viz-btn-on:not(:disabled):hover { background: rgba(22, 135, 60, 0.22); }
-
 /* Spinner inside ctrl-bar buttons */
 .ctrl-bar .spinner {
   border-color: rgba(0, 0, 0, 0.2);
@@ -545,7 +451,6 @@
   border-color: rgba(255, 255, 255, 0.3);
   border-top-color: #ffffff;
 }
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [CTRL-ERROR] — ControlBar.jsx — inline error message
@@ -558,7 +463,6 @@
   align-items: center;
   gap: 4px;
 }
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [SCORE-BADGE] — ControlBar.jsx › SCORE_BADGE() helper
@@ -577,60 +481,6 @@
 .score-high     { background: rgba(30,100,200,0.1);   color: #1a5fa8; border: 1px solid rgba(30,100,200,0.25); }
 .score-contains { background: rgba(160,115,0,0.1);    color: #7d5a00; border: 1px solid rgba(160,115,0,0.25); }
 .score-partial  { background: rgba(0,0,0,0.06);       color: #555555; border: 1px solid rgba(0,0,0,0.15); }
-
-
-/* ════════════════════════════════════════════════════════════════════════════
-   [DISAMBIG] — ControlBar.jsx › DisambigDropdown component
-   The dropdown that appears when multiple return matches are found.
-   ════════════════════════════════════════════════════════════════════════════ */
-
-/* Legacy flat-list styles (kept for backward compat — now replaced by dropdown) */
-.ctrl-disambig-row {
-  flex-direction: column;
-  align-items: flex-start !important;
-  gap: 8px;
-  background: #f7f7f7;
-  border-top: 1px solid #e0e0e0;
-  padding: 10px 20px 12px;
-}
-.ctrl-disambig-label {
-  font-size: 0.75rem;
-  color: #555555;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-.ctrl-disambig-label strong { color: #111111; }
-
-.ctrl-disambig-list  { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
-
-.ctrl-disambig-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px 5px 8px;
-  background: #f0f0f0;
-  border: 1px solid #cccccc;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-  font-size: 0.82rem;
-  color: #111111;
-  text-align: left;
-}
-.ctrl-disambig-item:hover:not(:disabled) { background: #e2e2e2; border-color: #999999; }
-.ctrl-disambig-no-map { opacity: 0.45; cursor: not-allowed; }
-
-.ctrl-disambig-name    { font-weight: 600; color: #111111; }
-.ctrl-disambig-meta    { font-size: 0.72rem; color: #666666; }
-.ctrl-disambig-nomapping {
-  font-size: 0.66rem;
-  background: rgba(192,57,43,0.08);
-  border: 1px solid rgba(192,57,43,0.3);
-  color: #a93226;
-  border-radius: 4px;
-  padding: 1px 5px;
-}
 
 /* ── Dropdown wrapper — positioned so the menu escapes the flex row ──────── */
 .disambig-dropdown-wrap {
@@ -825,7 +675,6 @@
   cursor: not-allowed;
 }
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    [BOTTOM-AREA] — LayoutContainer — content area below the ControlBar
    ════════════════════════════════════════════════════════════════════════════ */
@@ -884,29 +733,6 @@
   background: var(--accent);
   height: 80px;
 }
-
-/* Horizontal resize handle */
-.lc-resize-handle {
-  flex: 0 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: col-resize;
-  z-index: 10;
-}
-.lc-resize-bar {
-  width: 3px;
-  height: 48px;
-  border-radius: 99px;
-  background: var(--border);
-  transition: background 0.15s, height 0.15s;
-}
-.lc-resize-handle:hover .lc-resize-bar,
-.lc-resize-handle[data-resize-handle-active] .lc-resize-bar {
-  background: var(--accent);
-  height: 72px;
-}
-
 
 /* ════════════════════════════════════════════════════════════════════════════
    [PANEL-SHELL] — bottom-panel-shell + PanelHeader (.ph-*) + panel body
@@ -1019,7 +845,12 @@
   right: 0;
   left: auto;
   width: 268px;
+  /* Tinted so the column menu reads as its own panel over the white table. */
+  background: #eef3fa;
+  border-color: #c5d3e6;
 }
+.col-vis-wrap .ctrl-date-menu .col-vis-search { background: #ffffff; }
+.col-vis-wrap .ctrl-date-menu .ctrl-date-list label:hover { background: #dde7f5; }
 .col-vis-head-actions { display: flex; align-items: center; gap: 8px; }
 .col-vis-head-actions .ctrl-date-clear:disabled {
   opacity: 0.4;
@@ -1090,11 +921,6 @@
   white-space: nowrap;
 }
 .ph-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
-.ph-btn.ph-btn-active {
-  background: rgba(88, 166, 255, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .ph-btn-restore {
   background: rgba(88, 166, 255, 0.1);
   border-color: rgba(88, 166, 255, 0.3);
@@ -1148,23 +974,6 @@
   color: var(--text-muted);
 }
 
-/* Empty states */
-.bottom-panel-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 100%;
-  min-height: 180px;
-  color: var(--text-muted);
-  text-align: center;
-}
-.bottom-panel-empty-icon  { font-size: 2.4rem; opacity: 0.45; }
-.bottom-panel-empty-title { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
-.bottom-panel-empty-sub   { font-size: 0.78rem; color: var(--text-muted); opacity: 0.7; }
-
-
 /* ════════════════════════════════════════════════════════════════════════════
    [VIZ-PANEL] — VisualizationPanel
    ════════════════════════════════════════════════════════════════════════════ */
@@ -1211,19 +1020,26 @@
 
 .viz-select {
   height: 28px;
-  padding: 0 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border);
+  padding: 0 28px 0 10px;
+  /* Light tint + our own chevron, matching the column-visibility menu. The
+     options used to be #1c2128 — a leftover of the removed dark theme — so the
+     list opened as a black box on a light page. */
+  background: #eef3fa url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234a5a70' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 9px center;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid #c5d3e6;
   border-radius: 6px;
-  color: var(--text);
+  color: #1f2937;
   font-size: 0.78rem;
+  font-weight: 500;
   outline: none;
   cursor: pointer;
   max-width: 200px;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
 }
-.viz-select:focus { border-color: var(--accent); }
-.viz-select option { background: #1c2128; }
+.viz-select:hover { background-color: #dde7f5; }
+.viz-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18); }
+.viz-select option { background: #ffffff; color: #1f2937; }
 
 .viz-type-btns { display: flex; gap: 3px; }
 .viz-type-btn {
@@ -1289,95 +1105,6 @@
 .viz-tooltip-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .viz-tooltip-name { color: var(--text-muted); flex: 1; font-size: 0.74rem; }
 .viz-tooltip-val  { color: var(--text); font-weight: 600; font-family: 'Courier New', monospace; font-size: 0.76rem; }
-
-
-/* ════════════════════════════════════════════════════════════════════════════
-   [OLD-PANELS] — Legacy InputPanel / SearchPanel styles (kept for compat)
-   ════════════════════════════════════════════════════════════════════════════ */
-.lc-top {
-  display: flex;
-  gap: 12px;
-  height: 310px;
-  flex-shrink: 0;
-}
-.lc-top-input  { flex: 0 0 60%; min-width: 0; overflow: hidden; }
-.lc-top-search { flex: 1; min-width: 0; overflow: hidden; }
-
-.top-panel-shell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-}
-.top-panel-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.025);
-  flex-shrink: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--text-muted);
-}
-.top-panel-icon { font-size: 1rem; line-height: 1; }
-.top-panel-body { flex: 1; overflow-y: auto; padding: 16px; }
-.top-panel-body::-webkit-scrollbar       { width: 4px; }
-.top-panel-body::-webkit-scrollbar-thumb { background: #444c56; border-radius: 99px; }
-
-/* InputPanel */
-.ip-empty {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 10px; height: 100%;
-  min-height: 140px; text-align: center; color: var(--text-muted);
-}
-.ip-empty-icon { font-size: 2rem; opacity: 0.4; }
-.ip-empty-text { font-size: 0.82rem; max-width: 220px; line-height: 1.5; }
-.ip-form       { display: flex; flex-direction: column; gap: 12px; }
-.ip-return-info {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 8px 12px; background: rgba(88,166,255,0.06);
-  border: 1px solid rgba(88,166,255,0.2); border-radius: 8px;
-}
-.ip-return-label {
-  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--text-muted);
-}
-.ip-return-name {
-  font-size: 0.83rem; font-weight: 600; color: var(--accent);
-  flex: 1; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
-}
-.ip-field     { display: flex; flex-direction: column; gap: 5px; }
-.ip-table-list { max-height: 100px; }
-.ip-actions   { display: flex; gap: 8px; align-items: center; }
-.ip-success   { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 16px 0; }
-.ip-success-icon { font-size: 2rem; }
-.ip-success-text { font-size: 0.9rem; font-weight: 600; color: var(--success); }
-.ip-success-sub  { font-size: 0.78rem; color: var(--text-muted); }
-
-/* SearchPanel */
-.sp-result {
-  margin-top: 16px; padding: 12px 14px;
-  background: rgba(63,185,80,0.06); border: 1px solid rgba(63,185,80,0.2);
-  border-radius: 10px; display: flex; flex-direction: column; gap: 6px;
-}
-.sp-result-name   { font-size: 0.9rem; font-weight: 700; color: var(--text); }
-.sp-result-badges { display: flex; gap: 6px; flex-wrap: wrap; }
-.sp-result-id     { font-size: 0.72rem; color: var(--text-muted); }
-.sp-empty {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 8px; margin-top: 24px; text-align: center; color: var(--text-muted);
-}
-.sp-empty-icon { font-size: 1.8rem; opacity: 0.3; }
-.sp-empty-text { font-size: 0.78rem; opacity: 0.7; }
 
 /* ════════════════════════════════════════════════════════════════════════════
    [NOTICE-TOAST] — NoticeToast.jsx — dismissible bottom-right popup for
@@ -1454,6 +1181,12 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.75;
+}
+
+/* A date substitution the user should know about ("No data for March 2025"). */
+.nlp-interpretation-note {
+  border-style: dashed;
+  white-space: normal;
 }
 
 .nlp-interpretation-chip-value {

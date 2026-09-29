@@ -8,11 +8,11 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from ..config import ANONYMOUS, RequestContext
 from ..hosts import get_profile
-from .xml_loader import load_xml_tree
+from .xml_loader import load_xml_tree, max_mtime
 
 logger = logging.getLogger(__name__)
 
@@ -22,38 +22,56 @@ _returns_ttl = float(os.getenv("DV_RETURNS_TTL_SEC", "3600"))
 
 
 class _TTLCache:
-    """TTL cache with one slot per tenant.
+    """TTL cache with one slot per tenant, also invalidated by source mtime.
 
     Keyed rather than single-slot because the returns master is a different
     file per tenant under iDEAL 6.0; one slot would serve tenant 1002 the
     return list of whichever tenant happened to load first. The key is the
     empty string under 5.5, so that host keeps exactly one slot as before.
+
+    The mtime check exists so an external edit to Returns.xml (e.g. someone
+    adding a return) is picked up on the very next call instead of waiting up
+    to _ttl seconds — the TTL is kept only as a safety net.
     """
 
-    __slots__ = ("_ttl", "_data", "_ts")
+    __slots__ = ("_ttl", "_data", "_ts", "_mtime")
 
     def __init__(self, ttl: float) -> None:
-        self._ttl  = ttl
-        self._data: dict = {}
-        self._ts:   dict = {}
+        self._ttl   = ttl
+        self._data:  dict = {}
+        self._ts:    dict = {}
+        self._mtime: dict = {}
 
     def loaded_at(self, key: str = "") -> float:
         return self._ts.get(key, 0.0)
 
-    def get(self, key: str = ""):
-        data = self._data.get(key)
-        if data is not None and (time.monotonic() - self._ts.get(key, 0.0)) < self._ttl:
-            return data
-        return None
+    def peek(self, key: str = "") -> tuple:
+        """(data, mtime) as last stored, ignoring freshness — for reload diffs."""
+        return self._data.get(key), self._mtime.get(key)
 
-    def set(self, data, key: str = ""):
-        self._data[key] = data
-        self._ts[key]   = time.monotonic()
+    def discard(self, key: str = "") -> None:
+        self._data.pop(key, None)
+
+    def get(self, key: str = "", mtime: float | None = None):
+        data = self._data.get(key)
+        if data is None:
+            return None
+        if (time.monotonic() - self._ts.get(key, 0.0)) >= self._ttl:
+            return None
+        if mtime is not None and self._mtime.get(key) != mtime:
+            return None
+        return data
+
+    def set(self, data, key: str = "", mtime: float = 0.0):
+        self._data[key]  = data
+        self._ts[key]    = time.monotonic()
+        self._mtime[key] = mtime
         return data
 
     def clear(self) -> None:
         self._data.clear()
         self._ts.clear()
+        self._mtime.clear()
 
 
 _returns_cache          = _TTLCache(ttl=_returns_ttl)
@@ -63,71 +81,75 @@ _non_xbrl_returns_cache = _TTLCache(ttl=_returns_ttl)
 
 # ── Parsers ────────────────────────────────────────────────────────────────────
 
-def parse_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
-    """Parse the XBRL returns master; one attribute dict per return row.
+def _parse_returns_master(ctx: RequestContext, cache: _TTLCache, non_xbrl: bool) -> tuple:
+    """One attribute dict per return row of a returns master, deduplicated by
+    Name and cached per tenant. The filename and row element come from the
+    host profile: 5.5 is <Returns>/<Return>, 6.0 is <Document>/<Row>."""
+    profile = get_profile()
+    profile.validate_context(ctx)
+    path    = profile.non_xbrl_returns_xml_path(ctx) if non_xbrl else profile.returns_xml_path(ctx)
+    row_tag = profile.returns_row_tag
 
-    The filename and the row element name both come from the host profile:
-    5.5 is Returns.xml with <Returns>/<Return>, 6.0 is Return.xml with
-    <Document>/<Row>.
-    """
-    cached = _returns_cache.get(ctx.tenant_id)
+    mtime = max_mtime(path)
+    cached = cache.get(ctx.tenant_id, mtime)
     if cached is not None:
         return cached
 
-    profile = get_profile()
-    profile.validate_context(ctx)
-    path    = profile.returns_xml_path(ctx)
-    row_tag = profile.returns_row_tag
+    prev_rows, prev_mtime = cache.peek(ctx.tenant_id)
+    reason = (
+        "first load" if prev_mtime is None
+        else "file changed" if prev_mtime != mtime
+        else "ttl expired"
+    )
 
     root = load_xml_tree(path, os.path.basename(path))
     if root is None:
         return ()
 
     seen: set[str] = set()
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for el in root.findall(row_tag):
         name = el.attrib.get("Name", "").strip()
         if name and name not in seen:
             seen.add(name)
-            rows.append(el.attrib)
+            row = dict(el.attrib)
+            # One frequency for every consumer (variance engine, date list, NLP):
+            # an unusable RepFreq ("x" in 6.0, or blank) is filled from PeriodId.
+            # The file's own value is kept as RepFreqRaw for diagnostics.
+            freq = profile.resolve_frequency(row, ctx)
+            if freq and freq != (row.get("RepFreq") or "").strip().upper():
+                row["RepFreqRaw"] = row.get("RepFreq", "")
+                row["RepFreq"] = freq
+            rows.append(row)
 
     result = tuple(rows)
     logger.info(
-        "Loaded %d unique return(s) from %s | tenant=%r | row_tag=<%s>",
-        len(rows), path, ctx.tenant_id, row_tag,
+        "Loaded %d unique %sreturn(s) from %s | tenant=%r | row_tag=<%s> | "
+        "reload_reason=%s | mtime %s -> %s",
+        len(rows), "non-XBRL " if non_xbrl else "", path, ctx.tenant_id, row_tag,
+        reason, prev_mtime, mtime,
     )
-    return _returns_cache.set(result, ctx.tenant_id)
+    if reason == "file changed" and prev_rows is not None:
+        prev_names = {r.get("Name", "") for r in prev_rows}
+        new_names  = {r.get("Name", "") for r in rows}
+        added   = sorted(new_names - prev_names)
+        removed = sorted(prev_names - new_names)
+        if added or removed:
+            logger.info(
+                "[report_lookup] %s master changed | tenant=%r | added=%s | removed=%s",
+                "non-XBRL returns" if non_xbrl else "returns", ctx.tenant_id, added, removed,
+            )
+    return cache.set(result, ctx.tenant_id, mtime)
+
+
+def parse_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
+    """Parse the XBRL returns master; one attribute dict per return row."""
+    return _parse_returns_master(ctx, _returns_cache, non_xbrl=False)
 
 
 def _parse_non_xbrl_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
     """Parse the non-XBRL returns master; one attribute dict per return row."""
-    cached = _non_xbrl_returns_cache.get(ctx.tenant_id)
-    if cached is not None:
-        return cached
-
-    profile = get_profile()
-    profile.validate_context(ctx)
-    path    = profile.non_xbrl_returns_xml_path(ctx)
-    row_tag = profile.returns_row_tag
-
-    root = load_xml_tree(path, os.path.basename(path))
-    if root is None:
-        return ()
-
-    seen: set[str] = set()
-    rows: List[Dict[str, Any]] = []
-    for el in root.findall(row_tag):
-        name = el.attrib.get("Name", "").strip()
-        if name and name not in seen:
-            seen.add(name)
-            rows.append(el.attrib)
-
-    result = tuple(rows)
-    logger.info(
-        "Loaded %d unique non-XBRL return(s) from %s | tenant=%r",
-        len(rows), path, ctx.tenant_id,
-    )
-    return _non_xbrl_returns_cache.set(result, ctx.tenant_id)
+    return _parse_returns_master(ctx, _non_xbrl_returns_cache, non_xbrl=True)
 
 
 def _normalise(s: str) -> str:
@@ -166,7 +188,7 @@ AUTO_SELECT_THRESHOLD = 90   # auto-pick when top score >= this AND uniquely bes
 def _normalised_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
     key = ctx.tenant_id
     if _norm_cache.loaded_at(key) < _returns_cache.loaded_at(key):
-        _norm_cache._data.pop(key, None)
+        _norm_cache.discard(key)
     cached = _norm_cache.get(key)
     if cached is not None:
         return cached
@@ -205,7 +227,7 @@ def _score_row(
     norm_id: str,
     norm_kw: str,
     query: str,
-    tokens: List[str],
+    tokens: list[str],
 ) -> int:
     """Return the highest confidence score for this row against the query."""
     # dict.fromkeys keeps order while dropping duplicates — norm_kw equals
@@ -233,7 +255,7 @@ def _score_row(
 
 def search_returns_scored(
     user_input: str, ctx: RequestContext = ANONYMOUS
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Score every return against *user_input* and return all candidates with
     score > 0, sorted descending by score.
@@ -246,7 +268,7 @@ def search_returns_scored(
     tokens  = [t for t in re.split(r"[^a-z0-9]+", keyword) if t]
     nr      = _normalised_returns(ctx)
 
-    scored: List[Dict[str, Any]] = []
+    scored: list[dict[str, Any]] = []
     for norm_name, norm_rid, norm_alt, norm_id, norm_kw, r in nr:
         s = _score_row(norm_name, norm_rid, norm_alt, norm_id, norm_kw, keyword, tokens)
         if s > 0:
@@ -287,25 +309,16 @@ def get_is_excel_by_return_code(
     )
     source = _parse_non_xbrl_returns(ctx) if is_non_xbrl else parse_returns(ctx)
 
-    # Primary lookup: Id attribute (same as .NET)
-    for row in source:
-        if str(row.get("Id", "")).strip() == return_code_text:
-            val = str(row.get("IsExcel", "false")).strip().lower()
-            logger.debug(
-                "[table_resolution] Found by Id=%r in %s → IsExcel=%s",
-                return_code_text, xml_label, val,
-            )
-            return val == "true"
-
-    # Fallback lookup: ReturnId attribute (some XMLs use this instead of Id)
-    for row in source:
-        if str(row.get("ReturnId", "")).strip() == return_code_text:
-            val = str(row.get("IsExcel", "false")).strip().lower()
-            logger.debug(
-                "[table_resolution] Found by ReturnId=%r in %s → IsExcel=%s",
-                return_code_text, xml_label, val,
-            )
-            return val == "true"
+    # Id first (same as .NET), then ReturnId, which some XMLs use instead.
+    for attr in ("Id", "ReturnId"):
+        for row in source:
+            if str(row.get(attr, "")).strip() == return_code_text:
+                val = str(row.get("IsExcel", "false")).strip().lower()
+                logger.debug(
+                    "[table_resolution] Found by %s=%r in %s → IsExcel=%s",
+                    attr, return_code_text, xml_label, val,
+                )
+                return val == "true"
 
     logger.warning(
         "[table_resolution] return_code=%r not found in %s — "

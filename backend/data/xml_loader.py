@@ -39,6 +39,26 @@ def _sanitise_xml_bytes(raw: bytes) -> bytes:
     return fixed
 
 
+def max_mtime(*paths: str) -> float:
+    """Latest mtime across *paths*, or 0.0 if none exist / are readable.
+
+    Used to key a cache on "has any source file changed" rather than pure
+    elapsed time, so an external edit (e.g. someone widening a department's
+    return-id access) is picked up on the next lookup instead of waiting out
+    a TTL. 0.0 never matches a real mtime, so a missing file always forces a
+    reload rather than silently pinning a cache entry forever.
+    """
+    latest = 0.0
+    for path in paths:
+        if not path:
+            continue
+        try:
+            latest = max(latest, os.path.getmtime(path))
+        except OSError:
+            continue
+    return latest
+
+
 def load_xml_tree(path: str, label: str = "") -> ET.Element | None:
     """Parse an XML file and return its root element, or None on failure."""
     display = label or os.path.basename(path)

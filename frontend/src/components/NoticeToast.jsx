@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 /**
  * NoticeToast — small dismissible popup, bottom-right corner.
@@ -8,11 +8,17 @@ import { useEffect } from 'react'
  * table, with nothing telling the user WHY it's empty.
  */
 export default function NoticeToast({ message, onDismiss, autoDismissMs = 8000 }) {
+  // Callers pass an inline onDismiss, which is a new function every render.
+  // Keyed on it, the timer restarted on each parent re-render and the toast
+  // never auto-dismissed while the user was interacting with the page.
+  const onDismissRef = useRef(onDismiss)
+  onDismissRef.current = onDismiss
+
   useEffect(() => {
-    if (!autoDismissMs) return
-    const timer = setTimeout(onDismiss, autoDismissMs)
+    if (!message || !autoDismissMs) return
+    const timer = setTimeout(() => onDismissRef.current(), autoDismissMs)
     return () => clearTimeout(timer)
-  }, [message, autoDismissMs, onDismiss])
+  }, [message, autoDismissMs])
 
   if (!message) return null
 

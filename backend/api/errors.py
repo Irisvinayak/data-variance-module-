@@ -1,24 +1,16 @@
 # errors.py — the shared HTTP error mapping for the route modules.
 #
-# This exact five-branch except-ladder was written out three times in main.py
-# (variance_compute, variance_dates, variance_nlresolve), including the same
-# six-line explanatory comment twice over. The mapping was identical in all
-# three copies; only the log text differed.
+# The frontend renders `detail` verbatim, so the strings below are part of the
+# API contract:
 #
-# The mapping is reproduced EXACTLY as it was, including the detail strings,
-# because the frontend renders `detail` verbatim:
-#
+#   HTTPException     -> passed through unchanged
 #   FileNotFoundError -> 404  str(exc)
 #   KeyError          -> 404  str(exc)   (note: str() of a KeyError is quoted)
 #   HostProfileError  -> 400  str(exc)
 #   RuntimeError      -> 500  str(exc)
 #   anything else     -> 500  "Unexpected server error: <Type>: <exc>"
 #
-# Call it from a single `except Exception` clause, which is what the last rung
-# of every original ladder was — so an HTTPException raised inside a guarded
-# block still lands on the generic-500 rung exactly as it did before. That
-# shadowing may well be wrong, but changing it is a behaviour change and does
-# not belong in a refactor.
+# Call it from a single `except Exception` clause around the guarded block.
 
 from __future__ import annotations
 
@@ -32,11 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 def http_error(exc: Exception, route: str, ctx=None) -> HTTPException:
-    """Map a domain exception to the HTTPException the routes used to raise.
+    """Map a domain exception to the HTTPException a route should raise.
 
     `route` and `ctx` only shape the log line; they never affect the response.
     Usage:  except Exception as exc: raise http_error(exc, "/x", ctx) from exc
     """
+    # A deliberate 4xx raised inside the guarded block (e.g. an access check)
+    # already says what the client should see; re-wrapping it as a generic
+    # 500 would hide it.
+    if isinstance(exc, HTTPException):
+        return exc
+
     where = f"{route} | {ctx}" if ctx is not None else route
 
     if isinstance(exc, FileNotFoundError):

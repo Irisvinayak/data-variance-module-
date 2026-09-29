@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import calendar
 import json
 import logging
 import os
@@ -19,7 +18,7 @@ import threading
 import time
 from collections import defaultdict
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import requests
 
@@ -46,7 +45,7 @@ _session = requests.Session()
 # every call (generate_sql() triggers up to 4 reads of schema.json alone: one
 # from build_prompt, one from validate_sql, doubled again on the one retry) is
 # pure waste that grows with total schema size as the corpus scales up.
-_json_cache: Dict[str, Any] = {}
+_json_cache: dict[str, Any] = {}
 _json_cache_lock = threading.Lock()
 
 
@@ -68,7 +67,7 @@ def _load_json_cached(path: str, default: Any) -> Any:
     return data
 
 
-def load_samples(path: str = DESCRIPTION_SAMPLES_PATH) -> Dict[str, Dict[str, List[str]]]:
+def load_samples(path: str = DESCRIPTION_SAMPLES_PATH) -> dict[str, dict[str, list[str]]]:
     """Load the full row-label samples dict the external build tool produced
     (INDEX_DIR/description_samples.json) — supplements the FAISS top-K
     matches with every known label value for a matched table. Returns {} if
@@ -77,159 +76,97 @@ def load_samples(path: str = DESCRIPTION_SAMPLES_PATH) -> Dict[str, Dict[str, Li
     return _load_json_cached(path, {})
 
 
-BANNED_KEYWORDS = ["delete", "update", "drop", "insert", "truncate", "alter", "create", "exec"]
+BANNED_KEYWORDS = [
+    "delete", "update", "drop", "insert", "truncate", "alter", "create", "exec",
+    "execute", "merge", "grant", "revoke", "call", "lock", "commit", "rollback",
+    "savepoint", "declare", "begin", "rename", "purge",
+]
+
+# Constructs no legitimate single SELECT against the shortlist needs, each of
+# which reaches past it: statement chaining, comments that can hide the rest of
+# a query, database links, and the Oracle packages that read files or make
+# network calls from inside a SELECT (UTL_HTTP, UTL_FILE, DBMS_*, ...).
+_BANNED_PATTERNS = [
+    (re.compile(r";"), "statement separator ';'"),
+    (re.compile(r"--|/\*"), "SQL comment"),
+    (re.compile(r"@"), "database link '@'"),
+    (re.compile(r"\b(?:dbms_|utl_|sys\.|ctxsys\.|httpuritype|xmltype)"), "Oracle system package"),
+]
+
+# The item list after a FROM, up to the next clause keyword or closing paren.
+# Every comma-separated item's leading identifier is a table reference: the
+# FROM/JOIN regex alone sees only the first one of "FROM allowed_t, other_t".
+_FROM_LIST_RE = re.compile(
+    r"\bfrom\s+(.*?)(?=\bwhere\b|\bgroup\b|\border\b|\bhaving\b|\bunion\b"
+    r"|\bintersect\b|\bminus\b|\bfetch\b|\bconnect\b|\bstart\b|\)|$)",
+    re.S,
+)
+# Table references include `$`/`#` and an optional `schema.` prefix so that
+# "FROM v$session" or "FROM other_schema.allowed_t" is seen whole and rejected,
+# rather than truncated to a prefix that happens to match the allowlist.
+_TABLE_IDENT = r"[a-z_][a-z0-9_$#]*(?:\s*\.\s*[a-z_][a-z0-9_$#]*)?"
+_LEADING_IDENT_RE = re.compile(rf"\s*({_TABLE_IDENT})")
+_FROM_JOIN_RE = re.compile(rf"(?:from|join)\s+({_TABLE_IDENT})")
 MAX_LABELS_MINIMAL = 8
-# "rules"-style prompts previously had NO cap here at all — load_samples()
-# injected every known row-label value for every column of every matched
-# table, unbounded. Fine for today's small per-table label vocabularies, but
-# a wide production table with hundreds of label values would balloon the
-# prompt with no ceiling except OLLAMA_TIMEOUT_SEC failing the whole request.
+# Caps the row-label values load_samples() injects per column: a wide table
+# with hundreds of label values would otherwise balloon the prompt until
+# OLLAMA_TIMEOUT_SEC fails the whole request.
 # More generous than MAX_LABELS_MINIMAL since "rules" style is meant to carry
 # richer context, but still bounded.
 MAX_LABELS_RULES = 25
 
 
-def _resolve_relative_time(query: str, today: date) -> Optional[str]:
-    """Detect relative time expressions ('last quarter', 'last 3 months', ...)
-    and resolve them to concrete calendar date ranges, injected into the
-    prompt so the LLM never has to guess what a phrase like that means."""
-    q = query.lower()
-    lines = []
+def _resolve_relative_time(query: str, today: date, fiscal_start_month: int = 4) -> Optional[str]:
+    """Resolve the query's date phrases to concrete calendar ranges, injected
+    into the prompt so the LLM never has to guess what "last quarter" or
+    "Q1FY25" means. Parsed by date_intent — the same reader /variance/nlresolve
+    uses, so the two endpoints agree. `today` should be the table's newest
+    data date (see variance_nlquery): anchoring on the wall clock pointed
+    "last quarter" at a quarter the data had not reached yet."""
+    from .date_intent import UNIT_MONTHS, parse_date_intent, period_containing, step_back
+
+    intent = parse_date_intent(query, fiscal_start_month, today=today)
+    if intent.is_empty:
+        return None
 
     def fmt(d):
         return d.strftime("%Y-%m-%d")
 
-    def month_end(y, m):
-        return date(y, m, calendar.monthrange(y, m)[1])
+    def rng(s, e):
+        return f"{fmt(s)} to {fmt(e)}"
 
-    from datetime import timedelta
+    def unit_period(d, unit):
+        if unit in UNIT_MONTHS or unit in ("day", "week"):
+            return period_containing(d, unit, fiscal_start_month)
+        return d, d
 
-    if re.search(r'\b(this|current)\s+week\b', q):
-        mon = today - timedelta(days=today.weekday())
-        sun = mon + timedelta(days=6)
-        lines.append(f"'this week'  = {fmt(mon)} to {fmt(sun)}")
-
-    if re.search(r'\b(last|previous)\s+week\b', q):
-        mon = today - timedelta(days=today.weekday() + 7)
-        sun = mon + timedelta(days=6)
-        lines.append(f"'last week'  = {fmt(mon)} to {fmt(sun)}")
-
-    if re.search(r'\b(this|current)\s+month\b', q):
-        start = today.replace(day=1)
-        end = month_end(today.year, today.month)
-        lines.append(f"'this month' = {today.strftime('%B %Y')}  ({fmt(start)} to {fmt(end)})")
-
-    if re.search(r'\b(last|previous)\s+month\b', q):
-        end = today.replace(day=1) - timedelta(days=1)
-        start = end.replace(day=1)
-        lines.append(f"'last month' = {end.strftime('%B %Y')}  ({fmt(start)} to {fmt(end)})")
-
-    def _months_back(y, m, n):
-        idx = (y * 12 + (m - 1)) - n
-        return idx // 12, idx % 12 + 1
-
-    _WORD_NUM = {
-        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-        "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-    }
-
-    def _extract_n(token: str) -> int:
-        return int(token) if token.isdigit() else _WORD_NUM.get(token.lower(), 0)
-
-    _N_WORD_RE = r'(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)'
-
-    m_months = re.search(rf'\b(?:last|previous|past|trailing)\s+{_N_WORD_RE}\s+months?\b', q)
-    if m_months:
-        n = _extract_n(m_months.group(1))
-        if n > 0:
-            end_y, end_m = _months_back(today.year, today.month, 1)
-            end = month_end(end_y, end_m)
-            start_y, start_m = _months_back(today.year, today.month, n)
-            start = date(start_y, start_m, 1)
-            lines.append(
-                f"'last {n} months' = {start.strftime('%B %Y')} to {end.strftime('%B %Y')}  "
-                f"({fmt(start)} to {fmt(end)})"
-            )
-
-    m_years = re.search(rf'\b(?:last|previous|past|trailing)\s+{_N_WORD_RE}\s+years?\b', q)
-    if m_years:
-        n = _extract_n(m_years.group(1))
-        if n > 0:
-            end_y = today.year - 1
-            start_y = today.year - n
-            lines.append(f"'last {n} years' = {start_y} to {end_y}  (01-JAN-{start_y} to 31-DEC-{end_y})")
-
-    if re.search(r'\b(this|current)\s+year\b', q):
-        lines.append(f"'this year'  = {today.year}  (01-JAN-{today.year} to 31-DEC-{today.year})")
-
-    if re.search(r'\b(last|previous)\s+year\b', q):
-        y = today.year - 1
-        lines.append(f"'last year'  = {y}  (01-JAN-{y} to 31-DEC-{y})")
-
-    _CQ_START = {1: (1, 1), 2: (4, 1), 3: (7, 1), 4: (10, 1)}
-    _CQ_END = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
-    cur_cq = (today.month - 1) // 3 + 1
-
-    if re.search(r'\b(this|current)\s+quarter\b', q):
-        s = date(today.year, *_CQ_START[cur_cq])
-        e = date(today.year, *_CQ_END[cur_cq])
-        lines.append(f"'this quarter' = Q{cur_cq} {today.year} (calendar)  ({fmt(s)} to {fmt(e)})")
-
-    if re.search(r'\b(last|previous)\s+quarter\b', q):
-        prev_cq = cur_cq - 1 if cur_cq > 1 else 4
-        prev_cq_year = today.year if cur_cq > 1 else today.year - 1
-        s = date(prev_cq_year, *_CQ_START[prev_cq])
-        e = date(prev_cq_year, *_CQ_END[prev_cq])
-        lines.append(f"'last quarter' = Q{prev_cq} {prev_cq_year} (calendar)  ({fmt(s)} to {fmt(e)})")
-
-    m_quarters = re.search(rf'\b(?:last|previous|past|trailing)\s+{_N_WORD_RE}\s+quarters?\b', q)
-    if m_quarters:
-        n = _extract_n(m_quarters.group(1))
-        if n > 0:
-            end_cq, end_cq_year = cur_cq - 1, today.year
-            if end_cq == 0:
-                end_cq, end_cq_year = 4, today.year - 1
-            start_idx = (end_cq_year * 4 + (end_cq - 1)) - (n - 1)
-            start_cq_year, start_cq = start_idx // 4, start_idx % 4 + 1
-            s = date(start_cq_year, *_CQ_START[start_cq])
-            e = date(end_cq_year, *_CQ_END[end_cq])
-            unit = "quarter" if n == 1 else "quarters"
-            lines.append(
-                f"'last {n} {unit}' = Q{start_cq} {start_cq_year} to Q{end_cq} {end_cq_year} (calendar)  "
-                f"({fmt(s)} to {fmt(e)})"
-            )
-
-    fy_sy = today.year if today.month >= 4 else today.year - 1
-    _FYQ = {
-        1: {"months": {4, 5, 6}, "start": (4, 1), "end": (6, 30), "offset": 0},
-        2: {"months": {7, 8, 9}, "start": (7, 1), "end": (9, 30), "offset": 0},
-        3: {"months": {10, 11, 12}, "start": (10, 1), "end": (12, 31), "offset": 0},
-        4: {"months": {1, 2, 3}, "start": (1, 1), "end": (3, 31), "offset": 1},
-    }
-    cur_fyq = next(fq for fq, v in _FYQ.items() if today.month in v["months"])
-
-    if re.search(r'\b(this|current)\s+(fy|financial|fiscal)\s*(quarter|q)\b', q):
-        off = _FYQ[cur_fyq]["offset"]
-        s = date(fy_sy + off, *_FYQ[cur_fyq]["start"])
-        e = date(fy_sy + off, *_FYQ[cur_fyq]["end"])
-        lines.append(f"'this FY quarter' = Q{cur_fyq} FY{fy_sy+1}  ({fmt(s)} to {fmt(e)})")
-
-    if re.search(r'\b(last|previous)\s+(fy|financial|fiscal)\s*(quarter|q)\b', q):
-        prev_fyq = cur_fyq - 1 if cur_fyq > 1 else 4
-        prev_fy_sy = fy_sy if cur_fyq > 1 else fy_sy - 1
-        off = _FYQ[prev_fyq]["offset"]
-        s = date(prev_fy_sy + off, *_FYQ[prev_fyq]["start"])
-        e = date(prev_fy_sy + off, *_FYQ[prev_fyq]["end"])
-        lines.append(f"'last FY quarter' = Q{prev_fyq} FY{prev_fy_sy+1}  ({fmt(s)} to {fmt(e)})")
-
-    if re.search(r'\b(this|current)\s+(financial year|fiscal year|fy)\b(?!\s*(?:quarter|q)\b)', q):
-        lines.append(f"'this financial year' = FY{fy_sy+1}  (01-APR-{fy_sy} to 31-MAR-{fy_sy+1})")
-
-    if re.search(r'\b(last|previous)\s+(financial year|fiscal year|fy)\b(?!\s*(?:quarter|q)\b)', q):
-        lines.append(f"'last financial year' = FY{fy_sy}  (01-APR-{fy_sy-1} to 31-MAR-{fy_sy})")
-
-    if not lines:
-        return None
+    lines = [f"latest reporting date in the data = {fmt(today)}"]
+    for ref in ([intent.anchor] if intent.anchor else []) + intent.targets:
+        lines.append(f"'{ref.text.strip()}' = {rng(ref.start, ref.end)}")
+    if intent.range:
+        lo, hi = intent.range
+        lines.append(f"'{lo.text.strip()} .. {hi.text.strip()}' = {rng(lo.start, hi.end)}")
+    if intent.since:
+        lines.append(f"'since {intent.since.text.strip()}' = {rng(intent.since.start, today)}")
+    base = intent.anchor.end if intent.anchor else today
+    if intent.relative:
+        n, unit = intent.relative
+        if unit == "period":
+            lines.append(f"'last {n} periods' = the {n} most recent distinct RDATE values up to {fmt(base)}")
+        else:
+            # The n units ending with the one that contains the anchor date.
+            s, _e = unit_period(step_back(base, unit, n - 1), unit)
+            _s, e = unit_period(base, unit)
+            lines.append(f"'last {n} {unit}(s)' = {rng(s, min(e, base))}")
+    if intent.xox:
+        prev = step_back(base, intent.xox, 1)
+        lines.append(
+            f"'{intent.xox}-over-{intent.xox}' = current RDATE {fmt(base)} vs previous "
+            f"RDATE on or before {fmt(prev)}"
+        )
+    if intent.this_unit:
+        s, e = unit_period(today, intent.this_unit)
+        lines.append(f"'this {intent.this_unit}' = {rng(s, e)}")
 
     block = (
         "════════════════════════════════════════════════\n"
@@ -520,7 +457,7 @@ def build_prompt(user_query, tables, columns, dialect="Oracle", today_date=None,
     if matched_labels is None:
         matched_labels = []
 
-    label_map: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+    label_map: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for lbl in matched_labels:
         table_name = lbl["table"]
         column_name = lbl["column"]
@@ -583,7 +520,10 @@ def build_prompt(user_query, tables, columns, dialect="Oracle", today_date=None,
     valid_tables = ", ".join(t["table"].upper() for t in tables)
 
     today_obj = date.fromisoformat(today_date) if isinstance(today_date, str) else today_date
-    _time_block = _resolve_relative_time(user_query, today_obj)
+    from ..hosts import get_profile
+    _time_block = _resolve_relative_time(
+        user_query, today_obj, get_profile().fiscal_year_start_month,
+    )
     time_context_block = (_time_block + "\n") if _time_block else ""
 
     if prompt_style == "minimal":
@@ -618,9 +558,8 @@ def _call_ollama(
 ) -> tuple:
     """Returns (response_text, latency_ms).
 
-    `attempt` is logged so the retry is distinguishable from the first call —
-    both used to emit byte-identical lines, which made two interleaved
-    requests impossible to tell apart from one request that retried.
+    `attempt` is logged so a retry is distinguishable from two interleaved
+    requests.
     """
     options = {}
     if model_profile.get("temperature") is not None:
@@ -657,7 +596,7 @@ def _call_ollama(
     return text, latency_ms
 
 
-def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None, matched_labels=None) -> Dict[str, Any]:
+def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None, matched_labels=None) -> dict[str, Any]:
     """Generate + validate a SQL SELECT for `user_query`, grounded strictly in
     `tables`/`columns` (the caller's already-authorized shortlist). Returns
     {"sql": str, "warnings": [str, ...]} — non-empty warnings means the SQL
@@ -689,13 +628,10 @@ def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None,
     raw = _strip_sql_fences(raw)
 
     is_valid, reason = validate_sql(raw, tables, columns)
-    warnings: List[str] = []
+    warnings: list[str] = []
     retried = False
 
     if not is_valid:
-        # The FIRST validation failure used to be logged at no level at all, so
-        # a model that failed here and passed on retry left zero trace — a
-        # silently degrading model stayed invisible until it failed twice.
         logger.warning(
             "[nlp.sql_generator] attempt 1 SQL rejected | model=%s | reason=%s",
             model_name, reason,
@@ -736,8 +672,6 @@ def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None,
         )
         return {"sql": "", "warnings": warnings}
 
-    # The ACCEPTED SQL was previously never logged by this module at all — it
-    # became visible only because one caller happened to log it afterwards.
     ai_audit.record(
         **audit, attempt=attempt, latency_ms=latency_ms, sql=raw,
         valid=True, retried=retried, validation_reason=None, warnings=warnings,
@@ -757,13 +691,17 @@ def validate_sql(sql, tables, columns):
     if not q.startswith("select"):
         return False, "Only SELECT queries are allowed"
 
+    for pattern, label in _BANNED_PATTERNS:
+        if pattern.search(q):
+            logger.error(
+                "[nlp.sql_generator] BANNED CONSTRUCT rejected | %s | sql=%r", label, sql,
+            )
+            return False, f"Disallowed construct: {label}"
+
     for word in BANNED_KEYWORDS:
         if re.search(rf'\b{word}\b', q):
-            # The SQL-safety boundary firing, not an ordinary validation
-            # miss. It used to reach the log only folded into the generic
-            # "invalid SQL" warning, indistinguishable from a column typo;
-            # a model emitting DML/DDL against the live Oracle connection
-            # deserves its own line.
+            # The SQL-safety boundary firing, not an ordinary validation miss:
+            # logged at ERROR so it is distinguishable from a column typo.
             logger.error(
                 "[nlp.sql_generator] BANNED KEYWORD rejected | keyword=%r | sql=%r",
                 word, sql,
@@ -779,9 +717,18 @@ def validate_sql(sql, tables, columns):
 
     q_for_tables = re.sub(r'\bextract\s*\([^)]*\)', '', q)
     q_for_tables = re.sub(r'\btrim\s*\([^)]*\)', '', q_for_tables)
-    referenced_tables = set(re.findall(r'(?:from|join)\s+([a-z_][a-z0-9_]*)', q_for_tables))
-    real_table_refs = referenced_tables - subquery_aliases
-    hallucinated_tables = real_table_refs - valid_table_names
+    referenced_tables = set(_FROM_JOIN_RE.findall(q_for_tables))
+    for from_list in _FROM_LIST_RE.findall(q_for_tables):
+        for item in from_list.split(","):
+            match = _LEADING_IDENT_RE.match(item)
+            if match:
+                referenced_tables.add(match.group(1))
+    referenced_tables = {re.sub(r"\s+", "", t) for t in referenced_tables}
+    # Aliases are NOT subtracted here: the query must start with SELECT (no
+    # WITH clause), so nothing but a real table can stand in table position,
+    # and subtracting them let "JOIN other_t AS other_t" or "(...) other_t
+    # ... JOIN other_t" put an unauthorized table past the allowlist.
+    hallucinated_tables = referenced_tables - valid_table_names
     if hallucinated_tables:
         return False, f"Hallucinated tables (not in schema): {sorted(hallucinated_tables)}"
 

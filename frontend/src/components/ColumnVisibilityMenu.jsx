@@ -9,7 +9,8 @@
  * Visibility is a pure view filter applied client-side — it never re-queries.
  * See DataVarianceBlock's allDisplayCols filter for where it lands.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import useClickOutside from '../hooks/useClickOutside.js'
 
 // Above this many columns a flat checklist stops being scannable and the
 // search box earns its space; below it, the box is just clutter.
@@ -27,13 +28,7 @@ export default function ColumnVisibilityMenu({
   const [filter, setFilter] = useState('')
   const wrapRef = useRef(null)
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open])
+  useClickOutside(wrapRef, open, () => setOpen(false))
 
   if (!columns.length) return null
 

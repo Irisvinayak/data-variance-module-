@@ -8,7 +8,8 @@ import os
 import threading
 import time
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Optional
+from collections.abc import Callable
 
 from ..config import (
     ANONYMOUS,
@@ -23,11 +24,55 @@ from .report_lookup import (
     parse_returns, get_is_excel_by_return_code,
     search_returns_scored, AUTO_SELECT_THRESHOLD,
 )
-from .calculate_variance import calculate_variance, validate_reporting_date
+from .calculate_variance import (
+    calculate_variance, format_oracle_date, validate_reporting_date,
+)
 
 logger = logging.getLogger(__name__)
 
 
+def _distinct_dates_desc(
+    execute_query_fn: Callable,
+    table_name: str,
+    filter_col: str,
+    limit: int,
+    before: Optional[datetime] = None,
+) -> tuple[list, Optional[str]]:
+    """Up to `limit` distinct `filter_col` values, newest first, as (rows, err).
+
+    Tries FETCH FIRST (12c+) and falls back to a ROWNUM wrapper for older
+    Oracle. The fallback applies DISTINCT and ORDER BY *inside* the wrapper:
+    the other way round, ROWNUM caps raw rows before de-duplication, so a
+    table with many rows on its latest date collapses to a single date.
+    """
+    where = (
+        f" WHERE {filter_col} < TO_DATE('{format_oracle_date(before)}', 'DD-MON-YYYY')"
+        if before is not None else ""
+    )
+    inner = f"SELECT DISTINCT {filter_col} FROM {table_name}{where} ORDER BY {filter_col} DESC"
+    _, rows, err = execute_query_fn(f"{inner} FETCH FIRST {int(limit)} ROWS ONLY")
+    if err:
+        _, rows, err = execute_query_fn(
+            f"SELECT {filter_col} FROM ({inner}) WHERE ROWNUM <= {int(limit)}"
+        )
+    return rows, err
+
+
+def _as_date_string(value: Any) -> str:
+    return format_oracle_date(value) if hasattr(value, "strftime") else str(value)
+
+
+def _ancestor_named(path: str, name: str, max_depth: int = 15) -> Optional[str]:
+    """The nearest ancestor directory of `path` whose basename is `name`."""
+    probe = os.path.dirname(path)
+    for _ in range(max_depth):
+        if os.path.basename(probe) == name:
+            return probe
+        parent = os.path.dirname(probe)
+        if parent == probe:                   # reached filesystem root
+            return None
+        probe = parent
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -39,12 +84,10 @@ def _run_table_diagnostics(
     filter_col: str,
     execute_query_fn: Callable,
 ) -> None:
-    sep = "=" * 70
-
     # Step 1: row count
     try:
         sql = f"SELECT COUNT(*) AS CNT FROM {table_name}"
-        cols, rows, err = execute_query_fn(sql)
+        _, rows, err = execute_query_fn(sql)
         if err:
             logger.warning("[DIAG] Step1 could not count rows: %s", err)
         else:
@@ -55,18 +98,7 @@ def _run_table_diagnostics(
 
     # Step 2: distinct date values
     try:
-        sql = (
-            f"SELECT DISTINCT {filter_col} FROM {table_name} "
-            f"ORDER BY {filter_col} DESC FETCH FIRST 10 ROWS ONLY"
-        )
-        cols, rows, err = execute_query_fn(sql)
-        if err:
-            sql = (
-                f"SELECT DISTINCT {filter_col} FROM "
-                f"(SELECT {filter_col} FROM {table_name} ORDER BY {filter_col} DESC) "
-                f"WHERE ROWNUM <= 10"
-            )
-            cols, rows, err2 = execute_query_fn(sql)
+        rows, _ = _distinct_dates_desc(execute_query_fn, table_name, filter_col, 10)
         if rows:
             logger.info("[DIAG] Step2 — distinct %s values: %s",
                         filter_col, [str(r[0]) for r in rows])
@@ -75,7 +107,7 @@ def _run_table_diagnostics(
     except Exception as exc:
         logger.warning("[DIAG] Step2 EXCEPTION: %s", exc)
 
-    logger.info("[DIAG] %s diagnostics complete.", sep)
+    logger.info("[DIAG] diagnostics complete for %s", table_name)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,7 +130,7 @@ def _run_table_diagnostics(
 # tbl_path) since a given return's mapping file/location essentially never
 # changes between deploys.
 _TABLE_MAPPING_TTL = float(os.getenv("DV_TABLE_MAPPING_TTL_SEC", "3600"))
-_mapping_cache: Dict[Tuple[str, str], Tuple[float, Any, str]] = {}
+_mapping_cache: dict[tuple[str, str], tuple[float, Any, str]] = {}
 _mapping_cache_lock = threading.Lock()
 
 
@@ -143,7 +175,7 @@ def _load_table_mapping(
         os.path.isdir(return_dir_from_config),
     )
 
-    candidates: List[str] = []
+    candidates: list[str] = []
 
     # ── Candidate 1: absolute tbl_path as-is ─────────────────────────────────
     if tbl_path and os.path.isabs(tbl_path):
@@ -180,45 +212,24 @@ def _load_table_mapping(
     # Collect every directory that might be the return's root folder.
     # We derive them from multiple sources so that spaces / trailing separators
     # in mapping_base can't silently break os.path.isdir.
-    scan_dirs: List[str] = []
+    scan_dirs: list[str] = []
 
     # Source A: straight join of config dir + return_id
     scan_dirs.append(return_dir_from_config)
 
     if tbl_path:
-        # Source B: walk UP from the deepest tbl_path-based candidate until we
-        #           find a folder whose basename == str(return_id).
-        #           This is immune to trailing-separator / double-sep issues.
-        deep_candidate = os.path.normpath(
-            os.path.join(mapping_base, str(return_id), tbl_path)
-        )
-        probe = os.path.dirname(deep_candidate)
-        for _ in range(15):                       # safety cap
-            if os.path.basename(probe) == str(return_id):
-                scan_dirs.append(probe)
-                break
-            parent = os.path.dirname(probe)
-            if parent == probe:                   # reached filesystem root
-                break
-            probe = parent
-
-        # Source C: same walk from the instance base path
-        deep_instance = os.path.normpath(
-            os.path.join(instance_base, str(return_id), tbl_path)
-        )
-        probe = os.path.dirname(deep_instance)
-        for _ in range(15):
-            if os.path.basename(probe) == str(return_id):
-                scan_dirs.append(probe)
-                break
-            parent = os.path.dirname(probe)
-            if parent == probe:
-                break
-            probe = parent
+        # Sources B and C: walk UP from the deepest tbl_path-based candidate
+        # (under the mapping base, then the instance base) to the folder whose
+        # basename == str(return_id). Immune to trailing/double separators.
+        for base in (mapping_base, instance_base):
+            deep = os.path.normpath(os.path.join(base, str(return_id), tbl_path))
+            found_dir = _ancestor_named(deep, str(return_id))
+            if found_dir:
+                scan_dirs.append(found_dir)
 
     # Deduplicate scan dirs
     seen_dirs: set = set()
-    unique_scan_dirs: List[str] = []
+    unique_scan_dirs: list[str] = []
     for d in scan_dirs:
         nd = os.path.normpath(d)
         if nd not in seen_dirs:
@@ -247,7 +258,7 @@ def _load_table_mapping(
 
     # ── Deduplicate candidates (preserve insertion order) ─────────────────────
     seen_paths: set = set()
-    deduped: List[str] = []
+    deduped: list[str] = []
     for c in candidates:
         if not c:
             continue
@@ -303,7 +314,7 @@ def _load_table_mapping(
 
 def find_return_and_tables(
     return_input: str, ctx: RequestContext = ANONYMOUS
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Find a return by name and list available tables from its mapping XML.
 
     Response variants:
@@ -333,14 +344,9 @@ def find_return_and_tables(
 
             tbl_path = (item["return"].get("TblPath") or "").strip()
 
-            # ── FIX: has_mapping is always True here. ─────────────────────────
-            # The old check `bool(tbl_path)` was disabling returns whose
-            # TblPath attribute was empty/missing in Returns.xml, even when
-            # a mapping file physically exists on disk (e.g. TableMapping.xml
-            # in the return's folder). The actual file resolution is handled
-            # by _load_table_mapping() which tries 10+ fallback paths and a
-            # full directory scan — so we let that run when the user selects
-            # the candidate instead of blocking it up front.
+            # has_mapping is always True: an empty TblPath does not mean there
+            # is no mapping file — _load_table_mapping()'s fixed-name
+            # candidates and directory scan resolve it once the user selects.
             candidates.append({
                 "score":       item["score"],
                 "return_id":   rid,
@@ -427,13 +433,14 @@ def find_return_and_tables(
             # Nothing anywhere describes this return's tables. Only NOW is it
             # an error — and the message names both files that were tried, so
             # whoever fixes the config knows where to put the data.
+            profile = get_profile()
             return {
                 "error": (
                     f"Return '{r.get('Name', return_input)}' (Id={return_id}): "
                     f"no table mapping file and no {query_label}. "
                     f"Checked TblPath={tbl_path!r} and standard fallback locations "
-                    f"under {get_profile().table_mapping_base_dir(ctx)}, plus "
-                    f"{list(get_profile().query_xml_candidates(ctx, return_id))}."
+                    f"under {profile.table_mapping_base_dir(ctx)}, plus "
+                    f"{list(profile.query_xml_candidates(ctx, return_id))}."
                 )
             }
         else:
@@ -460,7 +467,7 @@ def _get_table_metadata(
     tbl_path: str,
     table_name: str,
     ctx: RequestContext = ANONYMOUS,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     root, _ = _load_table_mapping(return_id, tbl_path, ctx)
     tname_up = table_name.strip().upper()
 
@@ -509,10 +516,10 @@ def _get_table_metadata(
     )
 
 
-def _resolve_physical_table_name(
+def resolve_physical_table_name(
     return_id: str,
     table_name: str,
-    return_meta: Optional[Dict[str, Any]] = None,
+    return_meta: Optional[dict[str, Any]] = None,
     ctx: RequestContext = ANONYMOUS,
 ) -> str:
     """is_excel -> optional '_DP' suffix -> optional DP_TABLE_SCHEMA prefix.
@@ -531,13 +538,33 @@ def _resolve_physical_table_name(
     return table_name
 
 
+def _return_meta(return_id: str, ctx: RequestContext) -> Optional[dict[str, Any]]:
+    """The returns-master row for `return_id`, or None."""
+    return next((r for r in parse_returns(ctx) if r.get("Id") == str(return_id)), None)
+
+
+def _trusted_tbl_path(return_meta: Optional[dict[str, Any]]) -> str:
+    """TblPath exactly as the returns master declares it.
+
+    The mapping file for a compute/dates request is always located from this,
+    never from a path sent by the client. /variance/find echoes the resolved
+    `table_mapping_path` to the browser and the browser sends it back, but
+    _load_table_mapping() treats an absolute tbl_path as its first candidate —
+    so honouring the echoed value let a caller point the server at any XML
+    file it can reach, including another return's mapping (reading a table the
+    caller is not entitled to under a return id they are) or a UNC path. The
+    return's own TblPath resolves to the same file /variance/find reported.
+    """
+    return (return_meta.get("TblPath") or "").strip() if return_meta else ""
+
+
 def _actual_previous_dates(
     resolved_table_name: str,
     filter_col: str,
     reporting_date: str,
     periods: int,
     execute_query_fn: Callable,
-) -> List[str]:
+) -> list[str]:
     """The `periods` reporting dates immediately before `reporting_date`.
 
     Reads the dates that exist in the table instead of deriving them from
@@ -554,46 +581,31 @@ def _actual_previous_dates(
     except (ValueError, AttributeError):
         return []
 
-    sql = (
-        f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
-        f"WHERE {filter_col} < TO_DATE('{anchor.strftime('%d-%b-%Y').upper()}', 'DD-MON-YYYY') "
-        f"ORDER BY {filter_col} DESC FETCH FIRST {max(int(periods), 1)} ROWS ONLY"
+    rows, err = _distinct_dates_desc(
+        execute_query_fn, resolved_table_name, filter_col,
+        max(int(periods), 1), before=anchor,
     )
-    cols, rows, err = execute_query_fn(sql)
     if err:
-        # Older Oracle without FETCH FIRST — same fallback shape used above.
-        sql = (
-            f"SELECT {filter_col} FROM ("
-            f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
-            f"WHERE {filter_col} < TO_DATE('{anchor.strftime('%d-%b-%Y').upper()}', 'DD-MON-YYYY') "
-            f"ORDER BY {filter_col} DESC) WHERE ROWNUM <= {max(int(periods), 1)}"
+        logger.warning(
+            "[service] Could not read previous reporting dates for %s (%s) — "
+            "falling back to frequency arithmetic",
+            resolved_table_name, err,
         )
-        cols, rows, err = execute_query_fn(sql)
-        if err:
-            logger.warning(
-                "[service] Could not read previous reporting dates for %s (%s) — "
-                "falling back to frequency arithmetic",
-                resolved_table_name, err,
-            )
-            return []
+        return []
 
-    out: List[str] = []
-    for r in rows or []:
-        v = r[0] if not isinstance(r, dict) else list(r.values())[0]
-        if v is None:
-            continue
-        out.append(v.strftime("%d-%b-%Y").upper()
-                   if hasattr(v, "strftime") else str(v))
-    return out
+    return [_as_date_string(r[0]) for r in rows or [] if r[0] is not None]
+
+
+# Ceiling on the date dropdown — decades of monthly filings.
+_MAX_AVAILABLE_DATES = 500
 
 
 def get_available_dates(
     return_id: str,
-    return_tbl_path: str,
     table_name: str,
     execute_query_fn: Callable,
     ctx: RequestContext = ANONYMOUS,
-) -> List[str]:
+) -> list[str]:
     """List every distinct value of the table's filter (date) column that
     actually has data AND is a canonical period-end for the return's OWN
     reporting frequency, newest first.
@@ -629,38 +641,23 @@ def get_available_dates(
     the table mapping or table itself can't be resolved. Returns [] (not an
     error) when the table resolves fine but genuinely has no rows yet.
     """
-    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name, ctx)
+    return_meta = _return_meta(return_id, ctx)
+    table_meta = _get_table_metadata(return_id, _trusted_tbl_path(return_meta), table_name, ctx)
     filter_col = table_meta["filter_col"]
-    # ctx was missing here, so this call fell back to its ANONYMOUS default.
-    # Harmless under 5.5 (paths never depend on identity there), but under 6.0
-    # ANONYMOUS carries no tenant, so is_excel's fallback lookup
-    # (get_is_excel_by_return_code) hit HostProfileError on every call — this
-    # is the sole reason GET /variance/dates 500'd for every 6.0 return while
-    # /variance/find, which threads ctx correctly, worked fine.
-    resolved_table_name = _resolve_physical_table_name(return_id, table_name, ctx=ctx)
-
-    sql = (
-        f"SELECT DISTINCT {filter_col} FROM {resolved_table_name} "
-        f"ORDER BY {filter_col} DESC FETCH FIRST 500 ROWS ONLY"
+    resolved_table_name = resolve_physical_table_name(
+        return_id, table_name, return_meta=return_meta, ctx=ctx
     )
-    cols, rows, err = execute_query_fn(sql)
+
+    rows, err = _distinct_dates_desc(
+        execute_query_fn, resolved_table_name, filter_col, _MAX_AVAILABLE_DATES,
+    )
     if err:
-        # Older Oracle without FETCH FIRST support — same fallback pattern
-        # _run_table_diagnostics already uses.
-        sql = (
-            f"SELECT DISTINCT {filter_col} FROM "
-            f"(SELECT {filter_col} FROM {resolved_table_name} ORDER BY {filter_col} DESC) "
-            f"WHERE ROWNUM <= 500"
-        )
-        cols, rows, err = execute_query_fn(sql)
-        if err:
-            raise RuntimeError(f"{err} | table_queried={resolved_table_name}")
+        raise RuntimeError(f"{err} | table_queried={resolved_table_name}")
 
     values = [row[0] for row in rows if row[0] is not None]
 
     # Same lookup compute_variance() itself uses to decide report_freq for this
     # return — one source of truth, not a second copy of the RepFreq census.
-    return_meta = next((r for r in parse_returns(ctx) if r.get("Id") == str(return_id)), None)
     report_freq = ((return_meta.get("RepFreq") or "").strip().upper() if return_meta else "")
 
     if report_freq:
@@ -682,22 +679,21 @@ def get_available_dates(
                 return_id, report_freq, table_name, len(values),
             )
 
-    return [v.strftime("%d-%b-%Y").upper() for v in values]
+    return [_as_date_string(v) for v in values]
 
 
 def compute_variance(
     return_id: str,
-    return_tbl_path: str,
     table_name: str,
     reporting_date: str,
     reporting_period: int,
     execute_query_fn: Callable,
     connection_string: Optional[str] = None,
-    selected_columns: Optional[List[str]] = None,
+    selected_columns: Optional[list[str]] = None,
     comparison_mode: str = "vs_current",
-    comparison_dates: Optional[List[str]] = None,
+    comparison_dates: Optional[list[str]] = None,
     ctx: RequestContext = ANONYMOUS,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Orchestrate full variance computation for one table.
 
     `comparison_dates` (optional) names the exact reporting dates to compare
@@ -706,8 +702,7 @@ def compute_variance(
     no decisions about it."""
     logger.info("[service] compute_variance started")
 
-    parsed      = parse_returns(ctx)
-    return_meta = next((r for r in parsed if r.get("Id") == str(return_id)), None)
+    return_meta = _return_meta(return_id, ctx)
     report_freq = (
         (return_meta.get("RepFreq") or "").strip().upper()
         if return_meta
@@ -722,7 +717,7 @@ def compute_variance(
     # ctx passed even though return_meta is always set here (so the
     # ctx-dependent is_excel lookup is not reached today) — leaving it off
     # makes correctness depend on a caller invariant that nothing enforces.
-    resolved_table_name = _resolve_physical_table_name(
+    resolved_table_name = resolve_physical_table_name(
         return_id, table_name, return_meta=return_meta, ctx=ctx
     )
 
@@ -732,7 +727,7 @@ def compute_variance(
     logger.debug("[table_resolution] OriginalTable=%s", table_name)
     logger.debug("[table_resolution] FinalReportName=%s", resolved_table_name)
 
-    table_meta = _get_table_metadata(return_id, return_tbl_path, table_name, ctx)
+    table_meta = _get_table_metadata(return_id, _trusted_tbl_path(return_meta), table_name, ctx)
 
     metadata = {
         "filter_col":            table_meta["filter_col"],
@@ -744,10 +739,10 @@ def compute_variance(
         "freq_val":              table_meta.get("freq_val"),
     }
 
-    def get_table_metadata_fn(rc, tn, isnon):
+    def get_table_metadata_fn(_return_code, _table_name, _is_non_xbrl):
         return metadata
 
-    def execute_query_adapter(query, conn_str=None):
+    def execute_query_adapter(query, _conn_str=None):
         logger.debug("[service] Executing Oracle query:\n%s", query)
         cols, rows, err = execute_query_fn(query)
 

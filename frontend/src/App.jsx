@@ -18,9 +18,11 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false
-    bootstrapAuth().then((resolved) => {
-      if (!cancelled) setIdentity(resolved)
-    })
+    bootstrapAuth()
+      .then((resolved) => {
+        if (!cancelled) setIdentity(resolved)
+      })
+      .catch((err) => console.error('[auth] Identity bootstrap failed:', err))
     return () => { cancelled = true }
   }, [])
 
@@ -37,11 +39,7 @@ export default function App() {
   return (
     <div className="app">
       <main className="app-main-full">
-        <LayoutContainer
-          loginId={identity.loginId}
-          tenantId={identity.tenantId}
-          uid={identity.uid}
-        />
+        <LayoutContainer loginId={identity.loginId} />
       </main>
     </div>
   )

@@ -41,7 +41,7 @@ import os
 import re
 import sys
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -89,11 +89,11 @@ def looks_corrupted(text: str) -> bool:
 
 # ── Oracle catalogue ──────────────────────────────────────────────────────────
 
-def fetch_db_columns(schema: str, table_regex: str) -> Dict[str, List[str]]:
+def fetch_db_columns(schema: str, table_regex: str) -> dict[str, list[str]]:
     """{TABLE_NAME: [COLUMN, ...]} in physical column order.
 
     _DP and _HIST are excluded. _DP is the same shape — the variance engine
-    appends that suffix itself at query time (service._resolve_physical_table_name)
+    appends that suffix itself at query time (service.resolve_physical_table_name)
     — and _HIST is an archive. Emitting all three would triple the index with
     near-identical text and let the retriever answer with an archive table.
     """
@@ -110,7 +110,7 @@ def fetch_db_columns(schema: str, table_regex: str) -> Dict[str, List[str]]:
     if err:
         raise RuntimeError(f"Oracle catalogue query failed: {err}")
 
-    out: Dict[str, List[str]] = defaultdict(list)
+    out: dict[str, list[str]] = defaultdict(list)
     for table_name, column_name in rows or []:
         out[str(table_name).strip().upper()].append(str(column_name).strip().upper())
     return dict(out)
@@ -118,7 +118,7 @@ def fetch_db_columns(schema: str, table_regex: str) -> Dict[str, List[str]]:
 
 # ── Worksheet reading ─────────────────────────────────────────────────────────
 
-def expand_merged(ws) -> List[List[Any]]:
+def expand_merged(ws) -> list[list[Any]]:
     """Grid with every merged range filled across all the cells it covers.
 
     openpyxl reports a merged range's value only in its top-left cell and None
@@ -141,7 +141,7 @@ def expand_merged(ws) -> List[List[Any]]:
 
 
 def find_db_name_row(
-    grid: List[List[Any]], db_columns: List[str], scan_depth: int = 8
+    grid: list[list[Any]], db_columns: list[str], scan_depth: int = 8
 ) -> Optional[int]:
     """0-based index of the row holding physical column names, or None.
 
@@ -163,14 +163,14 @@ def find_db_name_row(
     return best_row
 
 
-def compose_label(grid: List[List[Any]], label_rows: List[int], col: int) -> str:
+def compose_label(grid: list[list[Any]], label_rows: list[int], col: int) -> str:
     """Join the header hierarchy above a column into one description.
 
     F015's CASH_EQ_IN_QTR sits under Assets > Cash and Cash Equivalents >
     Inside Qatar. Flattening to "Inside Qatar" alone would be indistinguishable
     from the eleven other "Inside Qatar" columns in the same sheet.
     """
-    parts: List[str] = []
+    parts: list[str] = []
     for r in label_rows:
         if r >= len(grid) or col >= len(grid[r]):
             continue
@@ -183,9 +183,9 @@ def compose_label(grid: List[List[Any]], label_rows: List[int], col: int) -> str
     return " - ".join(parts)
 
 
-def read_filing_info(ws) -> Dict[str, str]:
+def read_filing_info(ws) -> dict[str, str]:
     """{'Return code': 'F014', 'Return name': ..., 'Reporting scale': ...}."""
-    meta: Dict[str, str] = {}
+    meta: dict[str, str] = {}
     for row in ws.iter_rows(values_only=True):
         cells = [c for c in row if c is not None and str(c).strip()]
         if len(cells) >= 2:
@@ -207,13 +207,13 @@ def describe_fallback(col: str, key_value: bool) -> Optional[str]:
 
 def extract_workbook(
     path: str,
-    db_columns: Dict[str, List[str]],
-    return_name_overrides: Dict[str, str],
-) -> Tuple[List[Dict[str, Any]], List[str]]:
+    db_columns: dict[str, list[str]],
+    return_name_overrides: dict[str, str],
+) -> tuple[list[dict[str, Any]], list[str]]:
     """(items, warnings) for one template workbook."""
     wb = openpyxl.load_workbook(path, data_only=True)
-    warnings: List[str] = []
-    items: List[Dict[str, Any]] = []
+    warnings: list[str] = []
+    items: list[dict[str, Any]] = []
     base = os.path.basename(path)
 
     filing_sheet = next(
@@ -237,7 +237,7 @@ def extract_workbook(
             continue
 
         key_value = is_key_value_table(table)
-        described: Dict[str, str] = {}
+        described: dict[str, str] = {}
 
         if not key_value:
             grid = expand_merged(ws)
@@ -308,7 +308,7 @@ def extract_workbook(
 
 
 def _recover_corrupted_labels(
-    items: List[Dict[str, Any]], warnings: List[str], source: str
+    items: list[dict[str, Any]], warnings: list[str], source: str
 ) -> None:
     """Replace corrupted header text with a clean label for the same column.
 
@@ -327,7 +327,7 @@ def _recover_corrupted_labels(
     """
     def prefix_len(a: str, b: str) -> int:
         n = 0
-        for ca, cb in zip(a, b):
+        for ca, cb in zip(a, b, strict=False):
             if ca != cb:
                 break
             n += 1
@@ -413,8 +413,8 @@ def main() -> int:
     print(f"  {len(db_columns)} table(s), "
           f"{sum(len(v) for v in db_columns.values())} column(s)\n")
 
-    all_items: List[Dict[str, Any]] = []
-    all_warnings: List[str] = []
+    all_items: list[dict[str, Any]] = []
+    all_warnings: list[str] = []
     seen: set = set()
 
     for path in args.workbooks:

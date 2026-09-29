@@ -15,12 +15,12 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Optional
 
 from .nlp_config import MARGIN_FULL_SEPARATION
 
 
-def normalize_scores(scores: Dict[str, float]) -> Dict[str, float]:
+def normalize_scores(scores: dict[str, float]) -> dict[str, float]:
     """Min-max normalize a {name: score} dict to [0, 1]. A single-entry (or
     empty) dict normalizes to 1.0 for every entry — nothing to compare against,
     so it can't be penalized as ambiguous."""
@@ -35,12 +35,12 @@ def normalize_scores(scores: Dict[str, float]) -> Dict[str, float]:
 
 
 def table_confidence(
-    ranked: List[Tuple[str, float]],
+    ranked: list[tuple[str, float]],
     qa_hit: bool,
-    lexical_overlaps: Dict[str, float],
+    lexical_overlaps: dict[str, float],
     tie_epsilon: float,
-    signal_leaders: Optional[Set[str]] = None,
-) -> Tuple[float, bool]:
+    signal_leaders: Optional[set[str]] = None,
+) -> tuple[float, bool]:
     """`ranked` is the authorized table shortlist as (table_name, score)
     pairs, already sorted descending, with the QA strong-match bonus
     EXCLUDED from `score` (the caller is responsible for stripping it — see

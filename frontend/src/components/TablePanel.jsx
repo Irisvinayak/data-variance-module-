@@ -69,7 +69,6 @@ export default function TablePanel({
             <>
               <DataVarianceBlock
                 result={result}
-                showHeader={false}
                 hiddenCols={hiddenCols}
                 onHideCol={onHideCol}
               />

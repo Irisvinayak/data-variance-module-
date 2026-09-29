@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 
 import numpy as np
@@ -17,11 +18,18 @@ from .nlp_config import EMBED_MODEL, QUERY_PREFIX
 logger = logging.getLogger(__name__)
 
 _model = None
+# Routes run in a threadpool, so several first NL requests can arrive together;
+# without the lock each one saw `_model is None` and loaded its own ~1.3GB copy.
+_model_lock = threading.Lock()
 
 
 def _get_model():
     global _model
-    if _model is None:
+    if _model is not None:
+        return _model
+    with _model_lock:
+        if _model is not None:
+            return _model
         from sentence_transformers import SentenceTransformer
         logger.info("[nlp.embedder] Loading embedding model %s ...", EMBED_MODEL)
         # Logged with its elapsed time because this load is the single

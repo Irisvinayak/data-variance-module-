@@ -1,8 +1,4 @@
 # auth.py — /auth/my-returns
-#
-# Split out of backend/main.py, which had grown to ~1400 lines holding every
-# route. Route bodies are unchanged; only the decorator and the imports moved.
-# backend/main.py mounts this router, so the URLs are identical.
 
 from __future__ import annotations
 
@@ -17,20 +13,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ── Why these handlers are `def`, not `async def` ─────────────────────────────
-# Every route here does BLOCKING work: synchronous Oracle round-trips via
-# oracledb, requests.post to Ollama, FAISS search, and os.listdir/isfile against
-# a network share. FastAPI runs an `async def` handler ON the event loop, so a
-# blocking body stalls the entire process - every other request, including
-# /health, waits behind it.
-#
-# That was not theoretical. With a slow /variance/compute in flight, /health
-# timed out at 30s three times in a row, then answered in 10.1s the moment
-# compute released the loop, then in 0.002s once idle.
-#
-# Declaring them `def` makes FastAPI run them in its threadpool instead, so
-# concurrent requests are served. The bodies are unchanged - there is no
-# `await` anywhere in backend/, so nothing depended on being a coroutine.
+# Handlers are `def`, not `async def`, on purpose — see backend/api/variance.py.
 
 
 # ── GET /auth/my-returns ───────────────────────────────────────────────────────

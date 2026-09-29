@@ -5,9 +5,7 @@
 # Why this exists: embeddings can now be built by ANY external tool and just
 # dropped into artifacts/nlp-index/ (see nlp_config.INDEX_DIR) — e.g. the pasted
 # table_meta.pkl/column_meta.pkl records only carry {"text", "table"}, no
-# return_id at all. retriever.py used to expect return_id to already be
-# baked into the embedding metadata; that only worked when this project's own
-# (now-removed) build pipeline produced it. This module decouples the two:
+# return_id at all. This module decouples the two:
 # the embedding index only needs to know table/column names, and THIS module
 # independently maps a table name back to a return_id via the same XML this
 # app already trusts for everything else (auth, compute_variance).
@@ -18,7 +16,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ..config import ANONYMOUS, RequestContext
 from ..data import query_xml_lookup
@@ -32,8 +30,8 @@ _TTL = float(os.getenv("DV_NLP_RETURN_LOOKUP_TTL_SEC", "3600"))
 # Return.xml and table-mapping files; a single shared slot would hand
 # whichever tenant warmed it first to every other tenant afterwards —
 # a data-isolation fault rather than mere staleness.
-_cache: Dict[str, Dict[str, Any]] = {}
-_cache_ts: Dict[str, float] = {}
+_cache: dict[str, dict[str, Any]] = {}
+_cache_ts: dict[str, float] = {}
 _lock = threading.Lock()
 _rebuild_in_progress: set = set()
 
@@ -42,7 +40,7 @@ def _strip_dp_suffix(table_name: str) -> str:
     return table_name[:-3] if table_name.upper().endswith("_DP") else table_name
 
 
-def _build_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, Any]]]:
+def _build_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, Any]]]:
     """Walk every <Return> in Returns.xml and build
     {UPPERCASE base table name (no _DP suffix): [candidate return metadata, ...]}.
 
@@ -64,7 +62,7 @@ def _build_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, A
     Every claimant is therefore kept here, and the choice is deferred to
     get_return_for_table(), which can use the caller's hint text to pick
     correctly. See _select_candidate()."""
-    lookup: Dict[str, List[Dict[str, Any]]] = {}
+    lookup: dict[str, list[dict[str, Any]]] = {}
 
     for ret in parse_returns(ctx):
         return_id = ret.get("Id")
@@ -184,7 +182,7 @@ def _rebuild_in_background(ctx: RequestContext) -> None:
             _rebuild_in_progress.discard(key)
 
 
-def _get_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, Any]]]:
+def _get_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, Any]]]:
     """As the number of returns grows, _build_lookup()'s O(returns) XML
     read+parse cost grows with it. Rebuilding synchronously on whichever
     user's request happens to land right after the TTL expires — the
@@ -223,9 +221,9 @@ def _get_lookup(ctx: RequestContext = ANONYMOUS) -> Dict[str, List[Dict[str, Any
 
 def _select_candidate(
     table_name: str,
-    candidates: List[Dict[str, Any]],
+    candidates: list[dict[str, Any]],
     hint_text: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Pick which claiming return actually owns `table_name`.
 
     `hint_text` is any text the caller already associates with this table —
@@ -286,7 +284,7 @@ def _select_candidate(
 def get_return_for_table(
     table_name: str, hint_text: Optional[str] = None,
     ctx: RequestContext = ANONYMOUS,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """Return {"return_id", "return_name", "report_freq", "filter_col",
     "comp_filter_col_names"} for `table_name`, or None if it isn't tied to
     any known return.
@@ -301,31 +299,11 @@ def get_return_for_table(
     return _select_candidate(table_name, candidates, hint_text)
 
 
-def candidates_for_table(
-    table_name: str, ctx: RequestContext = ANONYMOUS
-) -> List[Dict[str, Any]]:
-    """Every return claiming `table_name` (diagnostics / ambiguity reports)."""
-    return list(_get_lookup(ctx).get(_strip_dp_suffix(table_name).upper(), []))
-
-
 def invalidate() -> None:
     """Force the next get_return_for_table() call to re-read the XML
     synchronously (bypasses stale-while-revalidate — the caller explicitly
     wants a guaranteed-fresh read, e.g. tests or an admin action)."""
-    # _cache and _cache_ts are DICTS, keyed per tenant (see their declarations
-    # above). Rebinding them to None/0.0 - as this did - left the module in a
-    # state where the next _get_lookup() raised
-    # `TypeError: argument of type 'NoneType' is not iterable`.
-    # Nothing calls invalidate() today, so this never fired in production; it
-    # would have on the first use. .clear() keeps the per-tenant shape, which
-    # is what indexed_returns.invalidate() already does correctly.
-    # _cache and _cache_ts are DICTS, keyed per tenant (see their declarations
-    # above). Rebinding them to None/0.0 - as this did - left the module in a
-    # state where the next _get_lookup() raised
-    # `TypeError: argument of type 'NoneType' is not iterable`.
-    # Nothing calls invalidate() today, so this never fired in production; it
-    # would have on the first use. .clear() keeps the per-tenant shape, which
-    # is what indexed_returns.invalidate() already does correctly.
+    # .clear(), not rebinding: the caches are per-tenant dicts.
     with _lock:
         _cache.clear()
         _cache_ts.clear()

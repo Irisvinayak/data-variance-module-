@@ -44,8 +44,12 @@ if _ENV_OVERLAY:
     load_dotenv(dotenv_path=_ENV_OVERLAY, override=True)
 
 
+def _truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _flag(name: str, default: str = "false") -> bool:
-    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+    return _truthy(os.getenv(name, default))
 
 
 # ── Application mode ───────────────────────────────────────────────────────────
@@ -75,11 +79,6 @@ def is_legacy_mode(version: str | None = None) -> bool:
     return _normalize_app_version(version or APP_VERSION).startswith("5")
 
 
-def is_tenant_aware_mode(version: str | None = None) -> bool:
-    """True for iDEAL 6.0 (multi-tenant React + .NET API host)."""
-    return not is_legacy_mode(version)
-
-
 # ── Oracle DB settings ─────────────────────────────────────────────────────────
 # Resolved per version, the same way BASE_PATH is below: 5.5's CIMS returns and
 # 6.0's QCB returns live in different Oracle schemas (in this deployment,
@@ -89,35 +88,34 @@ def is_tenant_aware_mode(version: str | None = None) -> bool:
 # for a table that is perfectly real — just in the schema the wrong host is
 # pointed at. That symptom looks like a data problem; it is a config one.
 #
-#   DV_DB_*      — explicit override, wins for either version
 #   DV_DB_*_55   — used when VERSION is 5.5
 #   DV_DB_*_60   — used when VERSION is 6.0
-#
-# A bare DV_DB_* (no suffix) is also honoured as an implicit "same DB for both"
-# convenience for a single-database deployment, so an existing .env with only
-# unsuffixed DV_DB_* keeps working unchanged.
+#   DV_DB_*      — fallback for either version when the suffixed key is unset,
+#                  so a single-database .env with only unsuffixed keys works.
 
-def _db_setting(name: str, default: str) -> tuple[str, str, str]:
-    """(resolved_for_current_version, value_55, value_60) for one DB_* setting."""
-    override = os.getenv(f"DV_DB_{name}", "").strip()
-    v55 = (os.getenv(f"DV_DB_{name}_55", "").strip() or override or default)
-    v60 = (os.getenv(f"DV_DB_{name}_60", "").strip() or override or default)
-    resolved = v55 if is_legacy_mode() else v60
-    return resolved, v55, v60
+def _versioned(name: str, default_55: str, default_60: str | None = None) -> str:
+    """The DV_<name> setting for the configured VERSION.
+
+    Precedence: DV_<name>_55 / DV_<name>_60 (whichever matches VERSION), then
+    the unsuffixed DV_<name> (an explicit "same value for both hosts"), then
+    the default for that version.
+    """
+    override = os.getenv(f"DV_{name}", "").strip()
+    suffix, default = ("55", default_55) if is_legacy_mode() else (
+        "60", default_55 if default_60 is None else default_60
+    )
+    return os.getenv(f"DV_{name}_{suffix}", "").strip() or override or default
 
 
-DB_HOST, DB_HOST_55, DB_HOST_60 = _db_setting("HOST", "3.6.209.141")
-_DB_PORT_S, _DB_PORT_55_S, _DB_PORT_60_S = _db_setting("PORT", "1521")
-DB_PORT    : int = int(_DB_PORT_S)
-DB_PORT_55 : int = int(_DB_PORT_55_S)
-DB_PORT_60 : int = int(_DB_PORT_60_S)
-DB_SERVICE, DB_SERVICE_55, DB_SERVICE_60 = _db_setting("SERVICE", "XE")
-DB_USER, DB_USER_55, DB_USER_60 = _db_setting("USER", "SOUTHINDIANBANK")
-DB_PASSWORD, DB_PASSWORD_55, DB_PASSWORD_60 = _db_setting("PASSWORD", "southindianbank1123")
-_DB_MAXR_S, _DB_MAXR_55_S, _DB_MAXR_60_S = _db_setting("MAX_ROWS", "5000")
-DB_MAX_ROWS    : int = int(_DB_MAXR_S)
-DB_MAX_ROWS_55 : int = int(_DB_MAXR_55_S)
-DB_MAX_ROWS_60 : int = int(_DB_MAXR_60_S)
+# No defaults for host or credentials: a missing value must fail loudly at the
+# first query ("database is not configured") rather than silently connecting
+# somewhere a developer's machine happened to point once.
+DB_HOST: str = _versioned("DB_HOST", "")
+DB_PORT: int = int(_versioned("DB_PORT", "1521"))
+DB_SERVICE: str = _versioned("DB_SERVICE", "XE")
+DB_USER: str = _versioned("DB_USER", "")
+DB_PASSWORD: str = _versioned("DB_PASSWORD", "")
+DB_MAX_ROWS: int = int(_versioned("DB_MAX_ROWS", "5000"))
 
 # ── Base path ──────────────────────────────────────────────────────────────────
 # Root of the iDEAL repository installation. In 5.5 this is the repo itself
@@ -144,33 +142,22 @@ BASE_PATH_60: str = os.getenv("DV_BASE_PATH_60", "").strip() or r"D:\Repo6"
 # through the profile's own base_path, never this.
 BASE_PATH: str = BASE_PATH_OVERRIDE or (BASE_PATH_55 if is_legacy_mode() else BASE_PATH_60)
 
+# Month (1-12) the fiscal year starts in, used to read "FY25" / "Q1FY25" in
+# natural-language queries. Empty -> the host profile's default (5.5: April,
+# Indian FY; 6.0: January, QCB reports on the calendar year).
+_fy_raw = os.getenv("DV_FISCAL_YEAR_START_MONTH", "").strip()
+FISCAL_YEAR_START_MONTH_OVERRIDE: int | None = (
+    int(_fy_raw) if _fy_raw.isdigit() and 1 <= int(_fy_raw) <= 12 else None
+)
+
 # ── Table-data behaviour ───────────────────────────────────────────────────────
 # Also per-version: the two hosts' Oracle schemas differ (CRILC vs IDEALCRILC
-# in this deployment), and _resolve_physical_table_name prefixes every query
+# in this deployment), and resolve_physical_table_name prefixes every query
 # with DP_TABLE_SCHEMA — a stale value here means every table name 6.0 builds
 # is qualified with 5.5's schema (or vice versa), which is the same
 # "looks like missing data, is actually a stale switch" failure as DB_HOST.
-def _flag_versioned(name: str, default: str) -> tuple[bool, bool, bool]:
-    override = os.getenv(f"DV_{name}", "").strip()
-    v55 = os.getenv(f"DV_{name}_55", "").strip() or override or default
-    v60 = os.getenv(f"DV_{name}_60", "").strip() or override or default
-    truthy = lambda v: v.strip().lower() in {"1", "true", "yes", "on"}
-    return (truthy(v55) if is_legacy_mode() else truthy(v60)), truthy(v55), truthy(v60)
-
-
-IS_SP_TABLE_DATA_ENABLED, IS_SP_TABLE_DATA_ENABLED_55, IS_SP_TABLE_DATA_ENABLED_60 = (
-    _flag_versioned("IS_SP_TABLE_DATA_ENABLED", "false")
-)
-
-
-def _schema_setting(default_55: str, default_60: str) -> tuple[str, str, str]:
-    override = os.getenv("DV_DP_SCHEMA", "").strip()
-    v55 = os.getenv("DV_DP_SCHEMA_55", "").strip() or override or default_55
-    v60 = os.getenv("DV_DP_SCHEMA_60", "").strip() or override or default_60
-    return (v55 if is_legacy_mode() else v60), v55, v60
-
-
-DP_TABLE_SCHEMA, DP_TABLE_SCHEMA_55, DP_TABLE_SCHEMA_60 = _schema_setting("CRILC", "IDEALCRILC")
+IS_SP_TABLE_DATA_ENABLED: bool = _truthy(_versioned("IS_SP_TABLE_DATA_ENABLED", "false"))
+DP_TABLE_SCHEMA: str = _versioned("DP_SCHEMA", "CRILC", "IDEALCRILC")
 
 # ── Explicit path overrides ────────────────────────────────────────────────────
 # Empty string means "not overridden — let the host profile derive it from
@@ -221,22 +208,13 @@ DEV_TENANT_ID: str = os.getenv("DV_DEV_TENANT_ID", "").strip()
 # the right port automatically, instead of having to restate it and risk two
 # instances racing for the same socket.
 #
-#   DV_<NAME>      — explicit override, wins for either version
-#   DV_<NAME>_55   — used when VERSION is 5.5
-#   DV_<NAME>_60   — used when VERSION is 6.0
-def _versioned(name: str, default_55: str, default_60: str) -> tuple[str, str, str]:
-    """(resolved_for_current_version, value_55, value_60) for one DV_* setting."""
-    override = os.getenv(f"DV_{name}", "").strip()
-    v55 = os.getenv(f"DV_{name}_55", "").strip() or override or default_55
-    v60 = os.getenv(f"DV_{name}_60", "").strip() or override or default_60
-    return (v55 if is_legacy_mode() else v60), v55, v60
-
+# Keyed with _versioned() above, like DV_DB_* and DV_BASE_PATH_*.
 
 # ── API base path ──────────────────────────────────────────────────────────────
 # Set when served behind a reverse proxy, so FastAPI generates correct URLs:
 # /Datavariance/api under the 5.5 site, /DataVar6.0/api under the 6.0 site.
 # Defaults stay empty so a direct-to-uvicorn deployment is unaffected.
-API_BASE_PATH, API_BASE_PATH_55, API_BASE_PATH_60 = _versioned("API_BASE_PATH", "", "")
+API_BASE_PATH: str = _versioned("API_BASE_PATH", "")
 
 # ── Server settings ────────────────────────────────────────────────────────────
 # 5.5 -> 8002, 6.0 -> 8003. Distinct by default so both can run at once on one
@@ -244,20 +222,10 @@ API_BASE_PATH, API_BASE_PATH_55, API_BASE_PATH_60 = _versioned("API_BASE_PATH", 
 # other iDEAL services already on these servers.
 SERVER_HOST: str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
 
-_PORT, _PORT_55, _PORT_60 = _versioned("SERVER_PORT", "8002", "8003")
-SERVER_PORT: int = int(_PORT)
-SERVER_PORT_55: int = int(_PORT_55)
-SERVER_PORT_60: int = int(_PORT_60)
+SERVER_PORT: int = int(_versioned("SERVER_PORT", "8002", "8003"))
 
 # ── CORS origins ───────────────────────────────────────────────────────────────
 _DEFAULT_CORS = "http://localhost:5173,http://localhost:3001"
-_CORS, _CORS_55, _CORS_60 = _versioned("CORS_ORIGINS", _DEFAULT_CORS, _DEFAULT_CORS)
-
-
-def _origins(raw: str) -> list[str]:
-    return [o.strip() for o in raw.split(",") if o.strip()]
-
-
-CORS_ORIGINS: list[str] = _origins(_CORS)
-CORS_ORIGINS_55: list[str] = _origins(_CORS_55)
-CORS_ORIGINS_60: list[str] = _origins(_CORS_60)
+CORS_ORIGINS: list[str] = [
+    o.strip() for o in _versioned("CORS_ORIGINS", _DEFAULT_CORS).split(",") if o.strip()
+]

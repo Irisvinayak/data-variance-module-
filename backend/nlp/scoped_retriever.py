@@ -27,7 +27,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Optional
+from collections.abc import Mapping, Sequence
 
 from ..config import ANONYMOUS, RequestContext
 
@@ -54,7 +55,7 @@ from .query_analyzer import QueryAnalysis, analyze_query
 logger = logging.getLogger(__name__)
 
 
-def _empty(reason: str) -> Dict[str, Any]:
+def _empty(reason: str) -> dict[str, Any]:
     logger.info("[nlp.scoped_retriever] empty shortlist — %s", reason)
     return {
         "tables": [],
@@ -71,7 +72,7 @@ def rank_within_tables(
     ctx: "RequestContext | None" = None,
     *,
     analysis: Optional[QueryAnalysis] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Rank an ALREADY-DETERMINED set of tables, and the columns inside them,
     against what the query actually asks for.
 
@@ -107,8 +108,8 @@ def rank_within_tables(
     # carry lowercase names — can be rewritten to the names the caller and
     # everything downstream compare against. Same rewrite _shortlist_for_return
     # has always done, kept here so callers stop having to remember it.
-    canonical: Dict[str, str] = {}
-    meta_by_name: Dict[str, Mapping[str, Any]] = {}
+    canonical: dict[str, str] = {}
+    meta_by_name: dict[str, Mapping[str, Any]] = {}
     for record in tables:
         name = record["table"]
         canonical[name.upper()] = name
@@ -153,9 +154,9 @@ def rank_within_tables(
     # The QA strong-match is deliberately absent: a QA hit pins a table
     # GLOBALLY, and honouring one here could jump outside the return the user
     # named — the one thing this stage must never do.
-    scores: Dict[str, float] = {}
+    scores: dict[str, float] = {}
     signal_leaders: set = set()
-    texts_by_table: Dict[str, List[str]] = {}
+    texts_by_table: dict[str, list[str]] = {}
 
     for hits, weight in (
         (col_hits, 2.0),
@@ -211,7 +212,7 @@ def rank_within_tables(
 
     columns = _rank_columns(q_vec, [t["table"] for t in ranked_tables], canonical)
 
-    matched_labels: List[Dict[str, Any]] = []
+    matched_labels: list[dict[str, Any]] = []
     seen_labels = set()
     for _, lbl in label_hits:
         key = (lbl["table"].upper(), lbl["column"], lbl["value"])
@@ -239,8 +240,8 @@ def rank_within_tables(
 
 
 def _rank_columns(
-    q_vec, table_order: List[str], canonical: Dict[str, str]
-) -> List[Dict[str, Any]]:
+    q_vec, table_order: list[str], canonical: dict[str, str]
+) -> list[dict[str, Any]]:
     """Every column of every scoped table, grouped by table rank and ordered
     within a table by relevance.
 
@@ -260,7 +261,7 @@ def _rank_columns(
     and legitimate evidence for the table, so they stay selectable — just below
     every real measure.
     """
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for table in table_order:
         hits = subset_search(COLUMN_INDEX_PATH, COLUMN_META_PATH, q_vec, [table])
         ordered = sorted(

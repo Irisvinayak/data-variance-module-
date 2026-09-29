@@ -111,7 +111,7 @@ data/service.find_return_and_tables(ctx)
   ▼
 data/service.compute_variance(ctx)
   │  ├─ require_return_access(ctx, return_id)          authorization
-  │  ├─ _resolve_physical_table_name()                 adds schema + _DP suffix
+  │  ├─ resolve_physical_table_name()                  adds schema + _DP suffix
   │  ├─ data/db.execute_query()                        Oracle, SELECT only
   │  └─ data/calculate_variance.calculate_variance()   the arithmetic
   ▼
@@ -171,7 +171,12 @@ Three places, deliberately layered:
 
 1. `auth/deps.require_login` — resolves the login to a set of allowed return
    ids, and rejects an unknown tenant or unknown user.
-2. `auth/deps.require_return_access` — checked before any compute.
+2. `auth/deps.require_return_access` — checked before any compute: by
+   `/variance/dates` and `/variance/compute`, and by `/variance/nlresolve` on
+   every client-supplied return/table clarification answer and again on the
+   resolved return before it computes. The table-mapping file is always located
+   from the return's own `TblPath` in the returns master, never from the
+   `table_mapping_path` the client echoes back.
 3. `nlp/retriever` — the candidate shortlist is filtered to allowed returns
    **before** the LLM sees it, so a model cannot name a table the user may not
    read. `sql_generator.validate_sql` then re-checks the generated SQL against
@@ -241,3 +246,18 @@ two `web.config` files in `public/`.
 - [logging.md](logging.md) — log streams, levels, the AI audit trail
 - [integration-plan.md](integration-plan.md) — the historical record of the
   5.5/6.0 integration: verified differences, bugs found, open questions
+
+## NLP date resolution
+
+Both NLP endpoints read date phrases through one parser, `backend/nlp/date_intent.py`, which is pure and never touches the DB. It returns a `DateIntent`:
+- the anchor period and any explicit comparison periods
+- the relative part (`last N <unit>`) and the XoX part (QoQ / MoM / YoY)
+- `since` and a range
+
+Each explicit period is a range with a granularity, so `March 2025` means the whole month, not 1 March.
+
+- **/variance/nlresolve**: `date_resolver.resolve_reporting_date` maps the intent onto the dates the table really has. It uses `service.get_available_dates`, the same list as the manual date dropdown, which is frequency-filtered. It returns the anchor, up to 2 comparison dates (the same limit as the manual route), and `notes` for every substitution. The notes are returned as `interpretation.date_notes` and shown in the UI chips. A date phrase never fails: anything unmatched falls back to a real date, with a note.
+- **/variance/nlquery**: `sql_generator._resolve_relative_time` builds the prompt's RESOLVED TIME CONTEXT from the same intent. It is anchored on the newest data date, not today.
+- **Fiscal year**: `HostProfile.fiscal_year_start_month` is 4 (Apr–Mar) for 5.5 and 1 (calendar year) for 6.0. Override it with `DV_FISCAL_YEAR_START_MONTH`.
+- **Frequency**: `HostProfile.resolve_frequency` fills an unusable `RepFreq` (blank, or `x` in 6.0) from `PeriodId` → the period master, when the returns master is parsed.
+- **Tests**: `tests/nlp/test_date_intent.py` and `test_date_resolver.py`. To run the scenario matrix against real data, use `scripts/eval_nlp_dates.py`.

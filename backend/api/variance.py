@@ -1,8 +1,4 @@
 # variance.py — the manual variance path: /variance/find, /compute, /dates
-#
-# Split out of backend/main.py, which had grown to ~1400 lines holding every
-# route. Route bodies are unchanged; only the decorator and the imports moved.
-# backend/main.py mounts this router, so the URLs are identical.
 
 from __future__ import annotations
 
@@ -15,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ..auth.deps import require_login, require_return_access
 from ..config import RequestContext
 from ..data import service
+from ..data.calculate_variance import is_safe_identifier
 from ..data.db import execute_query
 from ..data.models import VarianceComputeRequest
 from .errors import http_error
@@ -55,9 +52,8 @@ def variance_find(
       • 404            — {detail: "..."}           (nothing found)
 
     Note: search results are NOT filtered by the user's allowed forms here.
-    The access check happens at /variance/compute time, giving a clear 403.
-    If you want to hide inaccessible returns from search results, see the
-    commented-out block below.
+    The access check happens at /variance/dates and /variance/compute time,
+    giving a clear 403.
     """
     logger.info("[main] GET /variance/find | %s | return_name=%r", ctx, return_name)
 
@@ -68,27 +64,6 @@ def variance_find(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=result["error"],
         )
-
-    # ── Optional: filter search results to user's allowed returns only ─────────
-    # Uncomment if you want the search list itself to be access-controlled.
-    #
-    # from .auth.service import get_allowed_form_ids
-    # allowed = get_allowed_form_ids(ctx) or set()
-    # if "candidates" in result:
-    #     result["candidates"] = [
-    #         c for c in result["candidates"]
-    #         if str(c.get("return_id", "")) in allowed
-    #     ]
-    #     if not result["candidates"]:
-    #         raise HTTPException(
-    #             status_code=status.HTTP_403_FORBIDDEN,
-    #             detail=f"No accessible returns found matching '{return_name}'.",
-    #         )
-    # elif result.get("return_id") and str(result["return_id"]) not in allowed:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail=f"You do not have access to return '{result.get('return_name')}'.",
-    #     )
 
     return result
 
@@ -101,6 +76,12 @@ def variance_find(
 # UI: the endpoint is reachable directly, and each extra date adds a full
 # period's worth of rows to the query and the response.
 MAX_COMPARISON_DATES = 3
+
+# Upper bound on the derived period count. Each period adds an OR'd date
+# predicate to the query and a pass over the result, and the field is an
+# unbounded int in the request body. 12 matches the NL path's own ceiling
+# (date_resolver._MAX_PERIOD_WALK); the UI never sends more than 3.
+MAX_REPORTING_PERIOD = 12
 
 
 @router.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
@@ -123,6 +104,21 @@ def variance_compute(
 
     # ── Step 2: check this specific return is in the user's allowed set ────────
     require_return_access(ctx, payload.return_id)
+
+    if payload.reporting_period > MAX_REPORTING_PERIOD:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"reporting_period may be at most {MAX_REPORTING_PERIOD}.",
+        )
+
+    if payload.selected_columns:
+        invalid = [c for c in payload.selected_columns if not is_safe_identifier(c)]
+        if invalid:
+            logger.warning("[main] 400 /variance/compute | %s | invalid selected_columns=%r", ctx, invalid)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid column name(s): {invalid}",
+            )
 
     comparison_dates = [d.strip().upper() for d in (payload.comparison_dates or []) if d and d.strip()]
     if comparison_dates:
@@ -151,7 +147,6 @@ def variance_compute(
     try:
         res = service.compute_variance(
             return_id=payload.return_id,
-            return_tbl_path=payload.table_mapping_path,
             table_name=payload.table_name,
             reporting_date=payload.reporting_date,
             reporting_period=payload.reporting_period,
@@ -183,6 +178,9 @@ def variance_dates(
     """List every reporting date that actually has data for this return/table,
     newest first — lets the manual UI offer a dropdown of real submission
     dates instead of a free calendar picker.
+
+    `table_mapping_path` is accepted for backward compatibility only; the
+    mapping file is resolved server-side from the return's own TblPath.
     """
     logger.info(
         "[main] GET /variance/dates | %s | return_id=%s | table=%s",
@@ -194,7 +192,6 @@ def variance_dates(
     try:
         dates = service.get_available_dates(
             return_id=return_id,
-            return_tbl_path=table_mapping_path,
             table_name=table_name,
             execute_query_fn=execute_query,
             ctx=ctx,

@@ -18,12 +18,34 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import threading
 from abc import ABC, abstractmethod
-from typing import Sequence
+from collections.abc import Mapping, Sequence
 
 from ..config.context import RequestContext
-from ..config.settings import BASE_PATH_OVERRIDE, PATH_OVERRIDES
+from ..config.settings import (
+    BASE_PATH_OVERRIDE, FISCAL_YEAR_START_MONTH_OVERRIDE, PATH_OVERRIDES,
+)
+
+logger = logging.getLogger(__name__)
+
+# Every frequency code calculate_variance understands (its _MONTHLY,
+# _QUARTERLY, ... sets). A RepFreq outside this set is treated as missing.
+KNOWN_FREQ_CODES = frozenset({
+    "M", "MONTHLY", "Q", "QUARTERLY", "H", "HALFYEARLY", "HY", "FH", "C", "CH",
+    "A", "ANNUAL", "Y", "FY", "B", "CY", "W", "WEEKLY", "F", "FORTNIGHTLY",
+    "HM", "D", "DAILY", "G",
+})
+
+# Period.xml@PeriodName -> frequency code, for 6.0 whose Period.xml has no
+# Frequency column (B5). Normalised: lowercase, spaces/punctuation removed.
+_PERIOD_NAME_FREQ = {
+    "daily": "D", "weekly": "W", "fortnightly": "F", "halfmonthly": "F",
+    "monthly": "M", "quarterly": "Q", "halfyearly": "H", "yearly": "Y",
+    "halfyearlycalendaryear": "C", "yearlycalendaryear": "B",
+}
 
 
 class HostProfileError(RuntimeError):
@@ -150,17 +172,6 @@ class HostProfile(ABC):
         allow-list and every request 403s. See docs/integration-plan.md B1.
         """
 
-    # ── File shapes: period master ─────────────────────────────────────────────
-
-    period_id_attr: str = "Period_Id"
-
-    @property
-    def period_freq_attr(self) -> str | None:
-        """Attribute carrying the frequency code, or None when the master has no
-        such column (6.0's Period.xml is Id + PeriodName only, so period labels
-        there must be resolved via a return's PeriodId instead)."""
-        return "Frequency"
-
     # ── File shapes: role access ───────────────────────────────────────────────
 
     def option_id(self, option: str) -> str | None:
@@ -172,6 +183,67 @@ class HostProfile(ABC):
         mapping does not masquerade as a permission decision.
         """
         return option
+
+    # ── Calendar facts ─────────────────────────────────────────────────────────
+
+    #: Month the fiscal year starts in, when DV_FISCAL_YEAR_START_MONTH is unset.
+    default_fiscal_year_start_month: int = 4
+
+    @property
+    def fiscal_year_start_month(self) -> int:
+        """What "FY25" / "Q1FY25" mean in a natural-language query. 4 means the
+        Indian Apr-Mar year (FY25 = Apr-2024..Mar-2025); 1 is the calendar year."""
+        return FISCAL_YEAR_START_MONTH_OVERRIDE or self.default_fiscal_year_start_month
+
+    _period_lock = threading.Lock()
+    _period_cache: dict = {}
+
+    def _period_frequencies(self, ctx: RequestContext) -> Mapping[str, str]:
+        """{period id: frequency code} from this host's period master. 5.5 carries
+        a Frequency column; 6.0 has only PeriodName, which is mapped by name."""
+        from ..data.xml_loader import load_xml_tree, max_mtime
+
+        path = self.period_xml_path(ctx)
+        mtime = max_mtime(path)
+        key = (ctx.tenant_id, path)
+        with self._period_lock:
+            hit = self._period_cache.get(key)
+            if hit and hit[0] == mtime:
+                return hit[1]
+
+        out: dict = {}
+        root = load_xml_tree(path, os.path.basename(path))
+        for el in (root.findall("Row") if root is not None else []):
+            pid = (el.attrib.get("Period_Id") or el.attrib.get("Id") or "").strip()
+            code = (el.attrib.get("Frequency") or "").strip().upper()
+            if code not in KNOWN_FREQ_CODES:
+                name = "".join(ch for ch in el.attrib.get("PeriodName", "").lower() if ch.isalnum())
+                code = _PERIOD_NAME_FREQ.get(name, "")
+            if pid and code:
+                out[pid] = code
+        with self._period_lock:
+            self._period_cache[key] = (mtime, out)
+        return out
+
+    def resolve_frequency(self, return_row: Mapping[str, str], ctx: RequestContext) -> str:
+        """The reporting frequency of one returns-master row.
+
+        RepFreq when it is a code the variance engine knows; otherwise the
+        row's PeriodId looked up in the period master. 6.0 has returns with
+        RepFreq="x" (e.g. 4089, PeriodId 108 = half-yearly calendar), which
+        would otherwise silently compute monthly comparisons. "" when neither
+        source gives a usable code, so callers keep their existing default."""
+        raw = (return_row.get("RepFreq") or "").strip().upper()
+        if raw in KNOWN_FREQ_CODES:
+            return raw
+        pid = (return_row.get("PeriodId") or "").strip()
+        code = self._period_frequencies(ctx).get(pid, "") if pid else ""
+        if code:
+            logger.info(
+                "[hosts] return %s: RepFreq=%r unusable -> %s from PeriodId=%s",
+                return_row.get("Id"), raw, code, pid,
+            )
+        return code
 
     # ── Helper for subclasses ──────────────────────────────────────────────────
 

@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from ..config import ANONYMOUS, RequestContext
 from . import return_lookup
@@ -50,8 +50,8 @@ logger = logging.getLogger(__name__)
 # Keyed by tenant ("" under 5.5): the coverage map is derived from a
 # tenant's own return metadata via return_lookup, so one shared slot would
 # report another tenant's embedding coverage.
-_cache: Dict[str, Dict[str, Any]] = {}
-_cache_mtime: Dict[str, float] = {}
+_cache: dict[str, dict[str, Any]] = {}
+_cache_mtime: dict[str, float] = {}
 _lock = threading.Lock()
 
 
@@ -62,17 +62,17 @@ def _current_mtime() -> float:
         return -1.0
 
 
-def _build(ctx: RequestContext = ANONYMOUS) -> Dict[str, Any]:
+def _build(ctx: RequestContext = ANONYMOUS) -> dict[str, Any]:
     """Resolve every indexed table to its owning return, exactly the way
     retriever.py does (same return_lookup call, same metadata text as the
     disambiguation hint), so the coverage set here can never disagree with
     what retrieval will actually produce."""
     records = all_meta(TABLE_INDEX_PATH, TABLE_META_PATH)
 
-    tables_upper: Set[str] = set()
-    return_ids: Set[str] = set()
-    tables_by_return: Dict[str, Set[str]] = {}
-    unresolved: List[str] = []
+    tables_upper: set[str] = set()
+    return_ids: set[str] = set()
+    tables_by_return: dict[str, set[str]] = {}
+    unresolved: list[str] = []
 
     for record in records:
         table = record.get("table")
@@ -106,7 +106,7 @@ def _build(ctx: RequestContext = ANONYMOUS) -> Dict[str, Any]:
     }
 
 
-def _get(ctx: RequestContext = ANONYMOUS) -> Dict[str, Any]:
+def _get(ctx: RequestContext = ANONYMOUS) -> dict[str, Any]:
     mtime = _current_mtime()
     with _lock:
         key = ctx.tenant_id
@@ -117,7 +117,7 @@ def _get(ctx: RequestContext = ANONYMOUS) -> Dict[str, Any]:
         return _cache[key]
 
 
-def indexed_return_ids(ctx: RequestContext = ANONYMOUS) -> Set[str]:
+def indexed_return_ids(ctx: RequestContext = ANONYMOUS) -> set[str]:
     """The return_ids the embedding index actually covers, as strings.
 
     An EMPTY set means the index is missing/unreadable entirely — callers
@@ -128,13 +128,13 @@ def indexed_return_ids(ctx: RequestContext = ANONYMOUS) -> Set[str]:
     return set(_get(ctx)["return_ids"])
 
 
-def indexed_table_names(ctx: RequestContext = ANONYMOUS) -> Set[str]:
+def indexed_table_names(ctx: RequestContext = ANONYMOUS) -> set[str]:
     """Every indexed table name, UPPERCASED (the index stores them lowercase,
     this app's XML uppercase — see index_store.meta_by_table)."""
     return set(_get(ctx)["tables_upper"])
 
 
-def tables_for_return(return_id: str, ctx: RequestContext = ANONYMOUS) -> List[str]:
+def tables_for_return(return_id: str, ctx: RequestContext = ANONYMOUS) -> list[str]:
     """The indexed table names belonging to one return, UPPERCASED.
 
     This is the reliable source of a return's tables for the NLP layer, and it
@@ -152,19 +152,10 @@ def tables_for_return(return_id: str, ctx: RequestContext = ANONYMOUS) -> List[s
     return sorted(_get(ctx)["tables_by_return"].get(str(return_id), ()))
 
 
-def has_embeddings(return_id: str, ctx: RequestContext = ANONYMOUS) -> bool:
-    """False only when coverage is KNOWN and this return isn't in it — see
-    indexed_return_ids() on why an empty coverage set means 'don't filter'."""
-    covered = indexed_return_ids(ctx)
-    if not covered:
-        return True
-    return str(return_id) in covered
-
-
 def filter_returns(
-    returns: List[Dict[str, Any]], id_key: str = "Id",
+    returns: list[dict[str, Any]], id_key: str = "Id",
     ctx: RequestContext = ANONYMOUS,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Narrow a list of Returns.xml rows to just those with embeddings.
 
     Returns the list UNCHANGED when coverage is unknown (empty set), so a
@@ -187,17 +178,6 @@ def filter_returns(
             len(returns), len(kept),
         )
     return kept
-
-
-def filter_table_names(
-    table_names: List[str], ctx: RequestContext = ANONYMOUS
-) -> List[str]:
-    """Narrow a list of table names to just the indexed ones (case-insensitive).
-    Unchanged when coverage is unknown, same rationale as filter_returns."""
-    covered = indexed_table_names(ctx)
-    if not covered:
-        return table_names
-    return [t for t in table_names if t.upper() in covered]
 
 
 def invalidate() -> None:

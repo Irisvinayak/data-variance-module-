@@ -19,32 +19,56 @@
  */
 
 import { authQuery, withAuth } from './auth/index.js'
+import { API_BASE_URL } from './config.js'
 
-// Leave empty in dev — Vite proxy handles forwarding to FastAPI.
-// Set VITE_API_BASE_URL=/Datavariance/api for reverse-proxy deployments.
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+// FastAPI sends `detail` as a string for HTTPException but as a list of
+// {loc, msg, ...} objects for request-validation (422) errors; passing the list
+// straight to Error() rendered "[object Object]".
+function errorDetail(detail) {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail.map((d) => d?.msg ?? JSON.stringify(d)).join('; ')
+  }
+  return null
+}
+
+async function request(path, label, options) {
+  const res = await fetch(`${API_BASE_URL}${path}`, options)
+  if (!res.ok) {
+    // Error bodies are not always JSON (proxy/IIS error pages), and a JSON
+    // body can be null — fall back to the status line either way.
+    const body = await res.json().catch(() => null)
+    throw new Error(errorDetail(body?.detail) ?? `${label} error (${res.status})`)
+  }
+  try {
+    return await res.json()
+  } catch {
+    // A 200 with a non-JSON body almost always means the route was not
+    // forwarded to the API and the SPA's index.html came back instead.
+    throw new Error(`${label} error: the server returned a non-JSON response`)
+  }
+}
+
+function postJson(body) {
+  return {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  }
+}
 
 // ── GET /auth/my-returns ──────────────────────────────────────────────────────
 // Fetches the list of return IDs the user is allowed to access.
 // Called once on app load — result used to filter all search results.
 export async function getMyReturns() {
-  const res = await fetch(`${BASE_URL}/auth/my-returns?${authQuery()}`)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Auth error (${res.status})`)
-  }
-  return res.json()  // { login_id, allowed_count, allowed_forms: ["2001","2007",...] }
+  // { login_id, allowed_count, allowed_forms: ["2001","2007",...] }
+  return request(`/auth/my-returns?${authQuery()}`, 'Auth')
 }
 
 // ── GET /variance/find?return_name=... ────────────────────────────────────────
 export async function findReturnTables(returnName) {
   const params = withAuth({ return_name: returnName })
-  const res = await fetch(`${BASE_URL}/variance/find?${params.toString()}`)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Find error (${res.status})`)
-  }
-  return res.json()
+  return request(`/variance/find?${params}`, 'Find')
 }
 
 // ── GET /variance/dates?return_id=&table_mapping_path=&table_name= ───────────
@@ -57,29 +81,13 @@ export async function getAvailableDates(returnId, tableMappingPath, tableName) {
     table_mapping_path: tableMappingPath,
     table_name:         tableName,
   })
-  const res = await fetch(`${BASE_URL}/variance/dates?${params.toString()}`)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Dates error (${res.status})`)
-  }
-  return res.json()  // { dates: ["31-MAR-2025", ...] }
+  // { dates: ["31-MAR-2025", ...] }
+  return request(`/variance/dates?${params}`, 'Dates')
 }
 
 // ── POST /variance/compute ───────────────────────────────────────────────────
 export async function computeVariance(payload) {
-  const res = await fetch(
-    `${BASE_URL}/variance/compute?${authQuery()}`,
-    {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    }
-  )
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Compute error (${res.status})`)
-  }
-  return res.json()
+  return request(`/variance/compute?${authQuery()}`, 'Compute', postJson(payload))
 }
 
 // ── POST /variance/nlresolve ─────────────────────────────────────────────────
@@ -106,22 +114,10 @@ export async function computeVariance(payload) {
 export const SKIP_ANSWER = '__skip__'
 
 export async function resolveNlQuery(query, { dimension, clarificationAnswer, resolvedContext } = {}) {
-  const res = await fetch(
-    `${BASE_URL}/variance/nlresolve?${authQuery()}`,
-    {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        query,
-        ...(dimension ? { dimension } : {}),
-        ...(clarificationAnswer ? { clarification_answer: clarificationAnswer } : {}),
-        ...(resolvedContext ? { resolved_context: resolvedContext } : {}),
-      }),
-    }
-  )
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `NL resolve error (${res.status})`)
-  }
-  return res.json()
+  return request(`/variance/nlresolve?${authQuery()}`, 'NL resolve', postJson({
+    query,
+    ...(dimension ? { dimension } : {}),
+    ...(clarificationAnswer ? { clarification_answer: clarificationAnswer } : {}),
+    ...(resolvedContext ? { resolved_context: resolvedContext } : {}),
+  }))
 }

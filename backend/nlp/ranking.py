@@ -15,7 +15,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, Optional
+from collections.abc import Mapping, Sequence
 
 from .nlp_config import RRF_K
 
@@ -48,13 +49,13 @@ def lexical_overlap(query_tokens: set, text: str) -> float:
 
 
 def fuse_best_hit_per_table(
-    hits: Sequence[Tuple[float, Mapping[str, Any]]],
+    hits: Sequence[tuple[float, Mapping[str, Any]]],
     weight: float,
-    scores: Dict[str, float],
+    scores: dict[str, float],
     *,
-    all_table_meta: Optional[Dict[str, Dict[str, Any]]] = None,
-    signal_leaders: Optional[Set[str]] = None,
-    texts_by_table: Optional[Dict[str, List[str]]] = None,
+    all_table_meta: Optional[dict[str, dict[str, Any]]] = None,
+    signal_leaders: Optional[set[str]] = None,
+    texts_by_table: Optional[dict[str, list[str]]] = None,
 ) -> None:
     """Accumulate one retrieval signal into `scores`, in place.
 

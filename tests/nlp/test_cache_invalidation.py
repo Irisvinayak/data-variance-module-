@@ -15,7 +15,7 @@ caller. These caches are a documented test/admin seam, so "nothing calls it"
 is not a reason to leave it broken.
 
 This walks the whole family rather than the one that was wrong, because they
-are five hand-written copies of the same stale-while-revalidate scaffolding and
+are hand-written copies of the same stale-while-revalidate scaffolding and
 the next copy can drift the same way.
 """
 from __future__ import annotations
@@ -30,13 +30,12 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from backend.auth import service as auth_service      # noqa: E402
-from backend.data import period_lookup, query_xml_lookup  # noqa: E402
+from backend.data import query_xml_lookup  # noqa: E402
 from backend.nlp import indexed_returns, return_lookup    # noqa: E402
 
 INVALIDATORS = [
     pytest.param(auth_service.invalidate, id="auth.service.invalidate"),
     pytest.param(auth_service.invalidate_role_cache, id="auth.service.invalidate_role_cache"),
-    pytest.param(period_lookup.invalidate, id="data.period_lookup.invalidate"),
     pytest.param(query_xml_lookup.invalidate, id="data.query_xml_lookup.invalidate"),
     pytest.param(indexed_returns.invalidate, id="nlp.indexed_returns.invalidate"),
     pytest.param(return_lookup.invalidate, id="nlp.return_lookup.invalidate"),
@@ -59,7 +58,7 @@ def test_invalidate_is_callable_and_repeatable(invalidate):
 
 
 @pytest.mark.parametrize(
-    "module", [period_lookup, query_xml_lookup, indexed_returns, return_lookup],
+    "module", [query_xml_lookup, indexed_returns, return_lookup],
     ids=lambda m: m.__name__.rsplit(".", 1)[-1],
 )
 def test_invalidate_leaves_the_caches_as_usable_mappings(module):

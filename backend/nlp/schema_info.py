@@ -24,7 +24,7 @@ import logging
 import os
 import re
 import threading
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from ..data.calculate_variance import _is_excluded_value_col
 from .nlp_config import SCHEMA_JSON_PATH
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # {(TABLE_UPPER, COLUMN_UPPER): {"type", "description"}} — mtime-invalidated,
 # matching index_store's caching convention so a freshly-dropped output/ folder
 # is picked up with no restart.
-_cache: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None
+_cache: Optional[dict[tuple[str, str], dict[str, Any]]] = None
 _cache_mtime: float = -1.0
 _lock = threading.Lock()
 
@@ -46,7 +46,7 @@ def _current_mtime() -> float:
         return -1.0
 
 
-def _build() -> Dict[Tuple[str, str], Dict[str, Any]]:
+def _build() -> dict[tuple[str, str], dict[str, Any]]:
     try:
         with open(SCHEMA_JSON_PATH, "r", encoding="utf-8") as fh:
             tables = json.load(fh)
@@ -60,7 +60,7 @@ def _build() -> Dict[Tuple[str, str], Dict[str, Any]]:
         )
         return {}
 
-    out: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    out: dict[tuple[str, str], dict[str, Any]] = {}
     for table in tables:
         tname = (table.get("table") or "").upper()
         if not tname:
@@ -79,7 +79,7 @@ def _build() -> Dict[Tuple[str, str], Dict[str, Any]]:
     return out
 
 
-def _get() -> Dict[Tuple[str, str], Dict[str, Any]]:
+def _get() -> dict[tuple[str, str], dict[str, Any]]:
     global _cache, _cache_mtime
     mtime = _current_mtime()
     with _lock:
@@ -90,7 +90,7 @@ def _get() -> Dict[Tuple[str, str], Dict[str, Any]]:
         return _cache
 
 
-def _entry(table: str, column: str) -> Optional[Dict[str, Any]]:
+def _entry(table: str, column: str) -> Optional[dict[str, Any]]:
     return _get().get(((table or "").upper(), (column or "").upper()))
 
 

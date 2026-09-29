@@ -93,10 +93,5 @@ class Ideal55Profile(HostProfile):
     def forms_delimiter(self) -> str:
         return "|"
 
-    # period_id_attr ("Period_Id") and period_freq_attr ("Frequency") are
-    # inherited: XML_Period.xml carries a real Frequency column, and the base
-    # class already defaults to exactly these values. (6.0's Period.xml does
-    # not — see B5 — so Ideal60Profile overrides both.)
-
     # 5.5's XML_RoleAccess.xml uses readable option names, so the logical name
     # is the wire value; the base-class identity mapping is already correct.

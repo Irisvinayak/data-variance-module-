@@ -4,10 +4,8 @@
 # row_label_index.faiss + their *_meta.pkl files and they get dropped into
 # artifacts/nlp-index/ (nlp_config.INDEX_DIR). This module only ever reads them.
 #
-# Indices are cached in memory per (index_path, meta_path) after first load —
-# search() used to call faiss.read_index()+pickle.load() from disk on EVERY
-# query (x3 per request: table/column/row-label), which is pure waste since
-# the files only change when the external tool rebuilds them. Cache entries
+# Indices are cached in memory per (index_path, meta_path) after first load,
+# since the files only change when the external tool rebuilds them. Cache entries
 # are invalidated by file mtime, so dropping in a freshly-rebuilt output/
 # folder is picked up on the next request with no restart needed.
 
@@ -17,18 +15,19 @@ import logging
 import os
 import pickle
 import threading
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Optional
+from collections.abc import Iterable
 
 import faiss
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-_cache: Dict[str, Tuple[float, faiss.Index, List[Dict[str, Any]]]] = {}
+_cache: dict[str, tuple[float, faiss.Index, list[dict[str, Any]]]] = {}
 _cache_lock = threading.Lock()
 
 
-def load_index(index_path: str, meta_path: str) -> Tuple[faiss.Index, List[Dict[str, Any]]]:
+def load_index(index_path: str, meta_path: str) -> tuple[faiss.Index, list[dict[str, Any]]]:
     """Load an index fresh from disk, bypassing the cache. Prefer search()
     for normal use — this is exposed mainly for tooling/tests."""
     index = faiss.read_index(index_path)
@@ -37,7 +36,7 @@ def load_index(index_path: str, meta_path: str) -> Tuple[faiss.Index, List[Dict[
     return index, meta
 
 
-def _load_cached(index_path: str, meta_path: str) -> Tuple[faiss.Index, List[Dict[str, Any]]]:
+def _load_cached(index_path: str, meta_path: str) -> tuple[faiss.Index, list[dict[str, Any]]]:
     mtime = max(os.path.getmtime(index_path), os.path.getmtime(meta_path))
     key = index_path
 
@@ -65,7 +64,7 @@ def _load_cached(index_path: str, meta_path: str) -> Tuple[faiss.Index, List[Dic
     return index, meta
 
 
-def all_meta(index_path: str, meta_path: str) -> List[Dict[str, Any]]:
+def all_meta(index_path: str, meta_path: str) -> list[dict[str, Any]]:
     """Return the full cached metadata list for an index, unfiltered by any
     query/score — used when a table needs its complete column list rather
     than just whatever a top-k similarity search happened to surface."""
@@ -75,18 +74,14 @@ def all_meta(index_path: str, meta_path: str) -> List[Dict[str, Any]]:
     return meta
 
 
-_grouped_cache: Dict[str, Tuple[float, Dict[str, List[Dict[str, Any]]]]] = {}
+_grouped_cache: dict[str, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
 
 
-def meta_by_table(index_path: str, meta_path: str) -> Dict[str, List[Dict[str, Any]]]:
+def meta_by_table(index_path: str, meta_path: str) -> dict[str, list[dict[str, Any]]]:
     """Same records as all_meta(), grouped by each record's "table" key and
     cached alongside the index (same mtime invalidation). Callers that only
     need one or a few tables' records (e.g. retriever.py's column-backfill
-    path) previously did `for c in all_meta(...): if c["table"] in ...` —
-    an O(total corpus size) linear scan on EVERY triggering query, regardless
-    of how few tables were actually being looked up. Grouping once (still
-    O(n), but cached) turns every subsequent lookup into an O(1) dict get,
-    so this stops scaling with total corpus size.
+    path) get an O(1) dict lookup instead of a linear scan of the corpus.
 
     KEYS ARE UPPERCASED — always look up with `table_name.upper()`. The
     externally-built index stores table names lowercased
@@ -112,7 +107,7 @@ def meta_by_table(index_path: str, meta_path: str) -> Dict[str, List[Dict[str, A
             return cached[1]
 
     _, meta = _load_cached(index_path, meta_path)
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for record in meta:
         grouped.setdefault(record["table"].upper(), []).append(record)
 
@@ -127,7 +122,7 @@ class _NotReconstructable(RuntimeError):
 
 # Reconstructed vector matrices, keyed and invalidated exactly like _cache /
 # _grouped_cache above.  {index_path: (mtime, matrix, {TABLE_UPPER: [rows]})}
-_vector_cache: Dict[str, Tuple[float, "np.ndarray", Dict[str, List[int]]]] = {}
+_vector_cache: dict[str, tuple[float, "np.ndarray", dict[str, list[int]]]] = {}
 
 
 def _load_vectors_cached(index_path: str, meta_path: str):
@@ -150,7 +145,7 @@ def _load_vectors_cached(index_path: str, meta_path: str):
         raise _NotReconstructable(f"{type(index).__name__} is not a flat index")
 
     matrix = index.reconstruct_n(0, index.ntotal).astype("float32", copy=False)
-    rows_by_table: Dict[str, List[int]] = {}
+    rows_by_table: dict[str, list[int]] = {}
     for i, record in enumerate(meta):
         rows_by_table.setdefault(record["table"].upper(), []).append(i)
 
@@ -170,7 +165,7 @@ def subset_search(
     table_names: Iterable[str],
     k: Optional[int] = None,
     min_score: float = 0.0,
-) -> List[Tuple[float, Dict[str, Any]]]:
+) -> list[tuple[float, dict[str, Any]]]:
     """Exact similarity search RESTRICTED to records belonging to `table_names`.
 
     search() cannot express this. FAISS has no per-query id filter on a flat
@@ -216,7 +211,7 @@ def subset_search(
         filtered = [(sc, rec) for sc, rec in hits if rec["table"].upper() in wanted]
         return filtered[:k] if k else filtered
 
-    rows: List[int] = []
+    rows: list[int] = []
     for name in wanted:
         rows.extend(rows_by_table.get(name, []))
     if not rows:
@@ -228,7 +223,7 @@ def subset_search(
 
     scored = [
         (float(score), meta[row])
-        for score, row in zip(sims, rows)
+        for score, row in zip(sims, rows, strict=True)
         if score >= min_score
     ]
     scored.sort(key=lambda pair: pair[0], reverse=True)
@@ -241,7 +236,7 @@ def search(
     query_vector: np.ndarray,
     k: int,
     min_score: float = 0.0,
-) -> List[Tuple[float, Dict[str, Any]]]:
+) -> list[tuple[float, dict[str, Any]]]:
     """Search a FAISS index (cached in memory after first load), returning
     only hits above min_score."""
     if not os.path.isfile(index_path) or not os.path.isfile(meta_path):
@@ -257,7 +252,7 @@ def search(
     distances, indices = index.search(q_vec, effective_k)
 
     results = []
-    for dist, idx in zip(distances[0], indices[0]):
+    for dist, idx in zip(distances[0], indices[0], strict=True):
         if idx != -1 and dist >= min_score:
             results.append((float(dist), meta[idx]))
     return results

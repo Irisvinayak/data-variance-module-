@@ -1,67 +1,36 @@
-# date_resolver.py — turns date/period intent in an NL query into a concrete
-# (reporting_date, reporting_period) pair ready for the existing, unmodified
-# service.compute_variance(). Lets /variance/nlresolve go one-shot: no date
-# mentioned -> use the latest actual submission; a date/period IS mentioned ->
-# resolve it against real data instead of guessing a calendar date that might
-# not exist.
+# date_resolver.py — turns date/period intent in an NL query into concrete
+# reporting dates ready for the existing, unmodified service.compute_variance().
+# Lets /variance/nlresolve go one-shot: no date mentioned -> the latest actual
+# submission vs the one before; a date/period IS mentioned -> resolved against
+# the dates the table really has, never a calendar guess that might not exist.
+#
+# What the query SAYS is read by date_intent.parse_date_intent (shared with
+# /variance/nlquery); this module only decides which real dates that maps to.
 
 from __future__ import annotations
 
-import calendar
 import logging
-import re
 from datetime import date, datetime
-from typing import List, Optional, Tuple
+from typing import Optional
 
-from dateutil import parser as dateutil_parser
-from dateutil.relativedelta import relativedelta
-
-from ..data.calculate_variance import get_previous_dates
-from ..config import ANONYMOUS, DP_TABLE_SCHEMA, IS_SP_TABLE_DATA_ENABLED, RequestContext
+from ..config import ANONYMOUS, RequestContext
 from ..data.db import execute_query
-from ..data.report_lookup import parse_returns, get_is_excel_by_return_code
-from .query_normalizer import normalize_query
+from ..data.service import resolve_physical_table_name
+from .date_intent import PeriodRef, parse_date_intent, period_containing, step_back
 
 logger = logging.getLogger(__name__)
 
 _DATE_FMT = "%d-%b-%Y"
-_MAX_PERIOD_WALK = 12  # safety cap when counting steps between two explicit periods
-
-
-def _resolve_physical_table_name(
-    return_id: str, table_name: str, ctx: RequestContext = ANONYMOUS
-) -> str:
-    """Mirrors service.compute_variance()'s inline table-name resolution
-    (is_excel -> optional _DP suffix -> optional DP_TABLE_SCHEMA prefix).
-    Duplicated here deliberately, read-only use only (a MAX() lookup) —
-    service._resolve_report_table_name() is dead/incomplete code (it's
-    missing the DP_TABLE_SCHEMA prefix), so it is not reused."""
-    return_meta = next((r for r in parse_returns(ctx) if r.get("Id") == str(return_id)), None)
-    is_excel = (
-        str(return_meta.get("IsExcel", "false")).strip().lower() == "true"
-        if return_meta
-        else get_is_excel_by_return_code(return_id, ctx=ctx)
-    )
-    if IS_SP_TABLE_DATA_ENABLED and not is_excel:
-        dp_name = f"{table_name}_DP"
-        return f"{DP_TABLE_SCHEMA}.{dp_name}" if DP_TABLE_SCHEMA else dp_name
-    return table_name
-
-
 _MAX_DATE_SCAN = 500
 
 
 def _available_dates_desc(
     return_id: str, table_name: str, filter_col: str,
     ctx: RequestContext = ANONYMOUS,
-) -> List[datetime]:
-    """Every distinct reporting date in the table, newest first.
-
-    This is the same question /variance/dates answers for the manual UI —
-    asked here so the NLP path anchors on dates that exist rather than on
-    dates a frequency calculation predicts should exist.
-    """
-    resolved = _resolve_physical_table_name(return_id, table_name, ctx)
+) -> list[datetime]:
+    """Every distinct reporting date in the table, newest first, unfiltered.
+    Fallback for when service.get_available_dates cannot resolve the table."""
+    resolved = resolve_physical_table_name(return_id, table_name, ctx=ctx)
     sql = (
         f"SELECT DISTINCT {filter_col} FROM {resolved} "
         f"ORDER BY {filter_col} DESC FETCH FIRST {_MAX_DATE_SCAN} ROWS ONLY"
@@ -81,7 +50,7 @@ def _available_dates_desc(
             )
             return []
 
-    out: List[datetime] = []
+    out: list[datetime] = []
     for r in rows or []:
         v = r[0]
         if v is None:
@@ -92,369 +61,204 @@ def _available_dates_desc(
     return out
 
 
-def _latest_available_date(
-    return_id: str, table_name: str, filter_col: str,
-    ctx: RequestContext = ANONYMOUS,
-) -> Optional[datetime]:
-    resolved = _resolve_physical_table_name(return_id, table_name, ctx)
-    sql = f"SELECT MAX({filter_col}) FROM {resolved}"
-    _cols, rows, err = execute_query(sql)
-    if err or not rows or rows[0][0] is None:
-        return None
-    value = rows[0][0]
-    return value if isinstance(value, datetime) else datetime.combine(value, datetime.min.time())
-
-
-def _nearest_available_on_or_before(
-    return_id: str, table_name: str, filter_col: str, target: datetime,
-    ctx: RequestContext = ANONYMOUS,
-) -> Optional[datetime]:
-    resolved = _resolve_physical_table_name(return_id, table_name, ctx)
-    target_str = target.strftime(_DATE_FMT).upper()
-    sql = (
-        f"SELECT MAX({filter_col}) FROM {resolved} "
-        f"WHERE {filter_col} <= TO_DATE('{target_str}', 'DD-MON-YYYY')"
-    )
-    _cols, rows, err = execute_query(sql)
-    if err or not rows or rows[0][0] is None:
-        return None
-    value = rows[0][0]
-    return value if isinstance(value, datetime) else datetime.combine(value, datetime.min.time())
-
-
-_YEAR_RANGE = range(2000, 2036)
-
-# A bare small number ("last 2 quarters") must NEVER be treated as a date —
-# dateutil's fuzzy mode will happily turn a lone "2" into "02-Jan-2026".
-# Only attempt a date parse when the text actually looks date-shaped: a
-# month name, a 4-digit year, or a DD/MM(/YYYY)-style separated number group.
-_MONTH_NAME_RE = re.compile(
-    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b", re.IGNORECASE
-)
-_YEAR_TOKEN_RE = re.compile(r"\b(19|20)\d{2}\b")
-_DATE_SEP_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b")
-
-
-def _looks_date_shaped(text: str) -> bool:
-    return bool(_MONTH_NAME_RE.search(text) or _YEAR_TOKEN_RE.search(text) or _DATE_SEP_RE.search(text))
-
-
-# "Q1FY25"/"Q1 FY25"/"FY25 Q1"/"FY2024-25 Q1" — Indian financial-year quarter
-# notation (Apr-Mar), extremely common phrasing for this app's RBI-regulated
-# data but NOT something dateutil's fuzzy parser understands (it would either
-# ignore "FY25" entirely for lacking a 4-digit year, or mis-parse it). Checked
-# ahead of the generic dateutil path in _try_parse_date for that reason.
-# Gap between the Q-token and the FY-token: optional whitespace/comma plus
-# an optional connector word ("Q1 of FY25", "Q1, FY25") — deliberately NOT
-# a `\b` boundary check on the digit itself: "Q1FY25" has no boundary
-# between "1" and "F" (both are \w characters), so `\bQ([1-4])\b` would
-# never match the glued form at all. `(?!\d)` blocks "Q12"-style false
-# matches instead.
-_FY_Q_GAP = r"(?:\s|,)*(?:of\s+|for\s+)?"
-_Q_THEN_FY_RE = re.compile(rf"\bQ([1-4])(?!\d){_FY_Q_GAP}FY\s*'?(\d{{2,4}})(-\d{{2,4}})?\b", re.IGNORECASE)
-_FY_THEN_Q_RE = re.compile(rf"\bFY\s*'?(\d{{2,4}})(-\d{{2,4}})?{_FY_Q_GAP}Q([1-4])(?!\d)", re.IGNORECASE)
-
-
-def _fy_quarter_end_date(fy_end_year: int, quarter: int) -> datetime:
-    """FYyy runs Apr(yy-1)-Mar(yy). Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec (all in
-    the calendar year BEFORE fy_end_year), Q4=Jan-Mar (in fy_end_year itself).
-    Returns that quarter's last calendar day."""
-    if quarter == 4:
-        month, year = 3, fy_end_year
-    else:
-        month, year = 3 + 3 * quarter, fy_end_year - 1
-    last_day = calendar.monthrange(year, month)[1]
-    return datetime(year, month, last_day)
-
-
-def _try_parse_fy_quarter(text: str) -> Optional[datetime]:
-    m = _Q_THEN_FY_RE.search(text)
-    if m:
-        quarter, fy_raw, fy_range_suffix = int(m.group(1)), m.group(2), m.group(3)
-    else:
-        m = _FY_THEN_Q_RE.search(text)
-        if not m:
-            return None
-        fy_raw, fy_range_suffix, quarter = m.group(1), m.group(2), int(m.group(3))
-    if fy_range_suffix:
-        # "FY2024-25" dash-range notation — ambiguous which half the caller
-        # means without more context; decline rather than silently guessing
-        # the wrong one (e.g. reading "FY2024-25" as ending in 2024).
-        return None
-    # "FY25"/"FY2025" both denote the fiscal year ENDING in that year (Indian
-    # convention) — 2-digit forms are expanded assuming the 2000s.
-    fy_end_year = int(fy_raw) if len(fy_raw) == 4 else 2000 + int(fy_raw)
-    if fy_end_year not in _YEAR_RANGE:
-        return None
-    return _fy_quarter_end_date(fy_end_year, quarter)
-
-
-def _try_parse_date(text: str) -> Optional[datetime]:
-    """Best-effort explicit date parse — only attempted when the substring
-    looks date-shaped (see _looks_date_shaped), and only trusted when the
-    resulting year is plausible for this application's data. FY-quarter
-    notation is checked first since it's an unambiguous explicit marker that
-    doesn't need (and wouldn't reliably pass) the date-shaped guard below."""
-    fy_quarter = _try_parse_fy_quarter(text)
-    if fy_quarter is not None:
-        return fy_quarter
-    if not _looks_date_shaped(text):
-        return None
-    try:
-        parsed = dateutil_parser.parse(text, fuzzy=True, default=datetime(date.today().year, 1, 1))
-    except (ValueError, OverflowError):
-        return None
-    if parsed.year not in _YEAR_RANGE:
-        return None
-    return parsed
-
-
-_COMPARISON_SPLIT_RE = re.compile(r"\b(?:vs\.?|versus|and|to)\b", re.IGNORECASE)
-
-_WORD_NUM = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+# ── Frequency -> the period a reporting date closes ──────────────────────────
+# Mirrors calculate_variance.validate_reporting_date: H/A close fiscal (Apr-Mar)
+# periods, C/B calendar ones. Used to snap "30-Mar-2025" onto 31-Mar-2025 for a
+# quarterly table instead of falling a whole quarter back to 31-Dec-2024.
+_FREQ_PERIOD = {
+    "M": ("month", 1), "MONTHLY": ("month", 1),
+    "Q": ("quarter", 1), "QUARTERLY": ("quarter", 1),
+    "H": ("half", 4), "HALFYEARLY": ("half", 4), "HY": ("half", 4), "FH": ("half", 4),
+    "C": ("half", 1), "CH": ("half", 1),
+    "A": ("year", 4), "ANNUAL": ("year", 4), "Y": ("year", 4), "FY": ("year", 4),
+    "B": ("year", 1), "CY": ("year", 1),
+    "W": ("week", 1), "WEEKLY": ("week", 1),
+    "D": ("day", 1), "DAILY": ("day", 1), "G": ("day", 1),
 }
 
-
-def _extract_n(token: str) -> int:
-    return int(token) if token.isdigit() else _WORD_NUM.get(token.lower(), 0)
-
-
-_N_WORD_RE = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
-
-
-def _extract_relative_periods_back(query: str) -> int:
-    """Detects 'last/previous/past N quarters|months|years|periods'. The count
-    is OPTIONAL — bare "last quarter"/"previous month" (no number) is common
-    phrasing and means N=1, same as this function's own no-count default.
-    Unit words also accept the abbreviations (qtr/qtrs, mo/mos) that survive
-    even after normalize_query()'s typo/abbreviation dictionary has already
-    run on `query` (see resolve_reporting_date) — belt-and-suspenders so a
-    dictionary miss doesn't silently defeat this match. Returns 0 if nothing
-    found at all (caller treats that as 'no relative phrase')."""
-    m = re.search(
-        rf"\b(?:last|previous|past|trailing)\s+(?:{_N_WORD_RE}\s+)?"
-        r"(?:quarters?|qtrs?|months?|mos?|years?|yrs?|periods?|reporting\s+periods?)\b",
-        query, re.IGNORECASE,
-    )
-    if not m:
-        return 0
-    if m.group(1) is None:
-        return 1
-    return max(_extract_n(m.group(1)), 0)
-
-
-# Finance-shorthand period-over-period phrasing (QoQ/MoM/YoY/WoW, and their
-# spelled-out equivalents). YoY specifically means "the same period one
-# calendar YEAR ago", which is freq-dependent (4 periods back for quarterly
-# data, 12 for monthly, ...) — resolved via _steps_between, same mechanism
-# the two-explicit-dates path already uses. QoQ/MoM/WoW all mean "compare
-# with the immediately preceding reporting period" (N=1) — the table's own
-# report_freq already defines what one period is, so no freq-specific
-# handling is needed for those.
-_YOY_TOKEN_RE = re.compile(
-    r"\byoy\b|year[\s-]?over[\s-]?year|same\s+(?:period|quarter|month)\s+last\s+year",
-    re.IGNORECASE,
-)
-_XOX_RE = re.compile(
-    r"\b(?:qoq|mom|yoy|wow)\b|"
-    r"quarter[\s-]?over[\s-]?quarter|month[\s-]?over[\s-]?month|"
-    r"year[\s-]?over[\s-]?year|week[\s-]?over[\s-]?week|"
-    r"same\s+(?:period|quarter|month)\s+last\s+year",
-    re.IGNORECASE,
-)
-
-
-def _extract_xox_periods(query: str, anchor: datetime, freq: str) -> int:
-    """Returns 0 if no XoX-style phrase is present."""
-    if not _XOX_RE.search(query):
-        return 0
-    if _YOY_TOKEN_RE.search(query):
-        one_year_back = anchor - relativedelta(years=1)
-        return max(_steps_between(anchor, one_year_back, freq), 1)
-    return 1
-
-
-# "since March 2024" / "since Q1FY24" — open-ended range from an explicit
-# start date up to the latest available submission (as opposed to "on
-# March 2024", which anchors ON that date with period=1). Reuses
-# _try_parse_date (including its FY-quarter support) on whatever follows
-# "since".
-_SINCE_RE = re.compile(r"\bsince\s+(.+?)$", re.IGNORECASE)
-
-
-def _extract_since_date(query: str) -> Optional[datetime]:
-    m = _SINCE_RE.search(query)
-    if not m:
-        return None
-    return _try_parse_date(m.group(1))
-
-
-def _extract_two_dates(query: str) -> Optional[Tuple[datetime, datetime]]:
-    """Splits the query on comparison connectors (vs/versus/and/to) and tries
-    to parse an explicit date/period on each side. Returns (later, earlier)
-    if both sides yield a distinct date, else None."""
-    parts = _COMPARISON_SPLIT_RE.split(query)
-    if len(parts) < 2:
-        return None
-    candidates = [d for d in (_try_parse_date(p) for p in parts) if d is not None]
-    if len(candidates) < 2:
-        return None
-    a, b = candidates[0], candidates[-1]
-    if a.date() == b.date():
-        return None
-    return (a, b) if a > b else (b, a)
-
-
-def _steps_between(anchor: datetime, target: datetime, report_freq: str) -> int:
-    """Counts how many frequency-steps back from `anchor` land at or before
-    `target`, capped at _MAX_PERIOD_WALK."""
-    for n in range(1, _MAX_PERIOD_WALK + 1):
-        stepped = get_previous_dates(anchor, report_freq, n)[-1]
-        if stepped <= target:
-            return n
-    return _MAX_PERIOD_WALK
-
-
-def _resolve_anchor_and_periods(
-    query: str, return_id: str, table_name: str, filter_col: str, report_freq: str,
-    ctx: RequestContext = ANONYMOUS,
-) -> Tuple[datetime, int]:
-    """Read the query's date/period intent as (anchor_date, periods_back).
-
-    Returns datetimes rather than formatted strings so the caller can map
-    the period count onto real dates. Raises ValueError if the table has no
-    data at all (nothing to anchor to)."""
-    freq = (report_freq or "M").strip().upper() or "M"
-
-    # Fix known typos/abbreviations ("perids"->"periods", "quater"->"quarter",
-    # ...) before any regex matching below — a misspelled unit word must not
-    # silently defeat period-count detection and fall through to the
-    # single-period default. Shares the same dictionary retriever.py already
-    # normalizes through for embedding quality (backend/nlp/query_normalizer.py).
-    original_query, query = query, normalize_query(query)
-    if query != original_query:
-        logger.info("[nlp.date_resolver] query normalized: %r -> %r", original_query, query)
-
-    latest = _latest_available_date(return_id, table_name, filter_col, ctx)
-    if latest is None:
-        raise ValueError(
-            f"No data found in {table_name} to determine a reporting date."
-        )
-
-    # Checked first, before any fuzzy date parsing: finance shorthand
-    # (QoQ/MoM/YoY/WoW) and "last/previous N quarters/months/years" are both
-    # exact, unambiguous regex matches — they must win over _try_parse_date
-    # ever getting a chance to fuzzy-match a bare numeral (e.g. the "2" in
-    # "last 2 quarters") as a bogus calendar date.
-    xox_n = _extract_xox_periods(query, latest, freq)
-    if xox_n > 0:
-        logger.info("[nlp.date_resolver] query=%r -> XoX shorthand, %d period(s) back from latest=%s", query, xox_n, latest)
-        return latest, xox_n
-
-    n = _extract_relative_periods_back(query)
-    if n > 0:
-        logger.info("[nlp.date_resolver] query=%r -> relative %d period(s) back from latest=%s", query, n, latest)
-        return latest, n
-
-    two_dates = _extract_two_dates(query)
-    if two_dates:
-        later, earlier = two_dates
-        anchor = _nearest_available_on_or_before(return_id, table_name, filter_col, later, ctx) or latest
-        periods = _steps_between(anchor, earlier, freq)
-        logger.info(
-            "[nlp.date_resolver] query=%r -> two explicit periods, anchor=%s periods=%d",
-            query, anchor, periods,
-        )
-        return anchor, max(periods, 1)
-
-    # "since <date>" — open-ended range from an explicit start up to the
-    # latest submission, distinct from "on <date>" (which anchors ON that
-    # date with period=1, handled below).
-    since_date = _extract_since_date(query)
-    if since_date:
-        periods = _steps_between(latest, since_date, freq)
-        logger.info(
-            "[nlp.date_resolver] query=%r -> since date=%s, periods=%d",
-            query, since_date, periods,
-        )
-        return latest, max(periods, 1)
-
-    single_date = _try_parse_date(query)
-    if single_date:
-        anchor = _nearest_available_on_or_before(return_id, table_name, filter_col, single_date, ctx)
-        if anchor is None:
-            raise ValueError(
-                f"No data found in {table_name} on or before {single_date.strftime(_DATE_FMT)}."
-            )
-        logger.info("[nlp.date_resolver] query=%r -> explicit date, anchor=%s", query, anchor)
-        return anchor, 1
-
-    logger.info("[nlp.date_resolver] query=%r -> no date/period intent, using latest=%s", query, latest)
-    return latest, 1
-
-
-# Same ceiling the manual /variance/compute route enforces (main.py's
-# MAX_COMPARISON_DATES): each extra period is another full set of rows in the
-# query and the response, and the result table renders one column group per
-# period.
-#
-# It caps the WHOLE list, anchor included — the manual UI sends the ticked
-# dates with the newest as element 0 and validates len(unique) > 3 — so the
-# NLP path may add at most MAX - 1 older dates. Emitting anchor + 3 here would
-# build a 4-date request the manual route would reject outright, leaving the
-# two paths disagreeing about what is a legal request.
+# Same ceiling the manual /variance/compute route enforces (MAX_COMPARISON_DATES).
+# It caps the WHOLE list, anchor included, so at most two older dates — emitting
+# more would build a request the manual route rejects outright.
 _MAX_COMPARISON_DATES = 3
 _MAX_OLDER_DATES = _MAX_COMPARISON_DATES - 1
+
+
+def _fmt(d: date) -> str:
+    return d.strftime(_DATE_FMT).upper()
+
+
+def _candidate_dates(
+    return_id: str, table_name: str, filter_col: str, ctx: RequestContext,
+) -> list[date]:
+    """The table's reporting dates, newest first — the same list the manual
+    date dropdown shows (service.get_available_dates), so NLP and the wizard
+    agree on which dates exist. That list is filtered to dates canonical for
+    the return's own frequency, which stops a table shared by a Quarterly and
+    an Annual return from handing the Annual one a quarter-end to compare with."""
+    try:
+        from ..data.service import get_available_dates
+        raw = get_available_dates(return_id, table_name, execute_query, ctx=ctx)
+        out = sorted({datetime.strptime(v, _DATE_FMT).date() for v in raw}, reverse=True)
+        if out:
+            return out
+    except Exception as exc:  # table-mapping quirks: fall back to the plain scan
+        logger.info(
+            "[nlp.date_resolver] get_available_dates failed (%s) — scanning %s directly",
+            exc, table_name,
+        )
+    return sorted(
+        {d.date() for d in _available_dates_desc(return_id, table_name, filter_col, ctx)},
+        reverse=True,
+    )
+
+
+class _Picker:
+    """Maps PeriodRefs and calendar steps onto dates that exist, recording a
+    note every time it had to substitute, so the answer is never silently
+    about a different date than the one asked for."""
+
+    def __init__(self, cands: list[date], freq: str):
+        self.cands = cands
+        self.freq = freq
+        self.notes: list[str] = []
+
+    def ref(self, ref: PeriodRef) -> date:
+        inside = [c for c in self.cands if ref.start <= c <= ref.end]
+        if inside:
+            return inside[0]
+        what = ref.text.strip()
+        if ref.granularity == "day" and self.freq in _FREQ_PERIOD:
+            unit, fy = _FREQ_PERIOD[self.freq]
+            _start, end = period_containing(ref.start, unit, fy)
+            if end in self.cands:
+                self.notes.append(
+                    f"{_fmt(ref.start)} is not a reporting date; used the period end {_fmt(end)}."
+                )
+                return end
+        if ref.start > self.cands[0]:
+            pick = self.cands[0]
+            self.notes.append(f"No data yet for {what}; used the latest available date {_fmt(pick)}.")
+            return pick
+        before = [c for c in self.cands if c < ref.start]
+        if before:
+            pick = before[0]
+            self.notes.append(f"No data for {what}; used the nearest earlier date {_fmt(pick)}.")
+            return pick
+        pick = self.cands[-1]
+        self.notes.append(f"{what} is before the earliest data; used the earliest date {_fmt(pick)}.")
+        return pick
+
+    def on_or_before(self, target: date, what: str) -> Optional[date]:
+        hits = [c for c in self.cands if c <= target]
+        if not hits:
+            return None
+        if hits[0] != target:
+            self.notes.append(f"No data for {what} ({_fmt(target)}); used {_fmt(hits[0])}.")
+        return hits[0]
+
+    def steps(self, anchor: date, n: int, unit: str) -> list[date]:
+        """The dates 1..n calendar units back from `anchor`. The unit 'period'
+        means the previous n submissions, whatever their spacing."""
+        older = [c for c in self.cands if c < anchor]
+        if unit == "period":
+            if len(older) < n:
+                self.notes.append(f"Asked for {n} earlier period(s); only {len(older)} exist.")
+            return older[:n]
+        out: list[date] = []
+        for k in range(1, n + 1):
+            plural = "s" if k > 1 else ""
+            hit = self.on_or_before(step_back(anchor, unit, k), f"{k} {unit}{plural} back")
+            if hit and hit < anchor and hit not in out:
+                out.append(hit)
+        return out
 
 
 def resolve_reporting_date(
     query: str, return_id: str, table_name: str, filter_col: str, report_freq: str,
     ctx: RequestContext = ANONYMOUS,
-) -> Tuple[str, int, List[str]]:
-    """(reporting_date, reporting_period, comparison_dates) for compute_variance().
+) -> tuple[str, int, list[str], list[str]]:
+    """(reporting_date, reporting_period, comparison_dates, notes).
 
-    comparison_dates are REAL dates taken from the table, newest first and
-    including the anchor, exactly as the manual UI supplies them. Handing
-    these over means compute_variance compares against rows that exist
-    instead of walking the calendar by Return.xml's RepFreq — which is wrong
-    whenever the declared frequency disagrees with the data (QCB F010 declares
-    daily, files monthly), and silently produces an all-blank comparison.
+    comparison_dates are REAL dates from the table, newest first and including
+    the anchor, exactly as the manual UI supplies them. They are chosen by what
+    the query MEANS (a named date, the same quarter a year ago, three quarters
+    back), not by "the next rows down". `notes` says, in words a user can read,
+    every place the answer had to differ from the literal request.
 
-    reporting_period is still returned so the caller keeps the old contract,
-    and it remains the fallback: if the table exposes no older date at all,
-    comparison_dates is empty and compute_variance derives them itself as
-    before, preserving today's behaviour rather than failing.
+    Never fails on a date phrase: anything unmatched falls back to a real date
+    with a note. The only error is a table with no data at all (ValueError).
+    comparison_dates always holds at least the anchor.
     """
-    anchor, periods = _resolve_anchor_and_periods(
-        query, return_id, table_name, filter_col, report_freq, ctx,
-    )
-    anchor_str = anchor.strftime(_DATE_FMT).upper()
+    from ..hosts import get_profile
 
-    available = _available_dates_desc(return_id, table_name, filter_col, ctx)
-    older = [d for d in available if d < anchor]
-    wanted = max(1, min(periods, _MAX_OLDER_DATES))
-    picked = older[:wanted]
+    freq = (report_freq or "M").strip().upper() or "M"
+    fy_start = get_profile().fiscal_year_start_month
 
-    if not picked:
-        logger.info(
-            "[nlp.date_resolver] anchor=%s | no older date present in %s — leaving "
-            "comparison to frequency arithmetic (freq=%s)",
-            anchor_str, table_name, report_freq,
+    cands = _candidate_dates(return_id, table_name, filter_col, ctx)
+    if not cands:
+        raise ValueError(f"No data found in {table_name} to determine a reporting date.")
+    latest = cands[0]
+
+    # Phrases with no year ("Q3", "this quarter") read against the data's
+    # newest date, not the wall clock — the data can lag the calendar by months.
+    intent = parse_date_intent(query, fy_start, today=latest)
+    pick = _Picker(cands, freq)
+
+    # ── the anchor (the "current" period) ────────────────────────────────
+    if intent.range:
+        anchor = pick.ref(intent.range[1])
+    elif intent.anchor:
+        anchor = pick.ref(intent.anchor)
+    else:
+        anchor = latest
+
+    # ── what to compare it with, most specific statement first ───────────
+    if intent.targets:
+        comps = [pick.ref(t) for t in intent.targets]
+        requested = len(intent.targets)
+    elif intent.range or intent.since:
+        start = (intent.range[0] if intent.range else intent.since).start
+        comps = [c for c in cands if start <= c < anchor]
+        if not comps:
+            comps = [c for c in cands if c < anchor][:1]
+            if comps:
+                pick.notes.append(
+                    f"No data between {_fmt(start)} and {_fmt(anchor)}; compared with {_fmt(comps[0])}."
+                )
+        requested = max(len(comps), 1)
+    elif intent.xox:
+        comps = pick.steps(anchor, 1, intent.xox)
+        requested = 1
+    elif intent.relative:
+        n, unit = intent.relative
+        comps = pick.steps(anchor, n, unit)
+        requested = n
+    else:
+        comps = [c for c in cands if c < anchor][:1]
+        requested = 1
+
+    comps = sorted({c for c in comps if c != anchor}, reverse=True)
+    if len(comps) > _MAX_OLDER_DATES:
+        # Keep the nearest and the furthest asked for: that spans the whole
+        # requested window within the limit.
+        pick.notes.append(
+            f"Showing {_MAX_COMPARISON_DATES} of {len(comps) + 1} periods "
+            f"(limit {_MAX_COMPARISON_DATES}): {_fmt(comps[0])} and {_fmt(comps[-1])}."
         )
-        return anchor_str, periods, []
-
-    comparison = [anchor_str] + [d.strftime(_DATE_FMT).upper() for d in picked]
-    if len(picked) < periods:
-        logger.info(
-            "[nlp.date_resolver] asked for %d period(s) back but only %d older "
-            "date(s) exist in %s — using what is there",
-            periods, len(picked), table_name,
+        comps = [comps[0], comps[-1]]
+    if not comps and anchor == cands[-1]:
+        pick.notes.append(
+            f"{_fmt(anchor)} is the earliest date in the table; there is no earlier period to compare with."
         )
+
+    anchor_str = _fmt(anchor)
+    # Always explicit, even with nothing older: an empty list would send
+    # compute_variance to RepFreq arithmetic, whose frequency check can reject
+    # a real but off-cycle date — the query must still execute.
+    comparison = [anchor_str] + [_fmt(c) for c in comps]
     logger.info(
-        "[nlp.date_resolver] anchor=%s | comparison_dates=%s (from actual data, "
-        "not RepFreq=%s arithmetic)",
-        anchor_str, comparison[1:], report_freq,
+        "[nlp.date_resolver] query=%r | fy_start=%d freq=%s | intent=%s | anchor=%s | "
+        "comparison_dates=%s | notes=%s",
+        query, fy_start, freq, intent.spans, anchor_str, comparison[1:], pick.notes,
     )
-    return anchor_str, periods, comparison
+    return anchor_str, max(requested, 1), comparison, pick.notes

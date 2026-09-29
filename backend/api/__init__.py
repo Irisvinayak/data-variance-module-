@@ -1,14 +1,9 @@
 # api/ — the HTTP layer, one module per functional area.
 #
-# backend/main.py used to hold every route plus every private helper and had
-# grown to ~1400 lines. The split is along the lines the code already had:
-# every private helper served exactly one route (/variance/nlresolve), so
-# there is no shared-helper module — each router owns what only it uses.
-#
-# URLs, tags, status codes and response shapes are unchanged; main.py mounts
-# these routers and remains the only place that owns the app object, the
-# middleware and the app-level exception handlers (which an APIRouter cannot
-# carry).
+# Each router owns the private helpers only it uses; errors.py holds the one
+# shared exception-to-HTTP mapping. backend/main.py mounts these routers and
+# owns the app object, the middleware and the app-level exception handlers
+# (which an APIRouter cannot carry).
 #
 # IMPORTANT: the `from ..nlp...` imports inside the nlp router's handlers are
 # function-local on purpose — they keep the ~1.3GB embedding model and FAISS

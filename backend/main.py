@@ -16,7 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api import ROUTERS
-from .config import API_BASE_PATH, SERVER_HOST, SERVER_PORT, CORS_ORIGINS
+from .config import API_BASE_PATH, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
+from .hosts import HostProfileError
 from .logging_config import (
     configure_logging,
     login_id_var,
@@ -24,7 +25,6 @@ from .logging_config import (
     request_id_var,
     tenant_id_var,
 )
-from .hosts import HostProfileError
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 # One line per meaningful boundary (API request, LLM call, auth decision) at
@@ -44,7 +44,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
+    # With a "*" origin Starlette echoes back whatever Origin the browser
+    # sent, so credentials plus a wildcard would let any site make
+    # credentialed calls. Identity travels in the query string, not cookies,
+    # so nothing here needs credentials in that configuration.
+    allow_credentials="*" not in CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -78,22 +82,7 @@ async def request_context_middleware(request: Request, call_next):
     return response
 
 
-# ── Catch-all exception handler ───────────────────────────────────────────────
-# Individual routes guard their own known failure modes, but several stages
-# deliberately run OUTSIDE those try blocks — notably /variance/nlresolve's
-# NLP stage (the function-level backend.nlp imports, get_relevant_schema,
-# resolve_intent), which happens before that route's own try:. Anything
-# raised there used to escape to Starlette's default handler, which replies
-# with plain-text "Internal Server Error" and NO JSON body. The frontend
-# reads `body.detail` (see frontend/src/api.js) and, finding none, could
-# only show a bare "NL resolve error (500)" — hiding the actual cause, which
-# on a fresh server deployment is usually a missing NLP dependency
-# (sentence-transformers / faiss-cpu / rank-bm25), an absent artifacts/nlp-index/
-# embedding index, or an embedding model that can't be downloaded.
-#
-# This handler makes every such crash self-reporting: the full traceback goes
-# to logs/<date>.log and the exception type/message reaches the client as a
-# normal JSON `detail`.
+# ── App-level exception handlers ──────────────────────────────────────────────
 # A HostProfileError means the request cannot address a repository — no tenant,
 # an unknown tenant, an unprovisioned one. That is a configuration or
 # authorisation fault with a message written for an operator, so it must not
@@ -111,6 +100,14 @@ async def host_profile_error_handler(request: Request, exc: HostProfileError) ->
     )
 
 
+# Catch-all. Several stages run outside any route's own try block — notably
+# /variance/nlresolve's NLP stage (the function-level backend.nlp imports,
+# retrieval, intent resolution). Starlette's default reply to those is a
+# plain-text "Internal Server Error" with no JSON body, and the frontend reads
+# `body.detail` (frontend/src/api.js), so the real cause — usually a missing
+# NLP dependency, an absent artifacts/nlp-index/ index, or an embedding model
+# that can't be downloaded — would be invisible. Here the traceback goes to
+# the log and the exception type/message reaches the client as `detail`.
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception(
@@ -120,6 +117,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": f"Unexpected server error: {type(exc).__name__}: {exc}"},
     )
+
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 # Every route lives in backend/api/ (one module per functional area). Mounted

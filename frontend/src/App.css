@@ -32,131 +32,6 @@ html, body, #root {
   overflow: hidden;
 }
 
-.app-header {
-  display: flex;
-  align-items: center;
-  /* gap: 14px; */
-  padding: 18px 32px;
-  border-bottom: 1px solid var(--border);
-  background: #003a75;
-}
-
-.header-logo { font-size: 1.8rem; }
-
-.header-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.header-subtitle {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.65);
-  margin-top: 2px;
-}
-
-.app-main {
-  flex: 1;
-  min-height: 0;
-  padding: 32px;
-  max-width: 860px;
-  width: 100%;
-  margin: 0 auto;
-  overflow-y: auto;
-}
-
-/* ── Wizard ───────────────────────────────────────────────────────────────── */
-.wizard {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-/* Progress bar */
-.wizard-progress {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
-
-.wizard-step-wrap {
-  display: flex;
-  align-items: center;
-}
-
-.wizard-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--border);
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-.wizard-dot.active { background: var(--accent); box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.2); }
-.wizard-dot.done   { background: var(--success); }
-
-.wizard-line {
-  width: 32px;
-  height: 2px;
-  background: var(--border);
-  transition: background 0.2s;
-}
-.wizard-line.done { background: var(--success); }
-
-.wizard-step-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-left: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-/* Section card */
-.wizard-section {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  box-shadow: var(--shadow);
-}
-
-.field-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-.field-hint {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  margin-top: -8px;
-}
-
-/* Input row */
-.input-row {
-  display: flex;
-  gap: 8px;
-}
-
-.text-input {
-  flex: 1;
-  padding: 9px 14px;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 0.88rem;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12); }
-.text-input::placeholder { color: var(--text-muted); }
-
 /* Buttons */
 .btn {
   padding: 9px 18px;
@@ -191,62 +66,6 @@ html, body, #root {
 
 .row-end { display: flex; gap: 8px; justify-content: flex-end; }
 
-/* Table list */
-.table-list {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  max-height: 240px;
-  overflow-y: auto;
-}
-.table-list::-webkit-scrollbar { width: 4px; }
-.table-list::-webkit-scrollbar-thumb { background: #a0b8d0; border-radius: 99px; }
-
-.table-item {
-  padding: 10px 16px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.12s;
-}
-.table-item:last-child { border-bottom: none; }
-.table-item:hover { background: #e8f0fa; }
-.table-item.selected {
-  background: rgba(0, 102, 204, 0.1);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/* Period chips */
-.period-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.period-chip {
-  padding: 7px 20px;
-  border-radius: 99px;
-  border: 1px solid var(--border);
-  background: #ffffff;
-  color: var(--text);
-  font-size: 0.84rem;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-.period-chip.selected {
-  background: rgba(0, 102, 204, 0.1);
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-.period-chip:hover:not(.selected) { background: #e8f0fa; border-color: #99b8d9; }
-
-/* Loading row */
-.loading-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
 /* Spinner */
 .spinner {
   display: inline-block;
@@ -269,45 +88,11 @@ html, body, #root {
   color: #c0392b;
 }
 
-/* ── VarianceFindBlock ─────────────────────────────────────────────────────── */
-.vfb-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.vfb-meta {
-  display: flex;
-  gap: 20px;
-  font-size: 0.84rem;
-  color: var(--text-muted);
-  flex-wrap: wrap;
-}
-
-.vfb-label {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
 /* ── Variance result block ────────────────────────────────────────────────── */
 .variance-block {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-/* Header: title + period badges */
-.variance-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.variance-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.01em;
 }
 
 .vt-period-row {
@@ -475,15 +260,6 @@ html, body, #root {
 .vt-sub-curr {
   background: #e8f0fa;
   color: #3380cc;
-}
-.vt-sub-date {
-  display: block;
-  font-size: 0.6rem;
-  font-weight: 400;
-  opacity: 0.7;
-  letter-spacing: 0;
-  text-transform: none;
-  margin-top: 1px;
 }
 
 /* ── Body cells ───────────────────────────────────────────────────────────── */

@@ -54,8 +54,8 @@ request_id_var: ContextVar[str] = ContextVar("dv_request_id", default="-")
 # whole compute + LLM + SQL tail (db.py, calculate_variance.py, the nlp
 # modules) is deliberately host- and request-agnostic and never receives a
 # RequestContext, so without this the AI audit trail could not say WHO a
-# generated query belonged to. Set by backend/auth/deps.py once the login is
-# resolved; "" outside a request.
+# generated query belonged to. Set from the query string by the middleware in
+# backend/main.py; "" outside a request.
 login_id_var:  ContextVar[str] = ContextVar("dv_login_id",  default="")
 tenant_id_var: ContextVar[str] = ContextVar("dv_tenant_id", default="")
 
@@ -82,6 +82,9 @@ class DailyFileHandler(logging.Handler):
     """Writes to logs/<YYYY-MM-DD>.log, switching to a fresh file the first
     time a record is emitted after midnight — no restart needed."""
 
+    #: Extension of the per-day file; subclasses change only this.
+    suffix: str = ".log"
+
     def __init__(self, log_dir: str, retention_days: int = 0):
         super().__init__()
         self._log_dir = log_dir
@@ -95,7 +98,7 @@ class DailyFileHandler(logging.Handler):
         if today == self._current_date and self._stream is not None:
             return
 
-        path = os.path.join(self._log_dir, f"{today}.log")
+        path = os.path.join(self._log_dir, f"{today}{self.suffix}")
         # Open the NEW file before touching any state. Assigning _current_date
         # first (as this used to) meant a failed open latched the handler into
         # a state where every later emit short-circuited on the date check and

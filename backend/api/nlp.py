@@ -1,8 +1,4 @@
 # nlp.py — the natural-language path: /variance/nlresolve, /variance/nlquery
-#
-# Split out of backend/main.py, which had grown to ~1400 lines holding every
-# route. Route bodies are unchanged; only the decorator and the imports moved.
-# backend/main.py mounts this router, so the URLs are identical.
 
 from __future__ import annotations
 
@@ -10,8 +6,9 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..auth.deps import require_login
-from ..config import RequestContext
+from ..auth.deps import require_login, require_return_access
+from ..auth.service import get_allowed_form_ids
+from ..config import AUTH_ENABLED, RequestContext
 from ..data import service
 from ..data.db import execute_query
 from ..data.models import NLResolveRequest
@@ -22,20 +19,34 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ── Why these handlers are `def`, not `async def` ─────────────────────────────
-# Every route here does BLOCKING work: synchronous Oracle round-trips via
-# oracledb, requests.post to Ollama, FAISS search, and os.listdir/isfile against
-# a network share. FastAPI runs an `async def` handler ON the event loop, so a
-# blocking body stalls the entire process - every other request, including
-# /health, waits behind it.
-#
-# That was not theoretical. With a slow /variance/compute in flight, /health
-# timed out at 30s three times in a row, then answered in 10.1s the moment
-# compute released the loop, then in 0.002s once idle.
-#
-# Declaring them `def` makes FastAPI run them in its threadpool instead, so
-# concurrent requests are served. The bodies are unchanged - there is no
-# `await` anywhere in backend/, so nothing depended on being a coroutine.
+# Handlers are `def`, not `async def`, on purpose — see backend/api/variance.py.
+
+
+def _allowed_return_ids(ctx: RequestContext) -> set | None:
+    """The caller's allowed return ids, or None when auth is bypassed.
+
+    None and an empty set mean different things downstream: None is "no auth
+    scoping", an empty set is "this user may access nothing"."""
+    return (get_allowed_form_ids(ctx) or set()) if AUTH_ENABLED else None
+
+
+def _return_row(return_id: str, ctx: RequestContext) -> dict | None:
+    """The returns-master row for `return_id`, or None."""
+    return next((r for r in parse_returns(ctx) if r.get("Id") == return_id), None)
+
+
+def _table_hint_text(table_name: str) -> str | None:
+    """The table's embedding-index text, used to disambiguate which return owns
+    it — table names are not unique across returns, and without the hint a
+    shared table (e.g. one used by both the Quarterly and Annual variant of a
+    return) resolves by fallback rules to whichever claimant sorts first, which
+    can carry the wrong report_freq into compute_variance. Same call shape
+    retriever.py uses; see return_lookup._select_candidate."""
+    from ..nlp.index_store import meta_by_table
+    from ..nlp.nlp_config import TABLE_INDEX_PATH, TABLE_META_PATH
+
+    records = meta_by_table(TABLE_INDEX_PATH, TABLE_META_PATH).get(table_name.upper(), [])
+    return " ".join(r.get("text", "") for r in records) or None
 
 
 def _restrict_result_columns(computed: dict, requested_columns: list) -> dict:
@@ -101,14 +112,11 @@ def _build_return_clarification(query: str, ctx: RequestContext, restrict_to: li
     `allow_other: True` is always included so the frontend can offer an
     "Others" free-text box (see ControlBar.jsx's NlpReturnPicker) for a user
     whose intended return isn't among the narrowed options."""
-    from ..auth.service import get_allowed_form_ids
-    from ..config import AUTH_ENABLED
-
     from ..nlp import indexed_returns
 
     returns = list(parse_returns(ctx))
-    if AUTH_ENABLED:
-        allowed = get_allowed_form_ids(ctx) or set()
+    allowed = _allowed_return_ids(ctx)
+    if allowed is not None:
         returns = [r for r in returns if str(r.get("Id")) in allowed]
 
     # Only offer returns the embedding index actually covers. Every option in
@@ -249,11 +257,16 @@ def _shortlist_for_return(
     which compute_variance needs and which it does resolve correctly.
     """
     from ..nlp import indexed_returns, return_lookup
-    from ..nlp.index_store import meta_by_table
-    from ..nlp.nlp_config import SCOPED_RETRIEVAL_ENABLED, TABLE_INDEX_PATH, TABLE_META_PATH
+    from ..nlp.nlp_config import SCOPED_RETRIEVAL_ENABLED
     from ..nlp.scoped_retriever import rank_within_tables
 
-    return_row = next((r for r in parse_returns(ctx) if r.get("Id") == return_id), None)
+    # return_id can come straight from the client (a "which return?" answer, or
+    # resolved_context echoed back), so it is not pre-authorized the way the
+    # retriever's shortlist is. Check before any of its tables are ranked or
+    # offered back as clarification options.
+    require_return_access(ctx, return_id)
+
+    return_row = _return_row(return_id, ctx)
     if return_row is None:
         return None
 
@@ -267,15 +280,12 @@ def _shortlist_for_return(
         return None
 
     # Per-table metadata (filter_col / report_freq) resolved the same way
-    # retriever.py resolves it, with the index text as the disambiguation hint
-    # — table names are not unique across returns and the hint is what stops a
-    # Quarterly table resolving to its Annually sibling, which would compute
-    # comparison periods a year apart on quarterly data.
-    hint_records = meta_by_table(TABLE_INDEX_PATH, TABLE_META_PATH)
+    # retriever.py resolves it — see _table_hint_text.
     tables: list = []
     for name in table_names:
-        hint = " ".join(r.get("text", "") for r in hint_records.get(name.upper(), [])) or None
-        ret = return_lookup.get_return_for_table(name, hint_text=hint, ctx=ctx) or {}
+        ret = return_lookup.get_return_for_table(
+            name, hint_text=_table_hint_text(name), ctx=ctx,
+        ) or {}
         tables.append({
             "table":       name,
             "return_id":   return_id,
@@ -322,24 +332,17 @@ def _shortlist_for_table(
     the query is what makes the right column reachable at all.
     """
     from ..nlp import return_lookup
-    from ..nlp.index_store import meta_by_table
-    from ..nlp.nlp_config import (
-        SCOPED_RETRIEVAL_ENABLED, TABLE_INDEX_PATH, TABLE_META_PATH,
-    )
+    from ..nlp.nlp_config import SCOPED_RETRIEVAL_ENABLED
     from ..nlp.scoped_retriever import rank_within_tables
 
-    # Resolve the return WITH the table's own index metadata as a hint —
-    # table names are not unique across returns, and without the hint a
-    # shared table (e.g. one used by both the Quarterly and Annual variant of
-    # a return) resolves by fallback rules to whichever claimant sorts first,
-    # which can carry the wrong report_freq into compute_variance. Same call
-    # shape retriever.py uses. See return_lookup._select_candidate.
-    hint_records = meta_by_table(TABLE_INDEX_PATH, TABLE_META_PATH).get(table_name.upper(), [])
-    hint_text = " ".join(r.get("text", "") for r in hint_records) or None
-
-    ret = return_lookup.get_return_for_table(table_name, hint_text=hint_text, ctx=ctx)
+    ret = return_lookup.get_return_for_table(
+        table_name, hint_text=_table_hint_text(table_name), ctx=ctx,
+    )
     if not ret or not ret.get("return_id"):
         return None
+    # table_name is a client-supplied clarification answer: any table in the
+    # index can be named here, so its owning return must be checked.
+    require_return_access(ctx, ret["return_id"])
 
     tables = [{"table": table_name, **ret}]
     if not SCOPED_RETRIEVAL_ENABLED:
@@ -438,12 +441,7 @@ def variance_nlresolve(
     # "show me the variance in total loan assets for CIMS_RAQ as of 31-Mar-2025"
     # searches for "total loan assets" and treats the return and the date as
     # the exact facts they are. See backend/nlp/query_analyzer.py.
-    from ..auth.service import get_allowed_form_ids as _get_allowed
-    from ..config import AUTH_ENABLED as _auth_on
-
-    # None (not an empty set) when auth is bypassed: analyze_query reads None as
-    # "no auth scoping" and an empty set as "this user may access nothing".
-    _allowed_ids = (_get_allowed(ctx) or set()) if _auth_on else None
+    allowed_ids = _allowed_return_ids(ctx)
 
     analysis = _nlp_stage(
         # _nlp_stage's own `ctx` parameter is for its logging only, so the ctx
@@ -451,7 +449,7 @@ def variance_nlresolve(
         # other stages below do — passing it as ctx=ctx would bind to
         # _nlp_stage itself and never reach analyze_query.
         "query_analysis", ctx, query,
-        analyze_query, query, _allowed_ids, ctx,
+        analyze_query, query, allowed_ids, ctx,
     )
     interpretation = analysis.to_interpretation()
 
@@ -672,9 +670,13 @@ def variance_nlresolve(
             detail="Could not resolve this query to a known table/column.",
         )
 
-    return_row = next(
-        (r for r in parse_returns(ctx) if r.get("Id") == resolution["return_id"]), None
-    )
+    # Final authorization gate, whichever branch produced the shortlist. The
+    # free-form retriever filters to allowed returns, but the clarification
+    # branches above build their shortlist from client-supplied ids, and
+    # compute_variance does no access check of its own.
+    require_return_access(ctx, resolution["return_id"])
+
+    return_row = _return_row(resolution["return_id"], ctx)
     if return_row is None:
         logger.warning("[main] 404 /variance/nlresolve | %s | resolved return_id=%s not found", ctx, resolution["return_id"])
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resolved return not found.")
@@ -686,6 +688,10 @@ def variance_nlresolve(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resolved return could not be mapped to a table-mapping file.",
         )
+    # compute_variance runs against found["return_id"], which is re-derived by
+    # name search above, so gate the id that is actually used.
+    if found["return_id"] != resolution["return_id"]:
+        require_return_access(ctx, found["return_id"])
 
     resolved_table = next(
         (t for t in found.get("tables", []) if (t.get("table_name") or "").upper() == resolution["table_name"].upper()),
@@ -711,9 +717,8 @@ def variance_nlresolve(
         # and the existing handler turns it into a 404 with a real reason.
         logger.info(
             "[main] /variance/nlresolve | %s | table=%r not in return %s's "
-            "table mapping — proceeding via %s fallback",
+            "table mapping — proceeding via XML_Query.xml fallback",
             ctx, resolution["table_name"], found["return_id"],
-            "XML_Query.xml",
         )
         resolved_table = {"table_name": resolution["table_name"]}
 
@@ -726,7 +731,7 @@ def variance_nlresolve(
     report_freq = shortlist_table_meta.get("report_freq") or found.get("report_freq") or "M"
 
     try:
-        reporting_date, reporting_period, comparison_dates = resolve_reporting_date(
+        reporting_date, reporting_period, comparison_dates, date_notes = resolve_reporting_date(
             query, found["return_id"], resolved_table["table_name"], filter_col, report_freq,
             ctx=ctx,
         )
@@ -741,7 +746,7 @@ def variance_nlresolve(
         resolution["selected_columns"], reporting_date, reporting_period,
     )
 
-    try:
+    def _compute(dates: list) -> dict:
         # selected_columns is deliberately NOT passed here — that parameter
         # also drives compute_variance's SQL SELECT list, so restricting it
         # to just the asked-for column would silently drop the filter_col/
@@ -750,22 +755,36 @@ def variance_nlresolve(
         # Instead we let it compute every numeric column exactly like the
         # manual wizard does, then restrict the RESULT to the asked-for
         # column(s) below via _restrict_result_columns.
-        computed = service.compute_variance(
+        return service.compute_variance(
             return_id=found["return_id"],
-            return_tbl_path=found["table_mapping_path"],
             table_name=resolved_table["table_name"],
-            reporting_date=reporting_date,
+            reporting_date=dates[0],
             reporting_period=reporting_period,
             execute_query_fn=execute_query,
             connection_string=None,
             selected_columns=None,
-            # Real dates from the table when the resolver found any, so the
-            # comparison lands on rows that exist. Empty list -> omitted, and
-            # compute_variance falls back to deriving them from reporting_period
-            # exactly as before.
-            comparison_dates=comparison_dates or None,
+            # Real dates from the table (date_resolver), newest first.
+            comparison_dates=dates,
             ctx=ctx,
         )
+
+    try:
+        computed = _compute(comparison_dates)
+        # The anchor exists in the date list but its rows can still come back
+        # empty (e.g. a filter on the physical table). One retry on the next
+        # real date keeps the query answering instead of dead-ending.
+        if (computed.get("error") or "").startswith("No data found") and len(comparison_dates) > 1:
+            retry_dates = comparison_dates[1:]
+            logger.info(
+                "[main] /variance/nlresolve | %s | no rows for %s — retrying from %s",
+                ctx, comparison_dates[0], retry_dates[0],
+            )
+            retried = _compute(retry_dates)
+            if not retried.get("error"):
+                date_notes = list(date_notes) + [
+                    f"No rows for {comparison_dates[0]}; showing {retry_dates[0]} instead."
+                ]
+                computed, comparison_dates, reporting_date = retried, retry_dates, retry_dates[0]
     except Exception as exc:
         raise http_error(exc, "/variance/nlresolve", ctx) from exc
 
@@ -805,7 +824,13 @@ def variance_nlresolve(
                 for col in resolution["selected_columns"]
             ],
             "reporting_date":   reporting_date,
+            # What was asked for vs what was actually compared, and why they
+            # differ — so a substituted date is never silent.
             "comparison_periods": reporting_period,
+            "requested_periods":  reporting_period,
+            "used_periods":       max(len(comparison_dates) - 1, 0),
+            "comparison_dates":   comparison_dates,
+            "date_notes":         date_notes,
         },
     }
 
@@ -845,8 +870,21 @@ def variance_nlquery(
             detail="No accessible return/table matches this query.",
         )
 
+    # Relative phrases ("last quarter") resolve against the newest date the
+    # top table actually has, not the wall clock — the data lags the calendar,
+    # and a today-anchored range can select nothing at all.
+    today_date = None
+    top = shortlist["tables"][0]
+    try:
+        from ..nlp.date_resolver import _candidate_dates
+        cands = _candidate_dates(top["return_id"], top["table"], top.get("filter_col") or "RDATE", ctx)
+        today_date = cands[0] if cands else None
+    except Exception as exc:
+        logger.info("[main] /variance/nlquery | %s | no data date for %s (%s) — using today", ctx, top.get("table"), exc)
+
     result = generate_sql(
         query, shortlist["tables"], shortlist["columns"],
+        today_date=today_date,
         matched_labels=shortlist.get("matched_labels"),
     )
     if not result.get("sql") or result.get("warnings"):
@@ -864,7 +902,7 @@ def variance_nlquery(
         ctx, query, result["sql"],
     )
 
-    columns, rows, err = execute_query(result["sql"])
+    columns, rows, err = execute_query(result["sql"])  # validated by generate_sql
     if err:
         logger.error("[main] 500 /variance/nlquery | %s | sql=%s | %s", ctx, result["sql"], err)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err)

@@ -19,10 +19,9 @@
 
 import * as strategy55 from './strategy55.js'
 import * as strategy60 from './strategy60.js'
+import { API_BASE_URL } from '../config.js'
 
 const STRATEGIES = { '5.5': strategy55, '6.0': strategy60 }
-
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 let identity = { loginId: '', tenantId: '', uid: '', version: null, ready: false }
 
@@ -42,7 +41,7 @@ async function fetchBackendVersion() {
   // "tenantId required" — an error that points at the URL, several layers away
   // from the actual cause (an unreachable /app-config, e.g. missing from the
   // dev-server proxy list, or a reverse proxy that does not forward it).
-  const url = `${BASE_URL}/app-config`
+  const url = `${API_BASE_URL}/app-config`
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } })
     if (!res.ok) {
@@ -83,10 +82,15 @@ function autoDetectVersion() {
  * Returns { loginId, tenantId, uid, version, ready }.
  */
 export async function bootstrapAuth() {
+  // Strip ?_at=<JWT> from the address bar BEFORE any request goes out: the
+  // /app-config fetch below would otherwise carry the token in its Referer,
+  // and a 5.5 (or wrongly guessed) version never ran the 6.0 strip at all.
+  // Idempotent, and it only moves the 6.0 params into sessionStorage.
+  strategy60.bootstrap()
+
   const pinned = normalizeVersion(import.meta.env.VITE_APP_VERSION)
   const fromBackend = pinned ? null : await fetchBackendVersion()
-  const guessed = pinned ?? fromBackend ?? autoDetectVersion() ?? '5.5'
-  const version = guessed
+  const version = pinned ?? fromBackend ?? autoDetectVersion() ?? '5.5'
 
   if (!pinned && !fromBackend) {
     // Reached only when the authoritative source was unavailable. Say so
@@ -112,11 +116,6 @@ export async function bootstrapAuth() {
   return identity
 }
 
-/** The resolved identity. Empty until bootstrapAuth() has run. */
-export function getIdentity() {
-  return identity
-}
-
 /**
  * Auth query string for every API call: 'loginId=..&tenantId=..'.
  *
@@ -124,11 +123,7 @@ export function getIdentity() {
  * requires it under 6.0, so callers never branch on the host version.
  */
 export function authQuery() {
-  const params = new URLSearchParams({
-    loginId:  identity.loginId,
-    tenantId: identity.tenantId,
-  })
-  return params.toString()
+  return withAuth().toString()
 }
 
 /** Merge the auth params into an existing URLSearchParams-compatible object. */

@@ -9,9 +9,8 @@
 from __future__ import annotations
 
 import re
-from typing import Dict
 
-_TERM_MAP: Dict[str, str] = {
+_TERM_MAP: dict[str, str] = {
     "exposer": "exposure",
     "exposres": "exposures",
     "expsoure": "exposure",

@@ -42,7 +42,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Optional
 
 from ..config import ANONYMOUS, RequestContext
 from ..data.report_lookup import parse_returns
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
-def _tokens(text: str) -> List[str]:
+def _tokens(text: str) -> list[str]:
     return _TOKEN_RE.findall((text or "").lower())
 
 
@@ -118,6 +118,14 @@ _DATE_PHRASE_RES = [
         r"same\s+(?:period|quarter|month)\s+last\s+year",
         re.IGNORECASE,
     ),
+    # calendar quarter / half ("Q1 2025", "2025 Q1", "H2 2024"), CY and
+    # spelled-out fiscal years — mirrors date_intent's patterns
+    re.compile(r"\b[QH][1-4](?!\d)[\s,\-]*(?:of\s+)?(?:CY\s*)?(?:19|20)\d{2}\b", re.IGNORECASE),
+    re.compile(r"\b(?:19|20)\d{2}[\s\-]*[QH][1-4](?!\d)", re.IGNORECASE),
+    re.compile(r"\b(?:CY|calendar\s+year|financial\s+year|fiscal\s+year)\s*'?\d{2,4}(?:-\d{2,4})?\b", re.IGNORECASE),
+    re.compile(r"\b(?:this|current)\s+(?:month|quarter|half[\s-]?year|year|financial\s+year|fy|week)\b", re.IGNORECASE),
+    re.compile(r"\b\d{1,2}\s+(?:months?|quarters?|years?|periods?)\s+(?:ago|back)\b", re.IGNORECASE),
+    re.compile(r"\byesterday\b|\blatest\b|\bmost\s+recent\b", re.IGNORECASE),
     # bare year, checked last so the richer patterns above claim it first
     re.compile(r"\b(?:19|20)\d{2}\b"),
 ]
@@ -185,8 +193,8 @@ class QueryAnalysis:
     raw: str
     normalized: str
     metric_text: str
-    return_ids: List[str] = field(default_factory=list)
-    return_names: List[str] = field(default_factory=list)
+    return_ids: list[str] = field(default_factory=list)
+    return_names: list[str] = field(default_factory=list)
     date_text: Optional[str] = None
     has_date_intent: bool = False
     scope: Optional[str] = None
@@ -198,9 +206,9 @@ class QueryAnalysis:
     # unscoped retrieval — confidently answers from an unrelated return
     # (measured: "total number of staff for CIMS_ROR" answered from CIMS_RAQ
     # at confidence 0.94).
-    unindexed_return_names: List[str] = field(default_factory=list)
+    unindexed_return_names: list[str] = field(default_factory=list)
 
-    def to_interpretation(self) -> Dict[str, Any]:
+    def to_interpretation(self) -> dict[str, Any]:
         """Client-facing summary of what was understood from the query — so the
         UI can show it back to the user instead of the resolution being a black
         box. Consumed by the `interpretation` field of /variance/nlresolve's
@@ -216,8 +224,8 @@ class QueryAnalysis:
 
 
 def _distinctive_tokens_by_return(
-    returns: List[Dict[str, Any]], corpus: List[Dict[str, Any]]
-) -> Dict[str, Set[str]]:
+    returns: list[dict[str, Any]], corpus: list[dict[str, Any]]
+) -> dict[str, set[str]]:
     """Per-return set of name tokens that actually identify it.
 
     Document frequency is counted over `corpus` — EVERY return in Returns.xml —
@@ -230,7 +238,7 @@ def _distinctive_tokens_by_return(
     the real 281-return corpus, "cims" appears in essentially all of them (and
     is correctly dropped) while "ale" appears in a handful (and is correctly
     kept)."""
-    doc_freq: Dict[str, int] = {}
+    doc_freq: dict[str, int] = {}
     for r in corpus:
         for tok in set(_tokens(r.get("Name", ""))):
             doc_freq[tok] = doc_freq.get(tok, 0) + 1
@@ -256,8 +264,8 @@ def _distinctive_tokens_by_return(
 
 
 def _match_named_returns(
-    query: str, candidates: List[Dict[str, Any]], corpus: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+    query: str, candidates: list[dict[str, Any]], corpus: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Which of `candidates` does the query name outright?
 
     Scored by how much of a return's DISTINCTIVE name survives in the query, so
@@ -320,7 +328,7 @@ def _name_scope(name: str) -> Optional[str]:
     return None
 
 
-def _narrow_by_scope(matched: List[Dict[str, Any]], scope: Optional[str]) -> List[Dict[str, Any]]:
+def _narrow_by_scope(matched: list[dict[str, Any]], scope: Optional[str]) -> list[dict[str, Any]]:
     """Keep only the matched returns whose NAME carries the scope the query
     asked for.
 
@@ -343,7 +351,7 @@ def _extract_date_text(query: str) -> tuple[str, Optional[str]]:
     (query_without_dates, the removed text). Patterns are applied in order and
     each consumes its span, so "as of 31-Mar-2025" is claimed by the anchored
     pattern before the bare-year one can nibble at "2025"."""
-    removed: List[str] = []
+    removed: list[str] = []
     remaining = query
 
     for pattern in _DATE_PHRASE_RES:
@@ -357,14 +365,14 @@ def _extract_date_text(query: str) -> tuple[str, Optional[str]]:
     return remaining, " ".join(removed)
 
 
-def _first_match(res: Dict[str, "re.Pattern[str]"], text: str) -> Optional[str]:
+def _first_match(res: dict[str, "re.Pattern[str]"], text: str) -> Optional[str]:
     for key, pattern in res.items():
         if pattern.search(text):
             return key
     return None
 
 
-def _strip_return_mention(text: str, matched_returns: List[Dict[str, Any]]) -> str:
+def _strip_return_mention(text: str, matched_returns: list[dict[str, Any]]) -> str:
     """Drop the words that named a return from the metric text. The return is
     already pinned by ID at that point, so leaving its name in the embedded
     string only lets it re-compete as a similarity signal — and every table
@@ -372,7 +380,7 @@ def _strip_return_mention(text: str, matched_returns: List[Dict[str, Any]]) -> s
     and discriminates nothing."""
     if not matched_returns:
         return text
-    name_tokens: Set[str] = set()
+    name_tokens: set[str] = set()
     for r in matched_returns:
         name_tokens.update(t for t in _tokens(r.get("Name", "")) if len(t) > 1)
     if not name_tokens:
@@ -413,7 +421,7 @@ def _tidy(text: str) -> str:
 
 def analyze_query(
     query: str,
-    allowed_return_ids: Optional[Set[str]] = None,
+    allowed_return_ids: Optional[set[str]] = None,
     ctx: RequestContext = ANONYMOUS,
 ) -> QueryAnalysis:
     """Full end-to-end read of one user query.
@@ -443,7 +451,7 @@ def analyze_query(
     # scope statement and unscoped retrieval answers from whatever scored best
     # anywhere — the worst possible failure, because the confidence is
     # genuinely high and the answer is genuinely about something else.
-    unindexed: List[Dict[str, Any]] = []
+    unindexed: list[dict[str, Any]] = []
     if not matched:
         auth_scoped = [r for r in corpus if allowed_return_ids is None
                        or str(r["Id"]) in allowed_return_ids]

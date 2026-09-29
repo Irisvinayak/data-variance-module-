@@ -14,6 +14,9 @@ import PanelHeader from './PanelHeader.jsx'
 const CURR_COLOR  = '#58a6ff'
 const PREV_COLORS = ['#8b949e', '#3fb950', '#e3b341', '#f85149']
 
+// Stable fallbacks so chartData's memo isn't invalidated by a fresh [] each render.
+const EMPTY = []
+
 const fmt = (v) => {
   if (v == null) return '—'
   const n = Number(v)
@@ -60,7 +63,9 @@ const X_AXIS_PROPS = {
 }
 
 const Y_AXIS_PROPS = {
-  tick: { fill: '#8b949e', fontSize: 10 },
+  // Black, not the muted grey the X axis uses: the Y values are the numbers
+  // being read off the chart, so they need full contrast.
+  tick: { fill: '#000000', fontSize: 10 },
   width: 64,
 }
 
@@ -93,7 +98,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function VisualizationPanel({
-  result, vizState, vizOpen, onExpand, onMinimize, hiddenCols = [],
+  result, vizState, vizOpen, onExpand, onMinimize, hiddenCols = EMPTY,
 }) {
   const [selectedCol, setSelectedCol] = useState(null)
   const [chartType,   setChartType]   = useState('bar')
@@ -104,8 +109,8 @@ export default function VisualizationPanel({
   // it — no special case needed for them.
   const hiddenSet          = new Set(hiddenCols.map((c) => c.toUpperCase()))
   const columns            = (result?.columns ?? []).filter((c) => !hiddenSet.has(c.toUpperCase()))
-  const rows               = result?.rows ?? []
-  const comparison_periods = result?.comparison_periods ?? []
+  const rows               = result?.rows ?? EMPTY
+  const comparison_periods = result?.comparison_periods ?? EMPTY
   const reporting_date     = result?.reporting_date ?? 'Current'
 
   // Validated against `columns` rather than trusted outright. selectedCol is
@@ -133,7 +138,10 @@ export default function VisualizationPanel({
       const currRaw = row.current?.[activeCol]
       entry[reporting_date] = currRaw != null ? Number(currRaw) : null
       comparison_periods.forEach((p, i) => {
+        // Sequential mode fills only previous_1; every period's own value is
+        // in the link_N whose from_date is that period.
         const raw = row.previous?.[`previous_${i + 1}`]?.[activeCol]?.value
+          ?? Object.values(row).find((v) => v?.from_date === p)?.metrics?.[activeCol]?.value
         entry[p] = raw != null ? Number(raw) : null
       })
       return entry
@@ -220,10 +228,13 @@ export default function VisualizationPanel({
                   </div>
                 </div>
 
+                {/* Only worth offering when there are more rows than the
+                    smallest limit — with 10 or fewer, every option shows them all. */}
+                {rows.length > 10 && (
                 <div className="viz-ctrl-group">
                   <span className="viz-ctrl-label">Rows</span>
                   <div className="viz-type-btns">
-                    {[10, 15, 25, 50].map((n) => (
+                    {[10, 15, 25, 50].filter((n, i, all) => i === 0 || all[i - 1] < rows.length).map((n) => (
                       <button
                         key={n}
                         className={`viz-type-btn${rowLimit === n ? ' viz-type-btn-on' : ''}`}
@@ -234,6 +245,7 @@ export default function VisualizationPanel({
                     ))}
                   </div>
                 </div>
+                )}
               </div>
 
               {/* ── Chart ────────────────────────────────────────────── */}

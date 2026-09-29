@@ -35,7 +35,7 @@ import os
 import pickle
 import random
 import sys
-from typing import Dict, List, NamedTuple, Set
+from typing import NamedTuple
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
@@ -47,9 +47,9 @@ from backend.nlp import return_lookup              # noqa: E402
 
 class BenchCase(NamedTuple):
     query: str                  # the human description, used as the query
-    tables: Set[str]            # every table carrying a column with this description
-    columns: Set[str]           # the column name(s) it maps to (lowercase)
-    return_ids: Set[str]        # returns owning those tables
+    tables: set[str]            # every table carrying a column with this description
+    columns: set[str]           # the column name(s) it maps to (lowercase)
+    return_ids: set[str]        # returns owning those tables
 
 
 def _description_of(text: str) -> str:
@@ -57,16 +57,16 @@ def _description_of(text: str) -> str:
     return parts[2] if len(parts) >= 3 else ""
 
 
-def build_cases(sample: int | None = 150, seed: int = 7) -> List[BenchCase]:
+def build_cases(sample: int | None = 150, seed: int = 7) -> list[BenchCase]:
     """Deterministically sampled cases. `sample=None` for the full corpus."""
     with open(cfg.COLUMN_META_PATH, "rb") as fh:
         records = pickle.load(fh)
 
     # description -> {table -> {columns}}
-    by_desc: Dict[str, Dict[str, Set[str]]] = collections.defaultdict(
+    by_desc: dict[str, dict[str, set[str]]] = collections.defaultdict(
         lambda: collections.defaultdict(set)
     )
-    texts: Dict[str, str] = {}
+    texts: dict[str, str] = {}
     for rec in records:
         desc = _description_of(rec.get("text", ""))
         table, column = rec.get("table"), rec.get("column")
@@ -77,7 +77,7 @@ def build_cases(sample: int | None = 150, seed: int = 7) -> List[BenchCase]:
         by_desc[desc][table].add(column.lower())
         texts.setdefault(table, rec.get("text", ""))
 
-    cases: List[BenchCase] = []
+    cases: list[BenchCase] = []
     dropped_ambiguous = 0
     for desc, tables in by_desc.items():
         if any(len(cols) > 1 for cols in tables.values()):

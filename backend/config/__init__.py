@@ -31,7 +31,6 @@ from .settings import (
     SERVER_HOST,
     SERVER_PORT,
     is_legacy_mode,
-    is_tenant_aware_mode,
 )
 
 __all__ = [
@@ -59,5 +58,4 @@ __all__ = [
     "SERVER_HOST",
     "SERVER_PORT",
     "is_legacy_mode",
-    "is_tenant_aware_mode",
 ]

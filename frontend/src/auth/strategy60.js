@@ -37,8 +37,6 @@
  * supplies a loginId and tenantId directly.
  */
 
-export const VERSION = '6.0'
-
 const TOKEN_KEY = '_at'
 const LOGIN_KEY = '_lid'
 const TENANT_KEY = '_tid'
@@ -211,6 +209,5 @@ export function resolve() {
     loginId:  loginId ?? '',
     tenantId: tenantId ?? '',
     uid:      firstClaim(claims, ['UserId', 'userId', 'uid']) ?? '',
-    token,
   }
 }

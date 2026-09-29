@@ -21,6 +21,9 @@ frontend/.env.production
 frontend/.env.test
 !config/env/*.example
 !frontend/.env.example
+# The 6.0 production build config, like its tracked 5.5 twin .env.production55:
+# public deploy paths only, and `npm run build:60` cannot be reproduced without it.
+!frontend/.env.production
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

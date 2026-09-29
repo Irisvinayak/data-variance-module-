@@ -1,0 +1,111 @@
+DATA VARIANCE MODULE - FOLDER GUIDE
+===================================
+
+A short map of every folder in this project and what it holds.
+For details, read the files in docs/ (listed at the bottom).
+
+
+ROOT FILES
+----------
+dev_server.py         Starts the backend server (port 8002 for 5.5, 8003 for 6.0).
+requirements.txt      Python packages the backend needs.
+requirements-dev.txt  Extra Python packages for testing.
+pyproject.toml        Test settings (pytest).
+README.md             Project introduction.
+.env                  Main settings file (not in git). VERSION=5.5 or 6.0 picks the host.
+.env.example          Every setting (backend + frontend) with defaults, in one file.
+
+
+backend/  - the Python (FastAPI) server
+--------
+main.py               Creates the app, adds middleware and error handlers, mounts routes.
+logging_config.py     Where logs go: console + logs/<date>.log.
+ai_audit.py           Records every AI (LLM) call to logs/ai/<date>.jsonl.
+
+backend/api/          The web routes (URLs).
+  meta.py             /health, /app-config, /variance/nlp-health
+  variance.py         Manual path: /variance/find, /variance/compute, /variance/dates
+  nlp.py              Natural-language path: /variance/nlresolve, /variance/nlquery
+  auth.py             /auth/my-returns
+  errors.py           Turns errors into proper HTTP responses.
+
+backend/auth/         Who can see what.
+  deps.py             Checks the loginId / tenantId on every request.
+  service.py          Login -> department -> list of allowed returns.
+
+backend/config/       Settings.
+  settings.py         Reads .env (DB, paths, port, auth on/off).
+  context.py          RequestContext: the current user and tenant.
+
+backend/data/         The variance engine and data access.
+  service.py          Finds returns and tables, runs the variance calculation.
+  calculate_variance.py  The actual period-over-period maths and SQL building.
+  db.py               Oracle database connection pool and query runner.
+  report_lookup.py    Reads the returns list (Returns.xml / Return.xml).
+  query_xml_lookup.py Backup way to find a return's tables (XML_Query.xml).
+  xml_loader.py       Safe XML file reader.
+  models.py           Request body shapes.
+
+backend/hosts/        The ONLY place that knows iDEAL 5.5 vs 6.0 differences.
+  base.py             Common rules for both hosts.
+  ideal_55.py         iDEAL 5.5 (single tenant) file paths and formats.
+  ideal_60.py         iDEAL 6.0 (multi tenant) file paths and formats.
+
+backend/nlp/          Natural-language questions -> table/column -> result.
+  query_analyzer.py   Reads the question: return name, dates, the metric asked for.
+  retriever.py        Searches the embedding index for matching tables/columns.
+  scoped_retriever.py Ranks tables inside one chosen return.
+  intent_resolver.py  AI picks the best table/column from the allowed shortlist.
+  sql_generator.py    AI writes SQL (for /nlquery) and checks it is safe.
+  date_intent.py      Understands date phrases ("last quarter", "March 2025").
+  date_resolver.py    Maps date phrases onto real dates in the table.
+  embedder.py         Loads the text-embedding model.
+  index_store.py, lexical_search.py, ranking.py, confidence.py  Search helpers.
+  return_lookup.py, indexed_returns.py, schema_info.py  Table/return info lookups.
+  nlp_config.py       NLP settings (index folder, models, thresholds).
+
+
+frontend/  - the React web page
+---------
+index.html, vite.config.js, package.json   Build setup (Vite).
+public/               IIS web.config files (one for 5.5, one for 6.0).
+.env.production*      Build settings for each host.
+src/main.jsx, App.jsx Entry point of the page.
+src/api.js            All calls to the backend.
+src/config.js         Backend base URL.
+src/auth/             Gets user identity (5.5: ?loginId=, 6.0: JWT token).
+src/components/       Screen parts: control bar, table, chart, menus, toasts.
+src/hooks/            Small reusable React helpers.
+src/DataVarianceTable.jsx  The results table.
+src/*.css             Styles.
+
+
+artifacts/nlp-index/  Search indexes for the NLP feature (built by an outside tool).
+  ideal-55/           Index for 5.5 (CIMS returns).
+  ideal-60/           Index for 6.0 (QCB returns).
+
+config/env/           Example .env overlay files for running 5.5 and 6.0 side by side.
+
+data/
+  mappings/           excel_tablemapping.json - Excel-to-table mapping.
+  schema/             SQL table definitions for the QCB tables.
+
+scripts/              Offline tools: build mappings, test search quality, test date parsing.
+
+tests/                Automated tests (run: python -m pytest).
+  nlp/                Tests for the NLP part (dates, caches, index folder).
+  test_data_layer.py  Tests for SQL safety and error handling.
+
+logs/                 Daily log files (created automatically).
+
+
+docs/  - documentation
+-----
+system-overview.md    One-page start here.
+architecture.md       How the system is built and why.
+functionality.md      What each feature does.
+models.md             API request/response shapes with examples.
+logging.md            Logs and the AI audit trail.
+integration-plan.md   History of joining 5.5 and 6.0 into one codebase.
+samples/              Example user questions for testing the NLP feature.
+folder-structure.txt  This file.

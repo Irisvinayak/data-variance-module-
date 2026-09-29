@@ -11,8 +11,6 @@
  * in sessionStorage would outlive the host's own session.
  */
 
-export const VERSION = '5.5'
-
 export function detect() {
   const params = new URLSearchParams(window.location.search)
   return params.has('loginId')

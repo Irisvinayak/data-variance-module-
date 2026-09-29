@@ -10,25 +10,46 @@ import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
-from typing import Callable, List, Dict, Any, Optional
+from typing import Any, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
+# An unquoted Oracle identifier. build_query() interpolates column names into
+# the SELECT list, and `selected_columns` arrives in the /variance/compute
+# request body, so anything else (a subquery, a comment, a UNION) would run as
+# SQL against the live connection.
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
+
+
+def is_safe_identifier(name: Any) -> bool:
+    return isinstance(name, str) and bool(_IDENTIFIER_RE.match(name))
+
+
+def sql_literal(value: Any) -> str:
+    """`value` as a single-quoted Oracle string literal, quotes doubled.
+
+    build_query() compares against the request's return id, which is only
+    vetted by the access check — and that check is bypassed entirely when
+    DV_AUTH_ENABLED=false — so it must never be spliced in raw."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def format_oracle_date(value: date) -> str:
+    """DD-MON-YYYY, upper-cased — the one date format every query and response uses."""
+    return value.strftime("%d-%b-%Y").upper()
+
+
 # ── SR-NO / serial-number column exclusion ────────────────────────────────────
-_EXCLUDED_VALUE_COLS = {
-    "SRNO", "SR_NO", "SR-NO", "SR.NO",
-    "SLNO", "SL_NO", "SLNO.",
-    "SNO",  "S_NO",
-    "ROWNUM", "ROW_NUM",
-}
+# Compared with every non-letter stripped, so "SR.NO", "SR_NO" and "SrNo" all
+# collapse to the same key.
+_EXCLUDED_VALUE_KEYS = frozenset({"SRNO", "SLNO", "SNO", "ROWNUM"})
 
 
 def _is_excluded_value_col(col: str) -> bool:
     """Return True if `col` is a serial-number-like column that should never
     be treated as a value column for variance computation."""
-    stripped = re.sub(r"[^A-Z]", "", col.upper())
-    excluded_stripped = {re.sub(r"[^A-Z]", "", x) for x in _EXCLUDED_VALUE_COLS}
-    return stripped in excluded_stripped
+    return re.sub(r"[^A-Z]", "", col.upper()) in _EXCLUDED_VALUE_KEYS
 
 
 # ── Row display-label hint words ──────────────────────────────────────────────
@@ -43,7 +64,7 @@ _LABEL_HINT_WORDS = (
 )
 
 
-def _label_score(col: str, rows: List[Dict]) -> float:
+def _label_score(col: str, rows: list[dict]) -> float:
     """
     Score how likely `col` contains human-readable description text (0–1).
 
@@ -95,7 +116,7 @@ def _label_score(col: str, rows: List[Dict]) -> float:
     return max(score, 0.0)
 
 
-def _is_datetime_col(col: str, rows: List[Dict]) -> bool:
+def _is_datetime_col(col: str, rows: list[dict]) -> bool:
     """True if this column holds date/datetime values."""
     for row in rows:
         value = row.get(col)
@@ -105,11 +126,11 @@ def _is_datetime_col(col: str, rows: List[Dict]) -> bool:
 
 
 def _pick_label_columns(
-    all_cols: List[str],
-    comp_cols: List[str],
-    rows: Optional[List[Dict]] = None,
+    all_cols: list[str],
+    comp_cols: list[str],
+    rows: Optional[list[dict]] = None,
     filter_col: Optional[str] = None,
-) -> List[str]:
+) -> list[str]:
     """
     Pick the best column(s) to use as a human-readable row label.
 
@@ -204,14 +225,14 @@ def get_previous_dates(
     current_date: datetime,
     report_freq: str,
     periods: int,
-) -> List[datetime]:
+) -> list[datetime]:
 
     logger.debug(
         "[variance] Calculating previous dates | current=%s | freq=%s | periods=%s",
         current_date, report_freq, periods,
     )
 
-    dates: List[datetime] = []
+    dates: list[datetime] = []
     prev = current_date
     freq = report_freq.strip().upper()
 
@@ -294,7 +315,7 @@ def _to_decimal(v: Any) -> Decimal:
     return Decimal(str(v).replace(",", ""))
 
 
-def get_difference(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any]]:
+def get_difference(prev_val: Any, curr_val: Any) -> Optional[dict[str, Any]]:
     try:
         p = _to_decimal(prev_val)
         c = _to_decimal(curr_val)
@@ -311,7 +332,7 @@ def get_difference(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any]]:
             return None
 
 
-def get_pct_change(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any]]:
+def get_pct_change(prev_val: Any, curr_val: Any) -> Optional[dict[str, Any]]:
     try:
         p       = _to_decimal(prev_val)
         c       = _to_decimal(curr_val)
@@ -323,7 +344,7 @@ def get_pct_change(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_variance_summary(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any]]:
+def get_variance_summary(prev_val: Any, curr_val: Any) -> Optional[dict[str, Any]]:
     try:
         p           = _to_decimal(prev_val)
         c           = _to_decimal(curr_val)
@@ -340,7 +361,24 @@ def get_variance_summary(prev_val: Any, curr_val: Any) -> Optional[Dict[str, Any
         return None
 
 
-def build_identifier(row: Dict[str, Any], comp_filter_cols: List[str]) -> str:
+def _column_metrics(
+    columns: list[str], prev_row: dict[str, Any], curr_row: dict[str, Any],
+) -> dict[str, Any]:
+    """Per-column change metrics from `prev_row` to `curr_row` (keys upper-case)."""
+    metrics: dict[str, Any] = {}
+    for col in columns:
+        prev_v = prev_row.get(col.upper())
+        curr_v = curr_row.get(col.upper())
+        metrics[col] = {
+            "value":            prev_v,
+            "change":           get_difference(prev_v, curr_v),
+            "pct_change":       get_pct_change(prev_v, curr_v),
+            "variance_summary": get_variance_summary(prev_v, curr_v),
+        }
+    return metrics
+
+
+def build_identifier(row: dict[str, Any], comp_filter_cols: list[str]) -> str:
     """Build a composite business-key string from the given columns."""
     row_upper = {k.upper(): v for k, v in row.items()}
     parts = [
@@ -352,32 +390,36 @@ def build_identifier(row: Dict[str, Any], comp_filter_cols: List[str]) -> str:
 
 def build_query(
     table_name: str,
-    metadata: Dict[str, Any],
+    metadata: dict[str, Any],
     current_date: datetime,
-    prev_dates: List[datetime],
+    prev_dates: list[datetime],
     return_code: Any,
-    selected_columns: Optional[List[str]] = None,
+    selected_columns: Optional[list[str]] = None,
 ) -> str:
 
     fc         = metadata["filter_col"]
     all_dates  = [current_date] + prev_dates
     conditions = [
-        f"{fc} = TO_DATE('{d.strftime('%d-%b-%Y').upper()}', 'DD-MON-YYYY')"
+        f"{fc} = TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY')"
         for d in all_dates
     ]
     date_sql = " OR ".join(conditions)
 
     rc_filter = (
-        f" AND {metadata.get('return_code_col')} = '{return_code}'"
+        f" AND {metadata.get('return_code_col')} = {sql_literal(return_code)}"
         if metadata.get("is_single")
         else ""
     )
     freq_filter = (
-        f" AND {metadata.get('freq_col')} = '{metadata.get('freq_val')}'"
+        f" AND {metadata.get('freq_col')} = {sql_literal(metadata.get('freq_val'))}"
         if metadata.get("freq_col") and metadata.get("freq_val")
         else ""
     )
 
+    if selected_columns:
+        unsafe = [c for c in selected_columns if not is_safe_identifier(c)]
+        if unsafe:
+            raise ValueError(f"Invalid column name(s): {unsafe}")
     cols  = ", ".join(selected_columns) if selected_columns else "*"
     query = (
         f"SELECT {cols} FROM {table_name} "
@@ -385,6 +427,14 @@ def build_query(
     )
     logger.debug("[variance] Generated Query:\n%s", query)
     return query
+
+
+# Tried in order; the two-digit-year forms come last.
+_DATE_LIKE_FORMATS = (
+    "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y",
+    "%d-%m-%Y %H:%M:%S", "%d-%b-%Y %H:%M:%S",
+    "%d-%b-%y", "%d-%m-%y",
+)
 
 
 def _parse_date_like(value: Any) -> Optional[datetime]:
@@ -395,18 +445,10 @@ def _parse_date_like(value: Any) -> Optional[datetime]:
     s = str(value).strip()
     if not s:
         return None
-    for fmt in (
-        "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y",
-        "%d-%m-%Y %H:%M:%S", "%d-%b-%Y %H:%M:%S",
-    ):
+    for fmt in _DATE_LIKE_FORMATS:
         try:
             return datetime.strptime(s, fmt)
-        except Exception:
-            pass
-    for fmt in ("%d-%b-%y", "%d-%m-%y"):
-        try:
-            return datetime.strptime(s, fmt)
-        except Exception:
+        except ValueError:
             pass
     logger.debug("[variance] *** COULD NOT PARSE DATE value=%r", value)
     return None
@@ -419,11 +461,11 @@ def dates_match(value: Any, target: datetime) -> bool:
     return d.year == target.year and d.month == target.month and d.day == target.day
 
 
-def _normalize_row_keys(row: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_row_keys(row: dict[str, Any]) -> dict[str, Any]:
     return {k.upper(): v for k, v in row.items()}
 
 
-def _is_numeric_col(col: str, rows: List[Dict]) -> bool:
+def _is_numeric_col(col: str, rows: list[dict]) -> bool:
     """Return True if at least one row has a parseable numeric value for col."""
     for row in rows:
         v = row.get(col)
@@ -444,15 +486,15 @@ def calculate_variance(
     return_code: Any,
     table_name: str,
     reporting_date: str,
-    get_table_metadata_fn: Callable[..., Dict[str, Any]],
-    execute_query_fn: Callable[..., List[Dict[str, Any]]],
+    get_table_metadata_fn: Callable[..., dict[str, Any]],
+    execute_query_fn: Callable[..., list[dict[str, Any]]],
     connection_string: Optional[str] = None,
     is_non_xbrl: bool = False,
     reporting_period: int = 1,
-    selected_columns: Optional[List[str]] = None,
+    selected_columns: Optional[list[str]] = None,
     comparison_mode: str = "vs_current",
-    comparison_dates: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    comparison_dates: Optional[list[str]] = None,
+) -> dict[str, Any]:
     """`comparison_dates`, when given, REPLACES the derived comparison periods:
     the caller has named the exact reporting dates to compare (the manual UI's
     date checkboxes — see ControlBar's DateField). `reporting_period` is then
@@ -477,7 +519,7 @@ def calculate_variance(
     metadata    = get_table_metadata_fn(return_code, table_name, is_non_xbrl)
     report_freq = metadata.get("report_freq", "M")
 
-    explicit_dates: Optional[List[datetime]] = None
+    explicit_dates: Optional[list[datetime]] = None
     if comparison_dates:
         try:
             explicit_dates = sorted(
@@ -499,11 +541,11 @@ def calculate_variance(
         # selection there is no separate "current date" for the user to pick.
         rdate = explicit_dates[0]
         prev_dates = explicit_dates[1:]
-        reporting_date = rdate.strftime("%d-%b-%Y").upper()
+        reporting_date = format_oracle_date(rdate)
         logger.info(
             "[variance] Using caller-supplied comparison dates | table=%s | current=%s | previous=%s",
             table_name, reporting_date,
-            [d.strftime("%d-%b-%Y").upper() for d in prev_dates],
+            [format_oracle_date(d) for d in prev_dates],
         )
         # Frequency validation is deliberately SKIPPED here. It exists to stop
         # a hand-typed date that can't be a valid period end (e.g. 15-Mar for a
@@ -657,11 +699,11 @@ def calculate_variance(
     # requested comparison dates had no submission at all, so the caller
     # (main.py -> frontend) can tell the user "we asked for X, nothing was
     # filed then" instead of a silent, unexplained blank comparison.
-    prev_row_sets: Dict[str, Any] = {}
-    missing_periods: List[str] = []
+    prev_row_sets: dict[str, Any] = {}
+    missing_periods: list[str] = []
     for i, pd in enumerate(prev_dates):
         period_rows = [r for r in all_rows if dates_match(r.get(fc), pd)]
-        lookup: Dict[str, Any] = {}
+        lookup: dict[str, Any] = {}
         duplicate_ids: set = set()
         for row in period_rows:
             ident = build_identifier(row, comp_cols)
@@ -680,20 +722,22 @@ def calculate_variance(
             i + 1, pd.strftime("%d-%b-%Y"), len(period_rows), len(lookup),
         )
         if not period_rows:
-            missing_periods.append(pd.strftime("%d-%b-%Y").upper())
+            missing_periods.append(format_oracle_date(pd))
         prev_row_sets[f"previous_{i + 1}"] = {"date": pd, "lookup": lookup}
 
     # ── Pre-build per-date lookups for sequential mode ───────────────────
-    date_lookups: List[Dict[str, Any]] = []
+    date_lookups: list[dict[str, Any]] = []
     if comparison_mode == "sequential":
-        chronological_pre = list(reversed(prev_dates)) + [rdate]
-        for d in chronological_pre:
+        for d in list(reversed(prev_dates)) + [rdate]:
             period_rows = [r for r in all_rows if dates_match(r.get(fc), d)]
-            lookup: Dict[str, Any] = {}
+            lookup: dict[str, Any] = {}
             for row in period_rows:
                 ident = build_identifier(row, comp_cols)
                 lookup[ident] = row
             date_lookups.append(lookup)
+
+    chronological = list(reversed(prev_dates)) + [rdate]
+    seq_links = list(zip(chronological, chronological[1:]))
 
     result_rows = []
     seen_current_ids: set = set()
@@ -710,7 +754,7 @@ def calculate_variance(
             )
         seen_current_ids.add(identifier)
 
-        row_result: Dict[str, Any] = {
+        row_result: dict[str, Any] = {
             "identifier":    identifier,
             "display_label": build_identifier(curr_row, label_cols) or identifier,
             "current":       curr_row,
@@ -719,8 +763,6 @@ def calculate_variance(
 
         if comparison_mode == "sequential":
             # ── Sequential mode: chain each consecutive date pair ────────
-            chronological = list(reversed(prev_dates)) + [rdate]
-            seq_links = list(zip(chronological, chronological[1:]))
 
             for link_idx, (date_a, date_b) in enumerate(seq_links):
                 from_row = date_lookups[link_idx].get(identifier)
@@ -730,22 +772,9 @@ def calculate_variance(
                 else:
                     to_row = date_lookups[link_idx + 1].get(identifier)
 
-                link_metrics: Dict[str, Any] = {}
+                link_metrics: dict[str, Any] = {}
                 if from_row is not None and to_row is not None:
-                    for col in selected_columns:
-                        col_up = col.upper()
-                        from_v = from_row.get(col_up)
-                        to_v   = to_row.get(col_up)
-                        logger.debug(
-                            "[seq_link] Identifier=%s | Col=%s | from=%s | to=%s",
-                            identifier, col, from_v, to_v,
-                        )
-                        link_metrics[col] = {
-                            "value":            from_v,
-                            "change":           get_difference(from_v, to_v),
-                            "pct_change":       get_pct_change(from_v, to_v),
-                            "variance_summary": get_variance_summary(from_v, to_v),
-                        }
+                    link_metrics = _column_metrics(selected_columns, from_row, to_row)
                 elif from_row is None:
                     logger.debug(
                         "[seq_link] No row for date_a=%s | Identifier=%s",
@@ -754,8 +783,8 @@ def calculate_variance(
 
                 link_key = f"link_{link_idx + 1}"
                 row_result[link_key] = {
-                    "from_date": date_a.strftime("%d-%b-%Y").upper(),
-                    "to_date":   date_b.strftime("%d-%b-%Y").upper(),
+                    "from_date": format_oracle_date(date_a),
+                    "to_date":   format_oracle_date(date_b),
                     "metrics":   link_metrics,
                 }
 
@@ -775,36 +804,22 @@ def calculate_variance(
                     )
                     continue
 
-                metrics: Dict[str, Any] = {}
-                for col in selected_columns:
-                    col_up = col.upper()
-                    prev_v = matched.get(col_up)
-                    curr_v = curr_row.get(col_up)
-                    logger.debug(
-                        "[row_match] Identifier=%s | Col=%s | Current=%s | Previous=%s",
-                        identifier, col, curr_v, prev_v,
-                    )
-                    metrics[col] = {
-                        "value":            prev_v,
-                        "change":           get_difference(prev_v, curr_v),
-                        "pct_change":       get_pct_change(prev_v, curr_v),
-                        "variance_summary": get_variance_summary(prev_v, curr_v),
-                    }
-                row_result["previous"][period_key] = metrics
+                row_result["previous"][period_key] = _column_metrics(
+                    selected_columns, matched, curr_row,
+                )
 
         result_rows.append(row_result)
 
-    chronological = list(reversed(prev_dates)) + [rdate]
     return {
         "table_name":         table_name,
         "reporting_date":     reporting_date,
-        "comparison_periods": [pd.strftime("%d-%b-%Y").upper() for pd in prev_dates],
+        "comparison_periods": [format_oracle_date(pd) for pd in prev_dates],
         "columns":            selected_columns,
         "display_columns":    all_display_cols,
         "rows":               result_rows,
         "comparison_mode":    comparison_mode,
         "chain_dates":        (
-            [d.strftime("%d-%b-%Y").upper() for d in chronological]
+            [format_oracle_date(d) for d in chronological]
             if comparison_mode == "sequential"
             else []
         ),

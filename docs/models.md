@@ -31,7 +31,7 @@ harmless under 5.5, essential under 6.0, and one cache shape for both.
 
 Not a data model but the other core abstraction. Path methods (`returns_xml_path`,
 `db_dir`, `user_xml_path`, …) all take a `RequestContext`; shape properties
-(`returns_row_tag`, `dept_forms_attr`, `forms_delimiter`, `period_freq_attr`, …)
+(`returns_row_tag`, `dept_forms_attr`, `forms_delimiter`, …)
 describe the file format. `describe(ctx)` returns every resolved path and powers
 `/health`.
 

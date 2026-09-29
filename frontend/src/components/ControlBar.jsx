@@ -1,19 +1,16 @@
 ﻿/**
  * ControlBar — compact two-row toolbar containing all wizard controls.
- * Replaces the old InputPanel + SearchPanel cards with a flat toolbar layout.
  * All wizard logic (state, handlers) lives in LayoutContainer; this is pure UI.
  *
- * CHANGE: Disambiguation list now renders as a dropdown (custom select-style
- * overlay) instead of a flat button list, keeping the toolbar compact while
- * still showing all matches.
- *
- * CHANGE: Reporting Date field is a dropdown of the actual submission dates
- * on file for the selected return/table (fetched by LayoutContainer via
- * GET /variance/dates), instead of a free calendar — the user picks a date
- * guaranteed to have data rather than guessing one.
+ * The disambiguation list is a select-style dropdown, keeping the toolbar
+ * compact while still showing all matches. The Reporting Date field lists only
+ * the submission dates on file for the selected return/table (fetched by
+ * LayoutContainer via GET /variance/dates), so the user picks a date
+ * guaranteed to have data rather than guessing one on a calendar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { VARIANCE_STEPS, COMPARISON_MODES, freqLabel } from '../types.js'
+import useClickOutside from '../hooks/useClickOutside.js'
 
 const SCORE_BADGE = (score) => {
   if (score >= 100) return { label: 'Exact', cls: 'score-exact' }
@@ -28,17 +25,10 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
   const [filter, setFilter] = useState('')
   const dropRef = useRef(null)
 
-  // Close on outside click
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (dropRef.current && !dropRef.current.contains(e.target)) {
-        setOpen(false)
-        onCancel()
-      }
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open, onCancel])
+  useClickOutside(dropRef, open, () => {
+    setOpen(false)
+    onCancel()
+  })
 
   // Filter candidates by typed text
   const filtered = filter.trim()
@@ -108,7 +98,7 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
                     </span>
                     <span className="disambig-item-name">{c.return_name}</span>
                     <span className="disambig-item-meta">
-                      {freqLabel(c.report_freq) || '—'}
+                      {freqLabel(c.report_freq)}
                     </span>
                     <span className="disambig-item-id">#{c.return_id}</span>
                   </button>
@@ -151,6 +141,8 @@ function NlpInterpretation({ interpretation }) {
     resolved_column_labels: resolvedColumnLabels,
     reporting_date: reportingDate,
     comparison_periods: comparisonPeriods,
+    comparison_dates: comparisonDates,
+    date_notes: dateNotes,
   } = interpretation
 
   const SCOPE_LABELS = { DOM: 'Domestic', OVE: 'Overseas', GLOBAL: 'Global' }
@@ -175,10 +167,14 @@ function NlpInterpretation({ interpretation }) {
       ? {
           key: 'date',
           label: 'Period',
+          // The exact dates compared, when the backend sent them; they can
+          // differ from the phrase (a named date with no data, the 3-date cap).
           value:
-            comparisonPeriods > 1
-              ? `${reportingDate} + ${comparisonPeriods} prior`
-              : reportingDate,
+            comparisonDates?.length > 1
+              ? `${reportingDate} vs ${comparisonDates.slice(1).join(', ')}`
+              : comparisonPeriods > 1
+                ? `${reportingDate} + ${comparisonPeriods} prior`
+                : reportingDate,
         }
       : dateText && { key: 'date', label: 'Period', value: dateText },
   ].filter(Boolean)
@@ -192,6 +188,13 @@ function NlpInterpretation({ interpretation }) {
         <span key={c.key} className="nlp-interpretation-chip">
           <span className="nlp-interpretation-chip-label">{c.label}</span>
           <span className="nlp-interpretation-chip-value">{c.value}</span>
+        </span>
+      ))}
+      {/* Every place the dates used differ from the dates asked for. */}
+      {dateNotes?.map((note, i) => (
+        <span key={`${i}:${note}`} className="nlp-interpretation-chip nlp-interpretation-note">
+          <span className="nlp-interpretation-chip-label">Note</span>
+          <span className="nlp-interpretation-chip-value">{note}</span>
         </span>
       ))}
     </div>
@@ -281,16 +284,10 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
   const dropRef = useRef(null)
   const { question, options, skippable, allowOther } = clarification
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (dropRef.current && !dropRef.current.contains(e.target)) {
-        setOpen(false)
-        onCancel()
-      }
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open, onCancel])
+  useClickOutside(dropRef, open, () => {
+    setOpen(false)
+    onCancel()
+  })
 
   const filtered = filter.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(filter.toLowerCase()))
@@ -431,13 +428,7 @@ function DateField({ selectedDates, setSelectedDates, availableDates, datesLoadi
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open])
+  useClickOutside(wrapRef, open, () => setOpen(false))
 
   if (datesLoading) {
     return (

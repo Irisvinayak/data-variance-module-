@@ -33,7 +33,7 @@ import json
 import logging
 import os
 import threading
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from .logging_config import (
@@ -65,20 +65,7 @@ class _JsonlHandler(DailyFileHandler):
     handler had.
     """
 
-    def _ensure_current_file(self) -> None:
-        today = date.today().isoformat()
-        if today == self._current_date and self._stream is not None:
-            return
-        path = os.path.join(self._log_dir, f"{today}.jsonl")
-        stream = open(path, "a", encoding="utf-8")
-        if self._stream is not None:
-            try:
-                self._stream.close()
-            except Exception:
-                pass
-        self._stream = stream
-        self._current_date = today
-        self._prune()
+    suffix = ".jsonl"
 
 
 def _get_handler() -> DailyFileHandler | None:
@@ -142,7 +129,9 @@ def record(
             name="ai_audit", level=logging.INFO, pathname=__file__, lineno=0,
             msg=line, args=(), exc_info=None,
         )
-        handler.emit(rec)
+        # handle(), not emit(): handle() takes the handler's lock, and records
+        # arrive from concurrent threadpool workers.
+        handler.handle(rec)
     except Exception as exc:
         global _warned
         if not _warned:

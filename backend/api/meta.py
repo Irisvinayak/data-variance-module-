@@ -1,33 +1,22 @@
 # meta.py — unauthenticated diagnostics: /health, /app-config, /variance/nlp-health
-#
-# Split out of backend/main.py, which had grown to ~1400 lines holding every
-# route. Route bodies are unchanged; only the decorator and the imports moved.
-# backend/main.py mounts this router, so the URLs are identical.
 
 from __future__ import annotations
 
+import importlib
+import json
 import logging
+import os
 
 from fastapi import APIRouter
+
+from ..config import ANONYMOUS, APP_VERSION
+from ..hosts import HostProfileError, get_profile
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ── Why these handlers are `def`, not `async def` ─────────────────────────────
-# Every route here does BLOCKING work: synchronous Oracle round-trips via
-# oracledb, requests.post to Ollama, FAISS search, and os.listdir/isfile against
-# a network share. FastAPI runs an `async def` handler ON the event loop, so a
-# blocking body stalls the entire process - every other request, including
-# /health, waits behind it.
-#
-# That was not theoretical. With a slow /variance/compute in flight, /health
-# timed out at 30s three times in a row, then answered in 10.1s the moment
-# compute released the loop, then in 0.002s once idle.
-#
-# Declaring them `def` makes FastAPI run them in its threadpool instead, so
-# concurrent requests are served. The bodies are unchanged - there is no
-# `await` anywhere in backend/, so nothing depended on being a coroutine.
+# Handlers are `def`, not `async def`, on purpose — see backend/api/variance.py.
 
 
 # ── GET /variance/nlp-health ──────────────────────────────────────────────────
@@ -40,9 +29,6 @@ router = APIRouter()
 # when ?check_model=true is passed).
 @router.get("/variance/nlp-health", tags=["Meta"])
 def nlp_health(check_model: bool = False) -> dict:
-    import importlib
-    import os
-
     from ..nlp import nlp_config
 
     packages: dict[str, str] = {}
@@ -117,25 +103,22 @@ def nlp_health(check_model: bool = False) -> dict:
     # closest wrong table and the generated SQL names something that does not
     # exist for that host. Reporting the version beside the folder is what makes
     # that mismatch visible instead of silent.
-    from ..config import settings as _settings
-
     index_tables = None
     try:
         with open(nlp_config.SCHEMA_JSON_PATH, encoding="utf-8") as fh:
-            import json as _json
-            index_tables = len(_json.load(fh))
-    except Exception:
-        pass
+            index_tables = len(json.load(fh))
+    except (OSError, ValueError):
+        pass  # already reported above as a MISSING/unreadable index file
 
     return {
         "status":           "ok" if not problems else "degraded",
         "problems":         problems,
-        "app_version":      _settings.APP_VERSION,
+        "app_version":      APP_VERSION,
         "index_dir":        nlp_config.INDEX_DIR,
         "index_dir_source": (
             "DV_NLP_INDEX_DIR override"
             if nlp_config.INDEX_DIR_OVERRIDE
-            else "VERSION=" + _settings.APP_VERSION
+            else "VERSION=" + APP_VERSION
         ),
         "index_tables":     index_tables,
         "embed_model_name": nlp_config.EMBED_MODEL,
@@ -149,9 +132,6 @@ def nlp_health(check_model: bool = False) -> dict:
 # ── Health check (no auth — used by infra/monitoring probes) ──────────────────
 @router.get("/health", tags=["Meta"])
 def health():
-    from ..config import ANONYMOUS, APP_VERSION
-    from ..hosts import HostProfileError, get_profile
-
     info = {"status": "ok", "version": APP_VERSION}
     try:
         profile = get_profile()
@@ -182,9 +162,6 @@ def app_config():
     and deliberately exposes nothing but the version and whether a tenant is
     required; /health carries the filesystem detail.
     """
-    from ..config import APP_VERSION
-    from ..hosts import HostProfileError, get_profile
-
     requires_tenant = False
     profile_name = None
     try:
@@ -192,7 +169,7 @@ def app_config():
         requires_tenant = profile.requires_tenant
         profile_name = profile.name
     except HostProfileError as exc:
-        logger.error("[main] /app-config - profile unavailable: %s", exc)
+        logger.error("[meta] /app-config - profile unavailable: %s", exc)
 
     return {
         "version":         APP_VERSION,

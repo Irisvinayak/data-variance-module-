@@ -57,6 +57,8 @@ class Ideal60Profile(HostProfile):
     name = "iDEAL 6.0"
     requires_tenant = True
     default_base_path = BASE_PATH_60
+    # QCB (Qatar) reports on the calendar year, so "FY25" is Jan-Dec 2025.
+    default_fiscal_year_start_month = 1
 
     # ── Tenant registry ────────────────────────────────────────────────────────
     # Cached: XML_Tenant.xml is read on every request otherwise, and it changes
@@ -79,22 +81,25 @@ class Ideal60Profile(HostProfile):
 
         path = self.tenant_xml_path()
         root = load_xml_tree(path, os.path.basename(path))
-        registry: dict = {}
         if root is None:
+            # Not cached: a transient read failure (network share, file being
+            # rewritten) would otherwise reject every request for AUTH_TTL_SEC.
             logger.error("[hosts/6.0] Cannot load tenant registry (path=%s)", path)
-        else:
-            for el in root.findall("Row"):
-                tid = el.attrib.get("TenantId", "").strip()
-                if not tid:
-                    continue
-                if el.attrib.get("Status", "false").strip().lower() != "true":
-                    logger.info("[hosts/6.0] tenant %r is inactive — skipping", tid)
-                    continue
-                registry[tid] = el.attrib
-            logger.info(
-                "[hosts/6.0] tenant registry loaded | %d active | ids=%s",
-                len(registry), sorted(registry),
-            )
+            return {}
+
+        registry: dict = {}
+        for el in root.findall("Row"):
+            tid = el.attrib.get("TenantId", "").strip()
+            if not tid:
+                continue
+            if el.attrib.get("Status", "false").strip().lower() != "true":
+                logger.info("[hosts/6.0] tenant %r is inactive — skipping", tid)
+                continue
+            registry[tid] = el.attrib
+        logger.info(
+            "[hosts/6.0] tenant registry loaded | %d active | ids=%s",
+            len(registry), sorted(registry),
+        )
 
         with cls._registry_lock:
             cls._registry = registry
@@ -201,17 +206,6 @@ class Ideal60Profile(HostProfile):
     @property
     def forms_delimiter(self) -> str:
         return ","
-
-    # Period.xml carries Id + PeriodName only — there is no frequency column to
-    # key on, so period_freq_attr is None and period_lookup degrades to "no
-    # label available" rather than guessing (B5). The reporting frequency itself
-    # is read from Return.xml@RepFreq, which service.py already does for both
-    # hosts, so variance date validation is unaffected.
-    period_id_attr = "Id"
-
-    @property
-    def period_freq_attr(self) -> str | None:
-        return None
 
     # ── Role access ────────────────────────────────────────────────────────────
 

@@ -19,7 +19,7 @@ import logging
 import re
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import requests
 
@@ -68,7 +68,7 @@ Answer:
 
 def _build_prompt(
     query: str,
-    shortlist: Dict[str, List[Dict[str, Any]]],
+    shortlist: dict[str, list[dict[str, Any]]],
     rank_text: Optional[str] = None,
 ) -> str:
     tables = shortlist["tables"]
@@ -147,7 +147,7 @@ before or after it.
 
 def _build_retry_prompt(
     query: str,
-    shortlist: Dict[str, List[Dict[str, Any]]],
+    shortlist: dict[str, list[dict[str, Any]]],
     bad_raw: str,
     rank_text: Optional[str] = None,
 ) -> str:
@@ -235,7 +235,7 @@ def _call_ollama(prompt: str, attempt: int = 1) -> tuple:
     return text, latency_ms
 
 
-def _parse_json_response(raw: str) -> Optional[Dict[str, Any]]:
+def _parse_json_response(raw: str) -> Optional[dict[str, Any]]:
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
     cleaned = re.sub(r"```\s*$", "", cleaned).strip()
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
@@ -248,8 +248,8 @@ def _parse_json_response(raw: str) -> Optional[Dict[str, Any]]:
 
 
 def _validate_grounding(
-    parsed: Dict[str, Any], shortlist: Dict[str, List[Dict[str, Any]]]
-) -> Optional[Dict[str, Any]]:
+    parsed: dict[str, Any], shortlist: dict[str, list[dict[str, Any]]]
+) -> Optional[dict[str, Any]]:
     tables_by_name = {t["table"]: t for t in shortlist["tables"]}
     return_id = str(parsed.get("return_id", "")).strip()
     table_name = str(parsed.get("table_name", "")).strip()
@@ -294,7 +294,7 @@ _QUERY_OVE_RE = re.compile(r"\bove(?:rseas)?\b|\bforeign\b|\boffshore\b", re.IGN
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
 
-def _rank_columns_by_query(query: str, columns: List[str]) -> List[str]:
+def _rank_columns_by_query(query: str, columns: list[str]) -> list[str]:
     """Re-rank candidate columns by literal token overlap with the query.
 
     Needed because the two shortlist sources order columns differently:
@@ -339,8 +339,8 @@ def _scope_of(column: str) -> Optional[str]:
 
 
 def _resolve_deterministic(
-    query: str, shortlist: Dict[str, List[Dict[str, Any]]]
-) -> Optional[Dict[str, Any]]:
+    query: str, shortlist: dict[str, list[dict[str, Any]]]
+) -> Optional[dict[str, Any]]:
     """LLM-free resolution straight from the retrieval scores.
 
     This exists because the LLM's entire job in this module is to pick ONE
@@ -366,7 +366,7 @@ def _resolve_deterministic(
     tables = shortlist.get("tables") or []
     all_columns = shortlist.get("columns") or []
 
-    def _cols_for(name: str) -> List[str]:
+    def _cols_for(name: str) -> list[str]:
         return [c["column"] for c in all_columns if c["table"] == name]
 
     # Prefer the highest-ranked table that actually has candidate columns —
@@ -436,10 +436,10 @@ def _resolve_deterministic(
 
 def resolve_intent(
     query: str,
-    shortlist: Dict[str, List[Dict[str, Any]]],
+    shortlist: dict[str, list[dict[str, Any]]],
     *,
     analysis: Any = None,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """Return {"return_id", "table_name", "selected_columns"} grounded entirely
     in `shortlist`.
 
