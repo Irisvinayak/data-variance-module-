@@ -217,12 +217,12 @@ DEV_TENANT_ID: str = os.getenv("DV_DEV_TENANT_ID", "").strip()
 API_BASE_PATH: str = _versioned("API_BASE_PATH", "")
 
 # ── Server settings ────────────────────────────────────────────────────────────
-# 5.5 -> 8002, 6.0 -> 8003. Distinct by default so both can run at once on one
+# 5.5 -> 8004, 6.0 -> 8003. Distinct by default so both can run at once on one
 # box without configuration; 8000/8001 are avoided because they collide with
 # other iDEAL services already on these servers.
 SERVER_HOST: str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
 
-SERVER_PORT: int = int(_versioned("SERVER_PORT", "8002", "8003"))
+SERVER_PORT: int = int(_versioned("SERVER_PORT", "8004", "8003"))
 
 # ── CORS origins ───────────────────────────────────────────────────────────────
 _DEFAULT_CORS = "http://localhost:5173,http://localhost:3001"

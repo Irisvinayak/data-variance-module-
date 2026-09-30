@@ -59,7 +59,7 @@ copy config\env\.env.55.example .env     # or .env.60.example
 
 ## Running
 
-Backend (port follows `VERSION`: 5.5 → 8002, 6.0 → 8003):
+Backend (port follows `VERSION`: 5.5 → 8004, 6.0 → 8003):
 
 ```powershell
 python dev_server.py

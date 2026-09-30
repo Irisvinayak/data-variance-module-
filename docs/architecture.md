@@ -26,7 +26,7 @@ The same code serves two different iDEAL applications:
 | Return element | `<Return>` | `<Row>` |
 | Allowed-returns attr | `Forms="a|b|c"` | `ReturnId="a,b,c"` |
 | Oracle schema | `CRILC` | `IDEALCRILC` |
-| Default port | 8002 | 8003 |
+| Default port | 8004 | 8003 |
 
 `VERSION` in the root `.env` is the **single switch**. It selects the DB, the
 repository root, the port, the reverse-proxy prefix, the CORS origins and the

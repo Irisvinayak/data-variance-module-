@@ -3,7 +3,7 @@ dev_server.py — FastAPI server launcher for Windows
 (Data Variance API — backend.main:app)
 
 Host, port and reverse-proxy prefix all come from the root .env via
-backend.config, so VERSION is the only switch: 5.5 starts on 8002, 6.0 on
+backend.config, so VERSION is the only switch: 5.5 starts on 8004, 6.0 on
 8003. Nothing about the port is decided here.
 """
 

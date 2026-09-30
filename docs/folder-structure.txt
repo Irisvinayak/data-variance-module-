@@ -7,7 +7,7 @@ For details, read the files in docs/ (listed at the bottom).
 
 ROOT FILES
 ----------
-dev_server.py         Starts the backend server (port 8002 for 5.5, 8003 for 6.0).
+dev_server.py         Starts the backend server (port 8004 for 5.5, 8003 for 6.0).
 requirements.txt      Python packages the backend needs.
 requirements-dev.txt  Extra Python packages for testing.
 pyproject.toml        Test settings (pytest).

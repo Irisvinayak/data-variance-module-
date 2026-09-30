@@ -3,7 +3,7 @@
  *
  * HOW ROUTING WORKS:
  *   Dev  : the Vite proxy in vite.config.js forwards every backend route
- *          prefix to the port VERSION selects in the root .env (5.5 -> 8002,
+ *          prefix to the port VERSION selects in the root .env (5.5 -> 8004,
  *          6.0 -> 8003). BASE_URL must be '' (empty) so requests go to the
  *          same origin and the proxy sees them.
  *

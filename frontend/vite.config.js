@@ -19,7 +19,7 @@ function backendTarget(mode) {
   const port =
     (isLegacy ? root.DV_SERVER_PORT_55 : root.DV_SERVER_PORT_60) ||
     root.DV_SERVER_PORT ||
-    (isLegacy ? '8002' : '8003')
+    (isLegacy ? '8004' : '8003')
   return `http://localhost:${String(port).trim()}`
 }
 
