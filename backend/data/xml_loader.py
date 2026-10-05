@@ -9,6 +9,19 @@ import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
+# The repository XML is read from a folder other systems write to. The standard library
+# parser expands entities, so a crafted file (billion laughs / external entity) can exhaust
+# memory or read local files; defusedxml refuses those constructs (code review L-02). It is
+# used when installed (it is in requirements.txt); without it the loader still works, with
+# one warning, so an install that lacks the package does not stop serving.
+try:
+    from defusedxml import ElementTree as _SafeET
+    from defusedxml.common import DefusedXmlException
+except ImportError:  # pragma: no cover - exercised by test with the import blocked
+    _SafeET = None
+    DefusedXmlException = None
+    logger.warning("[xml_loader] defusedxml is not installed; XML is parsed with the standard library")
+
 # Matches any <?xml ... ?> processing instruction
 _XML_DECL_RE = re.compile(rb"<\?xml[^?]*\?>", re.IGNORECASE)
 
@@ -77,12 +90,17 @@ def load_xml_tree(path: str, label: str = "") -> ET.Element | None:
 
         raw = _sanitise_xml_bytes(raw)
 
-        root = ET.fromstring(raw)
+        root = _SafeET.fromstring(raw) if _SafeET is not None else ET.fromstring(raw)
         logger.debug("[xml_loader] Loaded %s (%d top-level children)", display, len(root))
         return root
     except ET.ParseError as exc:
         logger.error("[xml_loader] XML parse error in %s: %s", display, exc)
         return None
+    except Exception as exc:  # noqa: BLE001
+        if DefusedXmlException is not None and isinstance(exc, DefusedXmlException):
+            logger.error("[xml_loader] %s rejected: it uses a forbidden XML construct (%s)", display, type(exc).__name__)
+            return None
+        raise
     except OSError as exc:
         logger.error("[xml_loader] Cannot read %s: %s", display, exc)
         return None

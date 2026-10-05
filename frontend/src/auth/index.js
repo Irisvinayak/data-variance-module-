@@ -20,10 +20,98 @@
 import * as strategy55 from './strategy55.js'
 import * as strategy60 from './strategy60.js'
 import { API_BASE_URL } from '../config.js'
+import { getToken, setToken, getClaims } from './token.js'
+import { scrubUrlCredentials } from './urlScrub.js'
+
+// Diagnostics are dev-only: production consoles must not carry config hints
+// or identity values.
+const devLog = {
+  warn:  (...a) => { if (import.meta.env.DEV) console.warn(...a) },
+  error: (...a) => { if (import.meta.env.DEV) console.error(...a) },
+}
+
+const APP_CONFIG_TIMEOUT_MS = 15000
 
 const STRATEGIES = { '5.5': strategy55, '6.0': strategy60 }
 
 let identity = { loginId: '', tenantId: '', uid: '', version: null, ready: false }
+
+const listeners = new Set()
+
+/** Subscribe to identity changes (a host token arriving after startup). */
+export function onIdentityChange(fn) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+/** Whether a live (non-expired) host token is held in memory. */
+export function hasToken() {
+  return Boolean(getToken())
+}
+
+/** The tenant to name in X-Tenant-Id ('' when there is none). The server checks it
+ * against the token's own tenant, so it is a claim, never a source of identity. */
+export function currentTenantId() {
+  return identity.tenantId || ''
+}
+
+// ── Host postMessage handshake ───────────────────────────────────────────────
+// Inside an iframe we announce DATAVAR_READY and the host may answer with
+// DATAVAR_AUTH {jwt}. Hosts that never reply change nothing.
+let handshakeStarted = false
+
+function hostOrigins() {
+  return String(import.meta.env.VITE_HOST_ORIGIN ?? '')
+    .split(',').map((o) => o.trim()).filter(Boolean)
+}
+
+function readyTargetOrigin() {
+  const configured = hostOrigins()
+  if (configured.length) return configured[0]
+  try {
+    if (document.referrer) return new URL(document.referrer).origin
+  } catch { /* fall through */ }
+  return '*'   // READY carries no secret
+}
+
+export function postReady() {
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'DATAVAR_READY' }, readyTargetOrigin())
+    }
+  } catch { /* non-fatal */ }
+}
+
+function handleHostMessage(event) {
+  if (event.source !== window.parent) return
+  const allowed = hostOrigins()
+  if (allowed.length && !allowed.includes(event.origin)) return
+  const data = event.data
+  if (!data || data.type !== 'DATAVAR_AUTH' || typeof data.jwt !== 'string') return
+  if (!setToken(data.jwt)) return   // empty or already expired
+
+  // Claims are unverified display fallbacks only; fill gaps, never override.
+  const claims = getClaims()
+  const pick = (keys) => {
+    for (const k of keys) if (claims?.[k]) return String(claims[k])
+    return ''
+  }
+  const loginId  = identity.loginId  || pick(['LoginId', 'loginId', 'login_id', 'sub'])
+  const hostTenant = typeof data.tenantId === 'string' ? data.tenantId.trim() : ''
+  const tenantId = identity.tenantId || pick(['TenantId', 'tenantId', 'tenant_id', 'tid']) || hostTenant
+  if (identity.ready && (loginId !== identity.loginId || tenantId !== identity.tenantId)) {
+    identity = { ...identity, loginId, tenantId }
+    listeners.forEach((fn) => fn(identity))
+  }
+}
+
+/** Idempotent: registers the listener once and sends the first READY. */
+export function startHostHandshake() {
+  if (handshakeStarted) return
+  handshakeStarted = true
+  window.addEventListener('message', handleHostMessage)
+  postReady()
+}
 
 function normalizeVersion(raw) {
   const value = String(raw ?? '').trim()
@@ -42,10 +130,12 @@ async function fetchBackendVersion() {
   // from the actual cause (an unreachable /app-config, e.g. missing from the
   // dev-server proxy list, or a reverse proxy that does not forward it).
   const url = `${API_BASE_URL}/app-config`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), APP_CONFIG_TIMEOUT_MS)
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } })
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal })
     if (!res.ok) {
-      console.error(
+      devLog.error(
         `[auth] GET ${url} -> ${res.status}. Cannot read the backend's VERSION, ` +
         'so the host version will be GUESSED from the URL. If the backend is ' +
         'running 6.0 this guess will be wrong and every request will 401. ' +
@@ -57,15 +147,17 @@ async function fetchBackendVersion() {
     const body = await res.json()
     const version = normalizeVersion(body?.version)
     if (!version) {
-      console.error('[auth] /app-config returned no usable version:', body)
+      devLog.error('[auth] /app-config returned no usable version:', body)
     }
     return version
   } catch (err) {
-    console.error(
+    devLog.error(
       `[auth] GET ${url} failed (${err?.message ?? err}). Falling back to ` +
       'guessing the host version from the URL — see above for why that is risky.',
     )
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -87,6 +179,10 @@ export async function bootstrapAuth() {
   // and a 5.5 (or wrongly guessed) version never ran the 6.0 strip at all.
   // Idempotent, and it only moves the 6.0 params into sessionStorage.
   strategy60.bootstrap()
+  // Session credentials in the URL (the 5.5 session cookie value, a token) are never
+  // used and must not stay in the address bar, history or Referer (code review C-01).
+  scrubUrlCredentials()
+  startHostHandshake()
 
   const pinned = normalizeVersion(import.meta.env.VITE_APP_VERSION)
   const fromBackend = pinned ? null : await fetchBackendVersion()
@@ -96,7 +192,7 @@ export async function bootstrapAuth() {
     // Reached only when the authoritative source was unavailable. Say so
     // plainly — an operator seeing a 401 needs to know the version was a
     // guess, not a fact, because that reframes the whole investigation.
-    console.warn(
+    devLog.warn(
       `[auth] Host version could not be read from the backend; GUESSED "${version}" ` +
       'from the URL shape. If this is wrong, authentication will fail in ways ' +
       'that look like bad credentials rather than a misconfigured proxy.',

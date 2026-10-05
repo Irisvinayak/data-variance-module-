@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import logging
 
+import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..auth.deps import require_login, require_return_access
-from ..config import RequestContext
+from ..config import AUTH_ENABLED, RequestContext
+from ..config import settings as cfg
 from ..data import service
-from ..data.calculate_variance import is_safe_identifier
+from ..data.calculate_variance import is_safe_identifier, result_error
 from ..data.db import execute_query
 from ..data.models import VarianceComputeRequest
+from ..data.validation import InvalidInput, ensure_safe_return_id, ensure_safe_table_ref
+from ..auth.service import is_return_allowed
 from .errors import http_error
+from .schemas import ComputeResponse, DatesResponse, FindResponse
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +42,9 @@ router = APIRouter()
 
 
 # ── GET /variance/find ─────────────────────────────────────────────────────────
-@router.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"])
+@router.get("/variance/find", status_code=status.HTTP_200_OK, tags=["Variance"], response_model=FindResponse, response_model_exclude_unset=True)
 def variance_find(
-    return_name: str,
+    return_name: str = Query(max_length=200),
     ctx: RequestContext = Depends(require_login),     # ← validates loginId param & user exists
 ) -> dict:
     """Find a return by name.
@@ -55,16 +60,45 @@ def variance_find(
     The access check happens at /variance/dates and /variance/compute time,
     giving a clear 403.
     """
-    logger.info("[main] GET /variance/find | %s | return_name=%r", ctx, return_name)
+    logger.info("[api.variance] GET /variance/find | %s | return_name=%r", ctx, return_name)
 
     result = service.find_return_and_tables(return_name, ctx)
-    if result.get("error"):
-        logger.warning("[main] 404 /variance/find | return_name=%r | %s", return_name, result["error"])
+    if result_error(result):
+        logger.warning("[api.variance] 404 /variance/find | return_name=%r | %s", return_name, result_error(result))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=result["error"],
+            detail=result_error(result),
         )
 
+    result = _redact_server_paths(result)
+
+    # Optional entitlement filter (DV_FIND_FILTER_BY_ACCESS, default off — the UI
+    # relies on seeing returns it may not open, so turning this on changes what
+    # users see). When on, a return the caller cannot open is reported as not
+    # found, exactly like a return that does not exist.
+    if cfg.FIND_FILTER_BY_ACCESS and AUTH_ENABLED:
+        if result.get("candidates") is not None:
+            result["candidates"] = [
+                c for c in result["candidates"] if is_return_allowed(ctx, str(c.get("return_id", "")))
+            ]
+            if not result["candidates"]:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No matching return found.")
+        elif result.get("return_id") and not is_return_allowed(ctx, str(result["return_id"])):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No matching return found.")
+
+    return result
+
+
+def _redact_server_paths(result: dict) -> dict:
+    """Replace the absolute server path of the mapping file with its file name.
+
+    The browser echoes the value back on /dates and /compute, but the server
+    ignores it (the mapping is located from the return's own TblPath), so the
+    full path only ever disclosed the repository layout (code review SEC-06).
+    """
+    path = result.get("table_mapping_path")
+    if isinstance(path, str) and path:
+        result = {**result, "table_mapping_path": os.path.basename(path.replace("\\", "/"))}
     return result
 
 
@@ -84,7 +118,7 @@ MAX_COMPARISON_DATES = 3
 MAX_REPORTING_PERIOD = 12
 
 
-@router.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"])
+@router.post("/variance/compute", status_code=status.HTTP_200_OK, tags=["Variance"], response_model=ComputeResponse, response_model_exclude_unset=True)
 def variance_compute(
     payload: VarianceComputeRequest,
     ctx: RequestContext = Depends(require_login),     # ← step 1: user must exist in XML_User.xml
@@ -96,13 +130,19 @@ def variance_compute(
       2. require_return_access — confirms user's dept has this return in Forms/NXForms
     """
     logger.info(
-        "[main] POST /variance/compute | %s | return_id=%s | table=%s | date=%s | "
+        "[api.variance] POST /variance/compute | %s | return_id=%s | table=%s | date=%s | "
         "periods=%s | comparison_dates=%s",
         ctx, payload.return_id, payload.table_name,
         payload.reporting_date, payload.reporting_period, payload.comparison_dates,
     )
 
     # ── Step 2: check this specific return is in the user's allowed set ────────
+    try:
+        ensure_safe_return_id(payload.return_id)
+        ensure_safe_table_ref(payload.table_name)
+    except InvalidInput as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     require_return_access(ctx, payload.return_id)
 
     if payload.reporting_period > MAX_REPORTING_PERIOD:
@@ -114,7 +154,7 @@ def variance_compute(
     if payload.selected_columns:
         invalid = [c for c in payload.selected_columns if not is_safe_identifier(c)]
         if invalid:
-            logger.warning("[main] 400 /variance/compute | %s | invalid selected_columns=%r", ctx, invalid)
+            logger.warning("[api.variance] 400 /variance/compute | %s | invalid selected_columns=%r", ctx, invalid)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid column name(s): {invalid}",
@@ -158,7 +198,7 @@ def variance_compute(
             ctx=ctx,
         )
         logger.info(
-            "[main] compute_variance SUCCESS | %s | return_id=%s | table=%s",
+            "[api.variance] compute_variance SUCCESS | %s | return_id=%s | table=%s",
             ctx, payload.return_id, payload.table_name,
         )
     except Exception as exc:
@@ -168,11 +208,11 @@ def variance_compute(
 
 
 # ── GET /variance/dates ─────────────────────────────────────────────────────────
-@router.get("/variance/dates", status_code=status.HTTP_200_OK, tags=["Variance"])
+@router.get("/variance/dates", status_code=status.HTTP_200_OK, tags=["Variance"], response_model=DatesResponse, response_model_exclude_unset=True)
 def variance_dates(
-    return_id: str,
-    table_mapping_path: str,
-    table_name: str,
+    return_id: str = Query(max_length=64),
+    table_name: str = Query(max_length=256),
+    table_mapping_path: str = Query(default="", max_length=1024),
     ctx: RequestContext = Depends(require_login),
 ) -> dict:
     """List every reporting date that actually has data for this return/table,
@@ -183,9 +223,15 @@ def variance_dates(
     mapping file is resolved server-side from the return's own TblPath.
     """
     logger.info(
-        "[main] GET /variance/dates | %s | return_id=%s | table=%s",
+        "[api.variance] GET /variance/dates | %s | return_id=%s | table=%s",
         ctx, return_id, table_name,
     )
+
+    try:
+        ensure_safe_return_id(return_id)
+        ensure_safe_table_ref(table_name)
+    except InvalidInput as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     require_return_access(ctx, return_id)
 

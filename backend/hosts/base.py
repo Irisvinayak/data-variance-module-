@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
@@ -30,6 +31,10 @@ from ..config.settings import (
 )
 
 logger = logging.getLogger(__name__)
+
+# A tenant id is substituted into a path, so only plain identifiers are accepted.
+_SAFE_TENANT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_ALLOW_SHARED_OVERRIDE = os.environ.get("DV_ALLOW_SHARED_PATH_OVERRIDE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 # Every frequency code calculate_variance understands (its _MONTHLY,
 # _QUARTERLY, ... sets). A RepFreq outside this set is treated as missing.
@@ -247,14 +252,50 @@ class HostProfile(ABC):
 
     # ── Helper for subclasses ──────────────────────────────────────────────────
 
-    @staticmethod
-    def _override(key: str, derived: str) -> str:
+    #: Overrides for these files/folders point at ONE location. Under a multi-tenant host
+    #: each tenant has its own copy, so a single shared path would make every tenant read
+    #: (and be authorised from) the same tenant's repository (code review M-01).
+    PER_TENANT_OVERRIDE_KEYS = frozenset({
+        "returns_xml", "non_xbrl_returns_xml", "table_mapping_base", "instance_base",
+        "user_xml", "department_xml", "role_access_xml", "period_xml",
+    })
+    _warned_overrides: set = set()
+
+    def _override(self, key: str, derived: str, ctx: RequestContext | None = None) -> str:
         """Return the DV_* env override for `key` if set, else the derived path.
 
-        Lets a deployment with a non-standard layout pin one file without
-        needing a bespoke profile.
+        Lets a deployment with a non-standard layout pin one file without needing a bespoke
+        profile. On a tenant-scoped host a per-tenant file may only be overridden with a
+        path containing the `{tenant}` placeholder (replaced by the request's tenant id); a
+        plain path is ignored with a warning, because it would be shared by every tenant.
+        DV_ALLOW_SHARED_PATH_OVERRIDE=true restores the old behaviour for an installation
+        that really has one tenant.
         """
-        return PATH_OVERRIDES.get(key) or derived
+        value = PATH_OVERRIDES.get(key)
+        if not value:
+            return derived
+        if not self.requires_tenant or key not in self.PER_TENANT_OVERRIDE_KEYS:
+            return value
+        if "{tenant}" in value:
+            tenant = str(getattr(ctx, "tenant_id", "") or "")
+            if _SAFE_TENANT_RE.match(tenant):
+                return value.replace("{tenant}", tenant)
+            self._warn_once(key, "has a {tenant} placeholder but the request's tenant id is missing or unsafe")
+            return derived
+        if _ALLOW_SHARED_OVERRIDE:
+            return value
+        self._warn_once(
+            key,
+            "is ignored: this host is multi-tenant and the path would be shared by every tenant "
+            "(use a {tenant} placeholder, or set DV_ALLOW_SHARED_PATH_OVERRIDE=true for a single-tenant install)",
+        )
+        return derived
+
+    @classmethod
+    def _warn_once(cls, key: str, message: str) -> None:
+        if key not in HostProfile._warned_overrides:
+            HostProfile._warned_overrides.add(key)
+            logger.warning("[hosts] path override for %r %s", key, message)
 
     #: Repository root for this host when DV_BASE_PATH is not set. Subclasses
     #: set it from their own DV_BASE_PATH_xx setting.

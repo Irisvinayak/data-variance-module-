@@ -23,8 +23,11 @@ from typing import Any, Optional
 import requests
 
 from .. import ai_audit
+from .llm_guard import CircuitBreaker, LLM_SLOT_WAIT_SEC, llm_slots, make_session
+from .prompt_safety import DATA_NOTICE, sanitize_question
 from .nlp_config import (
     DESCRIPTION_SAMPLES_PATH,
+    INTENT_FAILURE_COOLDOWN_SEC,
     MODEL_PROFILES,
     OLLAMA_MODEL,
     OLLAMA_TIMEOUT_SEC,
@@ -36,7 +39,8 @@ logger = logging.getLogger(__name__)
 
 # Reused across calls — avoids a fresh TCP/TLS handshake per Ollama request
 # (generate_sql makes up to 2 calls per query: initial attempt + one retry).
-_session = requests.Session()
+_session = make_session()
+_breaker = CircuitBreaker(INTENT_FAILURE_COOLDOWN_SEC)
 
 
 # mtime-keyed in-memory cache, same pattern as index_store.py/lexical_search.py/
@@ -106,7 +110,7 @@ _FROM_LIST_RE = re.compile(
 # rather than truncated to a prefix that happens to match the allowlist.
 _TABLE_IDENT = r"[a-z_][a-z0-9_$#]*(?:\s*\.\s*[a-z_][a-z0-9_$#]*)?"
 _LEADING_IDENT_RE = re.compile(rf"\s*({_TABLE_IDENT})")
-_FROM_JOIN_RE = re.compile(rf"(?:from|join)\s+({_TABLE_IDENT})")
+_FROM_JOIN_RE = re.compile(rf"\b(?:from|join)\s+({_TABLE_IDENT})")
 MAX_LABELS_MINIMAL = 8
 # Caps the row-label values load_samples() injects per column: a wide table
 # with hundreds of label values would otherwise balloon the prompt until
@@ -174,7 +178,7 @@ def _resolve_relative_time(query: str, today: date, fiscal_start_month: int = 4)
         "(these are the EXACT date ranges for the relative terms the user wrote)\n"
         "════════════════════════════════════════════════\n"
     )
-    block += "\n".join(f"  {l}" for l in lines)
+    block += "\n".join(f"  {line}" for line in lines)
     block += "\n"
     return block
 
@@ -408,6 +412,7 @@ Use {dialect_hint} syntax, including Oracle-specific constructs such as FETCH FI
 
 ### Task
 {user_query}
+{DATA_NOTICE}
 
 ### Database Schema
 {schema_context}
@@ -442,6 +447,8 @@ def _find_total_row(values: list) -> Optional[str]:
 
 
 def build_prompt(user_query, tables, columns, dialect="Oracle", today_date=None, matched_labels=None, model_name=None):
+    # Keep the question inside the prompt as DATA (code review LLM-02).
+    user_query = sanitize_question(user_query)
     if today_date is None:
         today_date = date.today().isoformat()
     if model_name is None:
@@ -542,6 +549,7 @@ SCHEMA CONTEXT
 ════════════════════════════════════════════════
 Allowed tables: {valid_tables}
 {time_context_block}User question: {user_query}
+{DATA_NOTICE}
 ════════════════════════════════════════════════
 SQL:"""
 
@@ -564,7 +572,13 @@ def _call_ollama(
     options = {}
     if model_profile.get("temperature") is not None:
         options["temperature"] = model_profile["temperature"]
-    if model_profile.get("num_predict") is not None:
+    # DV_SQL_NUM_PREDICT overrides the per-model cap. The small-model profiles stop at
+    # 128 tokens, which cuts a multi-column statement off mid-way (code review M-19);
+    # unset keeps the profile's value.
+    override = os.getenv("DV_SQL_NUM_PREDICT", "").strip()
+    if override.isdigit() and int(override) > 0:
+        options["num_predict"] = int(override)
+    elif model_profile.get("num_predict") is not None:
         options["num_predict"] = model_profile["num_predict"]
 
     payload = {"model": model_name, "prompt": prompt_text, "stream": False}
@@ -575,6 +589,13 @@ def _call_ollama(
         "[nlp.sql_generator] Calling Ollama | model=%s | attempt=%d | prompt_chars=%d",
         model_name, attempt, len(prompt_text),
     )
+    # Fail fast during an outage instead of holding a worker for the full
+    # timeout on every request (code review LLM-04).
+    if _breaker.in_cooldown():
+        raise RuntimeError("The language model is temporarily unavailable.")
+    if not llm_slots.acquire(timeout=LLM_SLOT_WAIT_SEC):
+        raise RuntimeError("The language model is busy. Please try again shortly.")
+
     started = time.monotonic()
     try:
         response = _session.post(OLLAMA_URL, json=payload, timeout=OLLAMA_TIMEOUT_SEC)
@@ -585,10 +606,21 @@ def _call_ollama(
             "[nlp.sql_generator] Ollama call failed | model=%s | attempt=%d | ms=%d | %s",
             model_name, attempt, latency_ms, exc,
         )
-        raise RuntimeError(f"Ollama request failed: {exc}") from exc
+        _breaker.trip()
+        raise RuntimeError("The language model could not be reached.") from exc
+    finally:
+        llm_slots.release()
 
     latency_ms = int((time.monotonic() - started) * 1000)
-    text = response.json().get("response", "")
+    # A proxy error page (HTML) is a 200 or a 5xx with a body that is not JSON;
+    # unguarded, that raised ValueError past the handlers above as a 500 with no
+    # fallback and no cooldown (code review LLM-05).
+    try:
+        text = response.json().get("response", "")
+    except ValueError as exc:
+        logger.error("[nlp.sql_generator] Ollama returned a non-JSON body | model=%s | attempt=%d", model_name, attempt)
+        _breaker.trip()
+        raise RuntimeError("The language model returned an unreadable response.") from exc
     logger.info(
         "[nlp.sql_generator] Ollama responded | model=%s | attempt=%d | ms=%d | response_chars=%d",
         model_name, attempt, latency_ms, len(text),
@@ -679,6 +711,105 @@ def generate_sql(user_query, tables, columns, dialect="Oracle", today_date=None,
     return {"sql": raw, "warnings": warnings}
 
 
+# Functions that read files, make network calls or reach other sessions from
+# inside a SELECT. Matched on the PARSED function name, so spacing/case/quoting
+# tricks that fool a text search do not apply.
+_DENIED_FUNCTION_PREFIXES = ("dbms_", "utl_", "ctxsys", "sys_")
+_DENIED_FUNCTIONS = {"httpuritype", "xmltype", "extractvalue", "dburitype", "sys_context", "userenv"}
+
+
+def _ast_check(sql: str, valid_table_names: set) -> tuple:
+    """Structural allow-list check on the PARSED statement. Returns (ok, reason).
+
+    This is the authoritative table boundary; the regex checks around it are
+    kept as a cheap first filter and for their error wording. The regex-only
+    approach was bypassable twice (code review C-02, C-03) because it reasoned
+    about text. Here every table reference anywhere in the tree is collected,
+    including inside sub-queries, so nothing can hide behind a function call or
+    a nested SELECT.
+
+    Fails CLOSED: a statement the parser cannot read, or a missing parser, is a
+    rejection, never an approval.
+    """
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except Exception:  # noqa: BLE001 - any import problem must reject, not crash
+        logger.error("[nlp.sql_generator] sqlglot is not installed; rejecting SQL (fail closed)")
+        return False, "SQL validation unavailable"
+
+    try:
+        statements = [s for s in sqlglot.parse(sql, read="oracle") if s is not None]
+    except Exception:  # noqa: BLE001
+        return False, "SQL could not be parsed"
+    if len(statements) != 1:
+        return False, "Disallowed construct: multiple statements"
+    root = statements[0]
+    # A query expression: a SELECT, or a UNION/INTERSECT/EXCEPT of SELECTs.
+    # Anything else (DML, DDL, commands) is not a query. Nesting is fine: what
+    # matters is that EVERY table anywhere in the tree is on the allow-list.
+    if not isinstance(root, (exp.Select, exp.Union, exp.Intersect, exp.Except)):
+        return False, "Only a single plain SELECT is allowed"
+
+    tables = set()
+    for walked in root.walk():
+        node = walked[0] if isinstance(walked, tuple) else walked
+        if isinstance(node, (exp.Command, exp.Insert, exp.Update, exp.Delete, exp.Merge,
+                             exp.Create, exp.Drop, exp.Alter)):
+            return False, "Only a single plain SELECT is allowed"
+        if isinstance(node, exp.Select) and (node.args.get("into") or node.args.get("locks")):
+            return False, "Disallowed construct: INTO / FOR UPDATE"
+        if isinstance(node, exp.Table):
+            # A table-valued function (TABLE(...), XMLTABLE, ...) is not a table
+            # reference the allow-list can reason about.
+            if not isinstance(node.this, exp.Identifier):
+                return False, "Disallowed construct: table function"
+            if node.catalog or node.db:
+                tables.add(f"{node.db}.{node.name}".strip(".").lower())
+            else:
+                tables.add(node.name.lower())
+        if isinstance(node, (exp.From, exp.Join)):
+            source = node.this
+            if source is not None and not isinstance(source, (exp.Table, exp.Subquery)):
+                return False, "Disallowed construct: table function"
+        if isinstance(node, (exp.Anonymous, exp.Func)):
+            name = (node.name or node.sql_name() or "").lower()
+            if name in _DENIED_FUNCTIONS or name.startswith(_DENIED_FUNCTION_PREFIXES):
+                return False, f"Disallowed construct: function '{name}'"
+
+    not_allowed = tables - valid_table_names
+    if not_allowed:
+        return False, f"Hallucinated tables (not in schema): {sorted(not_allowed)}"
+    if not tables:
+        return False, f"Query does not reference any matched table: {sorted(valid_table_names)}"
+    return True, "Valid"
+
+
+def _select_list_unknown_columns(sql: str, valid_col_names: set, extra_aliases: set) -> set:
+    """Column names used in any SELECT list that are neither schema columns, aliases
+    defined in the statement, SQL keywords nor 1-2 character table aliases."""
+    import sqlglot
+    from sqlglot import exp
+
+    root = sqlglot.parse_one(sql, read="oracle")
+    aliases = {a.alias.lower() for a in root.find_all(exp.Alias) if a.alias} | set(extra_aliases)
+    unknown = set()
+    for select in root.find_all(exp.Select):
+        for item in select.expressions:
+            for col in item.find_all(exp.Column):
+                name = (col.name or "").lower()
+                if (
+                    name
+                    and name not in valid_col_names
+                    and name not in _SQL_KEYWORDS
+                    and name not in aliases
+                    and not name.isdigit()
+                    and len(name) > 2
+                ):
+                    unknown.add(name)
+    return unknown
+
+
 def validate_sql(sql, tables, columns):
     """Returns (is_valid, reason). `tables`/`columns` MUST be the caller's
     already-authorized shortlist — this function's table/column allowlist
@@ -709,6 +840,15 @@ def validate_sql(sql, tables, columns):
             return False, f"Dangerous keyword detected: '{word}'"
 
     valid_table_names = {t["table"].lower() for t in tables}
+
+    # Authoritative structural check on the parsed statement (see _ast_check).
+    # The text-based checks below stay as a first filter and for their wording,
+    # but nothing they miss can get past this.
+    ast_ok, ast_reason = _ast_check(sql, valid_table_names)
+    if not ast_ok:
+        logger.error("[nlp.sql_generator] AST CHECK rejected | %s | sql=%r", ast_reason, sql)
+        return False, ast_reason
+
     all_columns = _load_all_columns(valid_table_names)
     valid_col_names = {c["column"].lower() for c in all_columns}
 
@@ -735,27 +875,12 @@ def validate_sql(sql, tables, columns):
     if not referenced_tables & valid_table_names:
         return False, f"Query does not reference any matched table: {sorted(valid_table_names)}"
 
-    select_body = re.split(r'\bfrom\b', q_for_tables, maxsplit=1)[0]
-    select_body = select_body.replace("select", "", 1).strip()
-    select_body = re.sub(r'\bas\s+[a-z_][a-z0-9_]*', '', select_body)
-    select_body = re.sub(
-        r'\b(sum|avg|min|max|count|coalesce|nvl|nullif|trim|upper|lower|to_date|to_char)\s*\(', '(', select_body,
-    )
-    select_body = re.sub(r'[*/+\-()\[\]]', ' ', select_body)
-
-    col_tokens = re.findall(r'(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)', select_body)
-
-    hallucinated_cols = {
-        t for t in col_tokens
-        if (
-            t not in valid_col_names
-            and t not in _SQL_KEYWORDS
-            and t not in subquery_aliases
-            and t != "*"
-            and not t.isdigit()
-            and len(t) > 2
-        )
-    }
+    # Which names in the SELECT list are not columns of the schema? Decided on the PARSED
+    # tree: a function name (ROUND, CAST, DECODE, ABS, ...) is not a column and a string
+    # literal ('pos') is not a column. The old text scan treated both as hallucinated
+    # columns and rejected valid SQL (code review M-18). Same scope as before: only the
+    # select list, so no query that passed is newly rejected.
+    hallucinated_cols = _select_list_unknown_columns(sql, valid_col_names, subquery_aliases)
     if hallucinated_cols:
         return False, f"Hallucinated columns (not in schema): {sorted(hallucinated_cols)}"
 

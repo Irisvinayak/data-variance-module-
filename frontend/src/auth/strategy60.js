@@ -5,7 +5,7 @@
  *
  *   /DataVar/?_at=<JWT>&_lid=<loginId>
  *
- * The token is moved into sessionStorage and stripped from the address bar on
+ * The token is moved into memory (never storage) and stripped from the address bar on
  * first load, so a bookmarked or shared URL cannot carry a live token, and a
  * page reload still works. LoginId and TenantId come from the JWT's claims,
  * falling back to _lid / _tid when the token cannot be decoded.
@@ -36,6 +36,11 @@
  * claims (JWT or fallback) are self-asserted and the API is open to anyone who
  * supplies a loginId and tenantId directly.
  */
+
+import { getToken, setToken, getClaims } from './token.js'
+
+// Dev-only diagnostics: never print identity values or config hints in production.
+const devWarn = (...args) => { if (import.meta.env.DEV) console.warn(...args) }
 
 const TOKEN_KEY = '_at'
 const LOGIN_KEY = '_lid'
@@ -81,11 +86,15 @@ function writeStore(key, value) {
   }
 }
 
+function urlTokenAllowed() {
+  return String(import.meta.env.VITE_ALLOW_URL_TOKEN ?? 'true').trim().toLowerCase() !== 'false'
+}
+
 export function detect() {
   const params = new URLSearchParams(window.location.search)
   return (
     params.has(TOKEN_KEY) || params.has(LOGIN_KEY) || params.has(TENANT_KEY) ||
-    Boolean(readStore(TOKEN_KEY))
+    Boolean(getToken())
   )
   // Deliberately does NOT check the natural-name aliases: a bare ?loginId=
   // with no _at/_lid/_tid is indistinguishable from a 5.5-shaped URL, and
@@ -102,7 +111,12 @@ export function bootstrap() {
   const lid = params.get(LOGIN_KEY) || params.get(LOGIN_KEY_ALIAS)
   const tid = params.get(TENANT_KEY) || params.get(TENANT_KEY_ALIAS)
 
-  if (token) writeStore(TOKEN_KEY, token)
+  // The JWT is kept in memory only. Drop any copy an earlier version stored.
+  try { sessionStorage.removeItem(TOKEN_KEY) } catch { /* non-fatal */ }
+  // Legacy delivery (code review M-02): hosts now answer the postMessage handshake.
+  // Set VITE_ALLOW_URL_TOKEN=false once every host does, and a token in the URL is
+  // stripped below but never used. Default (unset) keeps accepting it.
+  if (token && urlTokenAllowed()) setToken(token)
   if (lid) writeStore(LOGIN_KEY, lid)
   if (tid) writeStore(TENANT_KEY, tid)
 
@@ -129,30 +143,10 @@ export function bootstrap() {
   }
 }
 
-function decodeJwtPayload(token) {
-  try {
-    const segment = token.split('.')[1]
-    if (!segment) return null
-    const base64 = segment.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
-    const json = decodeURIComponent(
-      atob(padded)
-        .split('')
-        .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
-        .join(''),
-    )
-    return JSON.parse(json)
-  } catch {
-    // A malformed token is not fatal — _lid/_tid still identify the caller,
-    // and the backend is the authority on whether the request is allowed.
-    return null
-  }
-}
-
 export function resolve() {
   bootstrap()
-  const token = readStore(TOKEN_KEY)
-  const claims = token ? decodeJwtPayload(token) : null
+  const token = getToken()          // null when absent or expired
+  const claims = token ? getClaims() : null
 
   const loginId = firstClaim(claims, LOGIN_CLAIM_KEYS) ?? readStore(LOGIN_KEY)
   const tenantId = firstClaim(claims, TENANT_CLAIM_KEYS) ?? readStore(TENANT_KEY)
@@ -161,7 +155,7 @@ export function resolve() {
     // The token decoded fine but none of the known claim names were present —
     // worth a console note, since this is exactly the class of failure that
     // otherwise surfaces only as a 401 with no indication of the cause.
-    console.warn(
+    devWarn(
       '[auth:6.0] JWT decoded but no TenantId claim found under any of',
       TENANT_CLAIM_KEYS, '— falling back to _tid/tenantId param.',
     )
@@ -174,7 +168,7 @@ export function resolve() {
     // the fix is simply a missing/misspelled query param. Surface it here,
     // at the point identity actually gets resolved, rather than leaving it
     // to be found by reading the backend's access log.
-    console.warn(
+    devWarn(
       '[auth:6.0] loginId resolved to', JSON.stringify(loginId),
       'but tenantId is empty — every request will 401. iDEAL 6.0 requires a ' +
       'tenant. Add &tenantId=<id> or &_tid=<id> to the URL ' +
@@ -191,11 +185,15 @@ export function resolve() {
     // orphaned login here means the next load with real params starts clean,
     // and a bare reload fails as "not logged in" (honest and actionable)
     // rather than "logged in but permanently unauthorised".
-    const urlHasIdentity = new URLSearchParams(window.location.search).size > 0
+    // Only an identity parameter counts. Any other query parameter (?lang=, a cache buster)
+    // used to make this look like "the URL has identity" and skipped the cleanup (L-12).
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlHasIdentity = [TOKEN_KEY, LOGIN_KEY, TENANT_KEY, LOGIN_KEY_ALIAS, TENANT_KEY_ALIAS]
+      .some((key) => urlParams.has(key))
     if (!urlHasIdentity && readStore(LOGIN_KEY) && !readStore(TENANT_KEY)) {
       try {
         sessionStorage.removeItem(LOGIN_KEY)
-        console.warn(
+        devWarn(
           '[auth:6.0] Cleared a stored login that had no tenant alongside it. ' +
           'Reload with ?loginId=<user>&tenantId=<id> to sign in again.',
         )

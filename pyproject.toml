@@ -5,3 +5,24 @@
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+
+[tool.ruff]
+# Scope: backend code, tests and the launcher. The virtualenv and generated
+# folders are excluded so `ruff check` is fast and only judges this project.
+extend-exclude = ["backend/.venv", "frontend", "artifacts", "scripts/__pycache__"]
+
+[tool.ruff.lint]
+# Rules that find real bugs: pyflakes (F), syntax errors (E9), bugbear (B) and
+# the pylint "error" set (PLE) - the last one is what caught a control character
+# hidden inside a regex (code review C-02). The extra codes (L-24) are the
+# few non-style rules that flag real hazards: imports after code (E402), files
+# opened without a context manager (SIM115), subprocess.run without `check`
+# (PLW1510), loop variables overwritten (PLW2901), ambiguous names (E741) and
+# small clarity bugs (SIM118, SIM300, C420, W292). Style-only rules (line length E501,
+# import order I, typing modernisation UP, ...) stay OFF on purpose: ~700 findings
+# that change no behaviour and would bury a real one.
+select = ["F", "E9", "B", "PLE", "E402", "SIM115", "SIM118", "SIM300", "PLW1510", "PLW2901", "E741", "C420", "W292"]
+ignore = [
+    "B008",   # FastAPI's `Depends(...)` / `Query(...)` as a default argument is the framework's idiom
+    "B905",   # zip() without strict= is fine where lengths are equal by construction
+]

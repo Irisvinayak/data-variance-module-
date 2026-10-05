@@ -94,10 +94,24 @@ def _entry(table: str, column: str) -> Optional[dict[str, Any]]:
     return _get().get(((table or "").upper(), (column or "").upper()))
 
 
+# table -> its columns, built once per schema load instead of scanning every
+# (table, column) key on every call (code review PERF-01). Tied to the identity of
+# the dict _get() returns, so it is rebuilt exactly when the schema cache is.
+_cols_by_table: dict[str, frozenset] = {}
+_cols_source: Optional[dict] = None
+
+
 def columns_for_table(table: str) -> frozenset:
     """Every known column of `table`, upper-cased. Empty when unknown."""
-    t = (table or "").upper()
-    return frozenset(col for (tbl, col) in _get() if tbl == t)
+    global _cols_by_table, _cols_source
+    data = _get()
+    if _cols_source is not data:
+        grouped: dict[str, set] = {}
+        for tbl, col in data:
+            grouped.setdefault(tbl, set()).add(col)
+        _cols_by_table = {tbl: frozenset(cols) for tbl, cols in grouped.items()}
+        _cols_source = data
+    return _cols_by_table.get((table or "").upper(), frozenset())
 
 
 # The key-value submission header every QCB return carries: one fact per ROW

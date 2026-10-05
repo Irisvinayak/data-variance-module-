@@ -17,7 +17,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .nlp_config import MARGIN_FULL_SEPARATION
+from .nlp_config import (
+    CONFIDENCE_WEIGHT_LEADER,
+    CONFIDENCE_WEIGHT_MARGIN,
+    CONFIDENCE_WEIGHT_OVERLAP,
+    MARGIN_FULL_SEPARATION,
+)
 
 
 def normalize_scores(scores: dict[str, float]) -> dict[str, float]:
@@ -30,7 +35,7 @@ def normalize_scores(scores: dict[str, float]) -> dict[str, float]:
     lo, hi = min(values), max(values)
     spread = hi - lo
     if spread <= 1e-9:
-        return {name: 1.0 for name in scores}
+        return dict.fromkeys(scores, 1.0)
     return {name: (score - lo) / spread for name, score in scores.items()}
 
 
@@ -118,9 +123,9 @@ def table_confidence(
     # described above, since a table scored by more signals has a larger
     # share.
     confidence = (
-        0.45 * leader_term
-        + 0.40 * margin_term
-        + 0.15 * overlap_top1
+        CONFIDENCE_WEIGHT_LEADER * leader_term
+        + CONFIDENCE_WEIGHT_MARGIN * margin_term
+        + CONFIDENCE_WEIGHT_OVERLAP * overlap_top1
     )
     confidence = max(0.0, min(1.0, confidence))
 

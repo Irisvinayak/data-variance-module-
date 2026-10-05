@@ -24,6 +24,8 @@ import re
 import threading
 from typing import Any, Optional
 
+from .index_manifest import pickle_is_trusted
+
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -59,8 +61,11 @@ def _load_bm25_cached(index_path: str) -> tuple[Optional[Any], list[dict[str, An
     # the same silent no-op as an absent file, logged once per index_path so
     # a genuinely broken deployment is still visible in the log.
     try:
+        trusted, why = pickle_is_trusted(index_path)
+        if not trusted:
+            raise RuntimeError(f"not loaded: {why}")      # never unpickle an unpinned file (M-07)
         with open(index_path, "rb") as fh:
-            data = pickle.load(fh)
+            data = pickle.load(fh)  # noqa: S301 - gated by pickle_is_trusted above
         bm25, records = data["bm25"], data["records"]
     except Exception as exc:
         with _cache_lock:

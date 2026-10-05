@@ -312,7 +312,7 @@ def _match_named_returns(
 # _SCOPE_RES produces from the query. Matched by PREFIX rather than exact
 # token because the names in Returns.xml are not spelled consistently — the
 # overseas ALE return is literally named "CIMS_ALE Oversease(Quarterly)", which
-# no exact-match or -anchored rule for "overseas" will ever catch.
+# no exact-match or \b-anchored rule for "overseas" will ever catch.
 _NAME_SCOPE_PREFIXES = (
     ("domestic", "DOM"), ("onshore", "DOM"), ("india", "DOM"),
     ("overs", "OVE"), ("offshore", "OVE"), ("foreign", "OVE"),

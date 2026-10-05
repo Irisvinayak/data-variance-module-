@@ -29,16 +29,24 @@ import re
 import uuid
 from contextvars import ContextVar
 from datetime import date, timedelta
+from .config.settings import APP_VERSION
+from .envutil import env_int
 
-LOG_DIR: str = os.getenv(
-    "DV_LOG_DIR",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"),
-)
+def default_log_dir(version: str) -> str:
+    """<project>/logs/<version>. 5.5 and 6.0 run as separate processes on one machine; with a
+    shared logs/<date>.log their lines interleave and the daily rollover collides
+    (code review M-32). DV_LOG_DIR still overrides this completely."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    safe = "".join(ch for ch in str(version) if ch.isalnum() or ch in "._-") or "default"
+    return os.path.join(root, "logs", safe)
+
+
+LOG_DIR: str = os.getenv("DV_LOG_DIR") or default_log_dir(APP_VERSION)
 LOG_LEVEL: str = os.getenv("DV_LOG_LEVEL", "INFO").strip().upper()
 
 # Daily log files are never overwritten, so without a retention rule logs/
 # grows without bound. 0 disables pruning.
-LOG_RETENTION_DAYS: int = int(os.getenv("DV_LOG_RETENTION_DAYS", "30") or "0")
+LOG_RETENTION_DAYS: int = env_int("DV_LOG_RETENTION_DAYS", 30) if os.getenv("DV_LOG_RETENTION_DAYS", "30").strip() else 0   # blank = keep forever
 
 _FORMAT = "%(asctime)s | %(levelname)s | %(request_id)s | %(name)s | %(message)s"
 
@@ -78,6 +86,43 @@ class _RequestIdFilter(logging.Filter):
         return True
 
 
+# ── Optional identity redaction (code review M-09) ────────────────────────────
+# Under 6.0 the login is an e-mail address, and it ends up in the log through the request
+# context, the access-log query string and error lines, kept for LOG_RETENTION_DAYS.
+# DV_LOG_REDACT_IDENTITY=true replaces each identity with a STABLE pseudonym (u-<8 hex>):
+# the same person gets the same token on every line, so a problem can still be followed
+# through the log, but the log no longer names them. Off by default: operators who debug
+# by login name keep working until they choose otherwise.
+_REDACT_IDENTITY = os.environ.get("DV_LOG_REDACT_IDENTITY", "").strip().lower() in {"1", "true", "yes", "on"}
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+_LOGIN_PARAM_RE = re.compile(r"(?i)\b(login_?id)(=|%3D)([^&\s'\"|,)]+)")
+_LOGIN_FIELD_RE = re.compile(r"(login_id=)(['\"])(.*?)\2")
+
+
+def pseudonym(value: str) -> str:
+    """Stable, non-reversible stand-in for an identity: 'u-' + 8 hex of its SHA-256."""
+    import hashlib
+
+    return "u-" + hashlib.sha256(value.strip().lower().encode("utf-8")).hexdigest()[:8]
+
+
+def redact_identity(text: str) -> str:
+    text = _LOGIN_FIELD_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{pseudonym(m.group(3))}{m.group(2)}" if m.group(3) else m.group(0), text)
+    text = _LOGIN_PARAM_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{pseudonym(m.group(3))}", text)
+    return _EMAIL_RE.sub(lambda m: pseudonym(m.group(0)), text)
+
+
+class _RedactIdentityFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - never lose a log line over a bad format string
+            return True
+        record.msg = redact_identity(message)
+        record.args = ()
+        return True
+
+
 class DailyFileHandler(logging.Handler):
     """Writes to logs/<YYYY-MM-DD>.log, switching to a fresh file the first
     time a record is emitted after midnight — no restart needed."""
@@ -104,7 +149,7 @@ class DailyFileHandler(logging.Handler):
         # a state where every later emit short-circuited on the date check and
         # then wrote to a None/closed stream — silently killing file logging
         # for the rest of the day. Open first, commit after.
-        stream = open(path, "a", encoding="utf-8")
+        stream = open(path, "a", encoding="utf-8")  # noqa: SIM115 - kept open as the handler stream
 
         if self._stream is not None:
             try:
@@ -163,11 +208,15 @@ def configure_logging() -> None:
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     console.addFilter(request_id_filter)
+    if _REDACT_IDENTITY:
+        console.addFilter(_RedactIdentityFilter())
     root.addHandler(console)
 
     file_handler = DailyFileHandler(LOG_DIR, LOG_RETENTION_DAYS)
     file_handler.setFormatter(formatter)
     file_handler.addFilter(request_id_filter)
+    if _REDACT_IDENTITY:
+        file_handler.addFilter(_RedactIdentityFilter())
     root.addHandler(file_handler)
 
     # Third-party libraries that log every HTTP HEAD/GET at INFO (e.g. the

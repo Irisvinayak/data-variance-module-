@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from ..envutil import env_float, env_int
 import logging
 import os
 import threading
@@ -21,11 +22,16 @@ from ..hosts import get_profile
 from .xml_loader import load_xml_tree
 from . import query_xml_lookup
 from .report_lookup import (
-    parse_returns, get_is_excel_by_return_code,
+    parse_all_returns, get_is_excel_by_return_code,
     search_returns_scored, AUTO_SELECT_THRESHOLD,
 )
+from ..cache_util import put_bounded
+from ..config import settings as cfg_settings
+from .db import reset_truncation, was_truncated
+from .validation import ensure_safe_return_id, ensure_safe_table_ref
 from .calculate_variance import (
-    calculate_variance, format_oracle_date, validate_reporting_date,
+    calculate_variance, format_oracle_date, is_safe_sql_ref, result_error, sql_literal,
+    validate_reporting_date,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,6 +43,7 @@ def _distinct_dates_desc(
     filter_col: str,
     limit: int,
     before: Optional[datetime] = None,
+    extra_where: str = "",
 ) -> tuple[list, Optional[str]]:
     """Up to `limit` distinct `filter_col` values, newest first, as (rows, err).
 
@@ -45,10 +52,15 @@ def _distinct_dates_desc(
     the other way round, ROWNUM caps raw rows before de-duplication, so a
     table with many rows on its latest date collapses to a single date.
     """
-    where = (
-        f" WHERE {filter_col} < TO_DATE('{format_oracle_date(before)}', 'DD-MON-YYYY')"
-        if before is not None else ""
-    )
+    ensure_safe_table_ref(table_name)
+    if not is_safe_sql_ref(filter_col):
+        raise ValueError("Unsafe filter column name")   # M-06: identifiers cannot be bound
+    conditions = []
+    if before is not None:
+        conditions.append(f"{filter_col} < TO_DATE('{format_oracle_date(before)}', 'DD-MON-YYYY')")
+    if extra_where:
+        conditions.append(extra_where)       # built by _return_filter_sql from vetted names/literals
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
     inner = f"SELECT DISTINCT {filter_col} FROM {table_name}{where} ORDER BY {filter_col} DESC"
     _, rows, err = execute_query_fn(f"{inner} FETCH FIRST {int(limit)} ROWS ONLY")
     if err:
@@ -129,8 +141,9 @@ def _run_table_diagnostics(
 # way report_lookup.py caches Returns.xml itself, keyed by (return_id,
 # tbl_path) since a given return's mapping file/location essentially never
 # changes between deploys.
-_TABLE_MAPPING_TTL = float(os.getenv("DV_TABLE_MAPPING_TTL_SEC", "3600"))
+_TABLE_MAPPING_TTL = env_float("DV_TABLE_MAPPING_TTL_SEC", "3600")
 _mapping_cache: dict[tuple[str, str], tuple[float, Any, str]] = {}
+_MAPPING_CACHE_MAX = env_int("DV_MAPPING_CACHE_MAX", "2000")   # CONC-01
 _mapping_cache_lock = threading.Lock()
 
 
@@ -277,7 +290,7 @@ def _load_table_mapping(
             logger.debug("[service] Found mapping=%s", norm)
             root = load_xml_tree(norm, label=f"Table mapping for return {return_id}")
             with _mapping_cache_lock:
-                _mapping_cache[cache_key] = (now, root, norm)
+                put_bounded(_mapping_cache, cache_key, (now, root, norm), _MAPPING_CACHE_MAX)
             return root, norm
 
     # ── Nothing found — fall back to the canonical path (will log an error) ───
@@ -304,7 +317,7 @@ def _load_table_mapping(
     else:
         root = load_xml_tree(fallback, label=f"Table mapping for return {return_id}")
     with _mapping_cache_lock:
-        _mapping_cache[cache_key] = (now, root, fallback)
+        put_bounded(_mapping_cache, cache_key, (now, root, fallback), _MAPPING_CACHE_MAX)
     return root, fallback
 
 
@@ -540,7 +553,7 @@ def resolve_physical_table_name(
 
 def _return_meta(return_id: str, ctx: RequestContext) -> Optional[dict[str, Any]]:
     """The returns-master row for `return_id`, or None."""
-    return next((r for r in parse_returns(ctx) if r.get("Id") == str(return_id)), None)
+    return next((r for r in parse_all_returns(ctx) if r.get("Id") == str(return_id)), None)
 
 
 def _trusted_tbl_path(return_meta: Optional[dict[str, Any]]) -> str:
@@ -564,8 +577,16 @@ def _actual_previous_dates(
     reporting_date: str,
     periods: int,
     execute_query_fn: Callable,
+    report_freq: str = "",
+    extra_where: str = "",
 ) -> list[str]:
     """The `periods` reporting dates immediately before `reporting_date`.
+
+    Tables are often SHARED by several returns. `extra_where` restricts the dates to this
+    return's own rows (return-code / frequency columns), and `report_freq` keeps only dates
+    that are canonical for its frequency - the same two rules the date dropdown applies - so
+    "previous period" can no longer be a submission that belongs to another return
+    (code review H-16).
 
     Reads the dates that exist in the table instead of deriving them from
     RepFreq, so "previous period" means "the previous submission" — which
@@ -581,9 +602,12 @@ def _actual_previous_dates(
     except (ValueError, AttributeError):
         return []
 
+    want = max(int(periods), 1)
+    freq = (report_freq or "").strip().upper()
+    # Over-fetch when filtering by frequency: non-canonical dates are discarded below.
     rows, err = _distinct_dates_desc(
         execute_query_fn, resolved_table_name, filter_col,
-        max(int(periods), 1), before=anchor,
+        want * 8 if freq else want, before=anchor, extra_where=extra_where,
     )
     if err:
         logger.warning(
@@ -593,7 +617,31 @@ def _actual_previous_dates(
         )
         return []
 
-    return [_as_date_string(r[0]) for r in rows or [] if r[0] is not None]
+    values = [r[0] for r in rows or [] if r[0] is not None]
+    if freq:
+        canonical = [v for v in values if validate_reporting_date(v, freq)]
+        if canonical:
+            values = canonical
+        # none canonical: keep the unfiltered list, exactly as the dropdown does
+    return [_as_date_string(v) for v in values[:want]]
+
+
+def _return_filter_sql(metadata: dict) -> str:
+    """The predicate that limits a SHARED table to one return's rows ('' when not needed).
+
+    Mirrors build_query(): the return-code column for single-return tables and the
+    frequency column/value when the mapping names one. Names are shape-checked here
+    because they are spliced into SQL."""
+    parts = []
+    if metadata.get("is_single") and metadata.get("return_code_col") and metadata.get("return_code") is not None:
+        if not is_safe_sql_ref(metadata["return_code_col"]):
+            raise ValueError("Unsafe return-code column name")
+        parts.append(f"{metadata['return_code_col']} = {sql_literal(metadata['return_code'])}")
+    if metadata.get("freq_col") and metadata.get("freq_val"):
+        if not is_safe_sql_ref(metadata["freq_col"]):
+            raise ValueError("Unsafe frequency column name")
+        parts.append(f"{metadata['freq_col']} = {sql_literal(metadata['freq_val'])}")
+    return " AND ".join(parts)
 
 
 # Ceiling on the date dropdown — decades of monthly filings.
@@ -641,6 +689,8 @@ def get_available_dates(
     the table mapping or table itself can't be resolved. Returns [] (not an
     error) when the table resolves fine but genuinely has no rows yet.
     """
+    ensure_safe_return_id(return_id)
+    ensure_safe_table_ref(table_name)
     return_meta = _return_meta(return_id, ctx)
     table_meta = _get_table_metadata(return_id, _trusted_tbl_path(return_meta), table_name, ctx)
     filter_col = table_meta["filter_col"]
@@ -701,6 +751,13 @@ def compute_variance(
     calculate_variance()'s docstring. Passed straight through; this layer makes
     no decisions about it."""
     logger.info("[service] compute_variance started")
+    reset_truncation()
+
+    # Defence in depth (code review SEC-09/SEC-10): the routes already check
+    # these, but this function is also called from the NL path and from scripts,
+    # and both values end up in a filesystem path and in f-string SQL.
+    ensure_safe_return_id(return_id)
+    ensure_safe_table_ref(table_name)
 
     return_meta = _return_meta(return_id, ctx)
     report_freq = (
@@ -766,12 +823,22 @@ def compute_variance(
             )
 
         if not rows:
-            logger.error("[service] Zero rows — firing diagnostics")
-            _run_table_diagnostics(
-                table_name=resolved_table_name,
-                filter_col=metadata["filter_col"],
-                execute_query_fn=execute_query_fn,
-            )
+            # The diagnostics run COUNT(*) and a DISTINCT over the WHOLE table,
+            # and a caller can trigger them at will with a date that has no data
+            # (code review DATA-03). They only ever write to the log, so they are
+            # opt-in: DV_TABLE_DIAGNOSTICS=true when investigating an empty result.
+            if cfg_settings.TABLE_DIAGNOSTICS:
+                logger.error("[service] Zero rows — firing diagnostics")
+                _run_table_diagnostics(
+                    table_name=resolved_table_name,
+                    filter_col=metadata["filter_col"],
+                    execute_query_fn=execute_query_fn,
+                )
+            else:
+                logger.warning(
+                    "[service] Zero rows for %s — table diagnostics skipped "
+                    "(set DV_TABLE_DIAGNOSTICS=true to run them)", resolved_table_name,
+                )
 
         cols_up = [c.upper() for c in cols]
         return [
@@ -788,6 +855,8 @@ def compute_variance(
         previous = _actual_previous_dates(
             resolved_table_name, metadata["filter_col"], reporting_date,
             reporting_period, execute_query_fn,
+            report_freq=report_freq,
+            extra_where=_return_filter_sql({**metadata, "return_code": return_id}),
         )
         if previous:
             effective_comparison_dates = [reporting_date] + previous
@@ -802,7 +871,7 @@ def compute_variance(
                 "RepFreq=%s arithmetic", resolved_table_name, report_freq,
             )
 
-    return calculate_variance(
+    result = calculate_variance(
         return_code=return_id,
         table_name=resolved_table_name,
         reporting_date=reporting_date,
@@ -814,3 +883,15 @@ def compute_variance(
         comparison_mode=comparison_mode,
         comparison_dates=effective_comparison_dates,
     )
+
+    # The DB layer cut the result at DV_DB_MAX_ROWS: every figure derived from a
+    # partial row set can be wrong, and nothing used to say so (code review
+    # DATA-01). ADDITIVE: the result keeps every existing key; clients that
+    # ignore the new ones behave exactly as before.
+    if was_truncated() and isinstance(result, dict) and not result_error(result):
+        result["truncated"] = True
+        result["truncation_notice"] = (
+            "The result was cut off at the maximum number of rows, so some rows and "
+            "variances may be missing or incomplete. Narrow the selection and try again."
+        )
+    return result

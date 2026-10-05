@@ -18,11 +18,13 @@
 
 from __future__ import annotations
 
+from ..envutil import env_int
 import logging
 import os
 import threading
 import time
 
+from ..cache_util import put_bounded
 from ..config import ANONYMOUS, AUTH_TTL_SEC, RequestContext
 from ..data.xml_loader import load_xml_tree, max_mtime
 from ..hosts import get_profile
@@ -44,6 +46,9 @@ _AUTH_TTL = AUTH_TTL_SEC
 # Keyed by RequestContext.cache_key -> (tenant_id, login_id). Tenant is part of
 # the key in both modes: it is always "" under 5.5, and under 6.0 the same
 # login_id in two tenants is two different users with two different allow-lists.
+# Bounded (code review CONC-01): an unknown login is cached too, so a stream of
+# distinct loginId values would otherwise grow these for the life of the process.
+_AUTH_CACHE_MAX = env_int("DV_AUTH_CACHE_MAX", "5000")
 _forms_cache: dict = {}
 _create_cache: dict = {}
 _lock = threading.Lock()
@@ -121,7 +126,7 @@ def get_allowed_form_ids(ctx: RequestContext = ANONYMOUS):
     except _MasterUnavailable:
         return None
     with _lock:
-        _forms_cache[key] = (result, time.monotonic(), mtime)
+        put_bounded(_forms_cache, key, (result, time.monotonic(), mtime), _AUTH_CACHE_MAX)
     logger.info(
         "[AUTH] resolved | %s | result=%s | reload_reason=%s | mtime %s -> %s",
         ctx, f"{len(result)} form(s)" if result is not None else "USER NOT FOUND",
@@ -333,7 +338,7 @@ def can_generate_instance(ctx: RequestContext) -> bool:
     result = bool(verdict)
 
     with _lock:
-        _create_cache[key] = (result, time.monotonic(), mtime)
+        put_bounded(_create_cache, key, (result, time.monotonic(), mtime), _AUTH_CACHE_MAX)
     logger.info(
         "[AUTH_ROLE] %s role_id=%r can_generate_instance=%s (verdict=%r) | "
         "reload_reason=%s | mtime %s -> %s",

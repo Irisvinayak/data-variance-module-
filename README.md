@@ -50,12 +50,25 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Copy the environment template you need and fill it in — see
+Create your `.env` from the full template and fill it in — see
 [backend/config/settings.py](backend/config/settings.py) for every key:
 
 ```powershell
-copy config\env\.env.55.example .env     # or .env.60.example
+copy .env.example .env
 ```
+
+`config/env/.env.55.example` and `.env.60.example` are **not** replacements for
+`.env`: they are tiny per-instance overlays (just `VERSION=`) for running 5.5
+and 6.0 side by side — see below. Copying one over `.env` would discard every
+database, path and NLP setting.
+
+### Security defaults worth knowing
+
+The backend binds to `127.0.0.1` (IIS proxies to it), keeps `/docs` and the
+detailed `/health` and `/variance/nlp-health` output off, and keeps the
+LLM-written-SQL route `/variance/nlquery` disabled. Each has a `DV_*` switch in
+`.env.example`. Set `DV_IDENTITY_MODE=optional` (then `required`) together with
+`DV_JWT_SECRET` to verify the host's JWT instead of trusting `?loginId=`.
 
 ## Running
 
@@ -102,4 +115,5 @@ Start with the overview, then follow it into whichever reference you need.
 | [docs/models.md](docs/models.md) | Data models and API contracts, with real payloads |
 | [docs/logging.md](docs/logging.md) | Log streams, levels, the AI audit trail, what the logs contain |
 | [docs/integration-plan.md](docs/integration-plan.md) | Historical record of the 5.5/6.0 integration: verified differences, bugs found, open questions |
+| [docs/ISSUES_STATUS.md](docs/ISSUES_STATUS.md) | Code-review issues: what is solved, what remains, and what still needs testing — the single issue record |
 | [docs/samples/](docs/samples/) | Example NL and user queries |

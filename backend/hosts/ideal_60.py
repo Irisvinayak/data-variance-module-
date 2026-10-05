@@ -67,6 +67,7 @@ class Ideal60Profile(HostProfile):
     _registry_lock = threading.Lock()
     _registry: dict | None = None
     _registry_ts: float = 0.0
+    _registry_mtime: float | None = None   # mtime of XML_Tenant.xml the cache was built from (L-01)
 
     def tenant_xml_path(self) -> str:
         return self._override("tenant_xml", os.path.join(self.base_path, "XML_Tenant.xml"))
@@ -75,11 +76,22 @@ class Ideal60Profile(HostProfile):
         """{TenantId: attrib} for tenants whose Status is true."""
         cls = type(self)
         now = time.monotonic()
+        path = self.tenant_xml_path()
+        # The cache is also keyed on the file's modification time: a tenant deactivated in
+        # XML_Tenant.xml is refused on the next request instead of being served for up to
+        # AUTH_TTL_SEC (code review L-01). A stat() is far cheaper than the parse it saves.
+        try:
+            mtime: float | None = os.path.getmtime(path)
+        except OSError:
+            mtime = None
         with cls._registry_lock:
-            if cls._registry is not None and (now - cls._registry_ts) < AUTH_TTL_SEC:
+            if (
+                cls._registry is not None
+                and (now - cls._registry_ts) < AUTH_TTL_SEC
+                and cls._registry_mtime == mtime
+            ):
                 return cls._registry
 
-        path = self.tenant_xml_path()
         root = load_xml_tree(path, os.path.basename(path))
         if root is None:
             # Not cached: a transient read failure (network share, file being
@@ -104,6 +116,7 @@ class Ideal60Profile(HostProfile):
         with cls._registry_lock:
             cls._registry = registry
             cls._registry_ts = now
+            cls._registry_mtime = mtime
         return registry
 
     @classmethod
@@ -150,34 +163,34 @@ class Ideal60Profile(HostProfile):
         return os.path.join(self.base_path, str(ctx.tenant_id), _DB_FOLDER)
 
     def returns_xml_path(self, ctx: RequestContext) -> str:
-        return self._override("returns_xml", os.path.join(self.db_dir(ctx), "Return.xml"))
+        return self._override("returns_xml", os.path.join(self.db_dir(ctx), "Return.xml"), ctx)
 
     def non_xbrl_returns_xml_path(self, ctx: RequestContext) -> str:
         return self._override(
-            "non_xbrl_returns_xml", os.path.join(self.db_dir(ctx), "NonXBRLReturn.xml")
+            "non_xbrl_returns_xml", os.path.join(self.db_dir(ctx), "NonXBRLReturn.xml"), ctx,
         )
 
     def table_mapping_base_dir(self, ctx: RequestContext) -> str:
-        return self._override("table_mapping_base", self.db_dir(ctx))
+        return self._override("table_mapping_base", self.db_dir(ctx), ctx)
 
     def instance_base_dir(self, ctx: RequestContext) -> str:
         # Per-tenant. <Base>\Instance does not exist in Repo6 (B4).
         return self._override(
-            "instance_base", os.path.join(self.base_path, str(ctx.tenant_id), "Instance")
+            "instance_base", os.path.join(self.base_path, str(ctx.tenant_id), "Instance"), ctx,
         )
 
     def user_xml_path(self, ctx: RequestContext) -> str:
-        return self._override("user_xml", os.path.join(self.db_dir(ctx), "User.xml"))
+        return self._override("user_xml", os.path.join(self.db_dir(ctx), "User.xml"), ctx)
 
     def department_xml_path(self, ctx: RequestContext) -> str:
-        return self._override("department_xml", os.path.join(self.db_dir(ctx), "Department.xml"))
+        return self._override("department_xml", os.path.join(self.db_dir(ctx), "Department.xml"), ctx)
 
     def role_access_xml_path(self, ctx: RequestContext) -> str:
         # Per-tenant (B2), and named RoleAccess.xml — not XML_RoleAccess.xml.
-        return self._override("role_access_xml", os.path.join(self.db_dir(ctx), "RoleAccess.xml"))
+        return self._override("role_access_xml", os.path.join(self.db_dir(ctx), "RoleAccess.xml"), ctx)
 
     def period_xml_path(self, ctx: RequestContext) -> str:
-        return self._override("period_xml", os.path.join(self.db_dir(ctx), "Period.xml"))
+        return self._override("period_xml", os.path.join(self.db_dir(ctx), "Period.xml"), ctx)
 
     # ── File shapes ────────────────────────────────────────────────────────────
 

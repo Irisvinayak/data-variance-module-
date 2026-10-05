@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import LayoutContainer from './components/LayoutContainer.jsx'
-import { bootstrapAuth } from './auth/index.js'
+import { bootstrapAuth, onIdentityChange } from './auth/index.js'
 import './layout.css'
 
 /**
@@ -15,16 +15,37 @@ import './layout.css'
  */
 export default function App() {
   const [identity, setIdentity] = useState(null)
+  const [bootError, setBootError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    setBootError(false)
     bootstrapAuth()
       .then((resolved) => {
         if (!cancelled) setIdentity(resolved)
       })
-      .catch((err) => console.error('[auth] Identity bootstrap failed:', err))
-    return () => { cancelled = true }
-  }, [])
+      .catch((err) => {
+        if (import.meta.env.DEV) console.error('[auth] Identity bootstrap failed:', err)
+        if (!cancelled) setBootError(true)
+      })
+    // A host token can arrive after startup (postMessage handshake).
+    const off = onIdentityChange((next) => { if (!cancelled) setIdentity(next) })
+    return () => { cancelled = true; off() }
+  }, [attempt])
+
+  if (bootError) {
+    return (
+      <div className="app">
+        <main className="app-main-full">
+          <div className="auth-booting">
+            <p>Could not start the application. Please check your connection and try again.</p>
+            <button type="button" onClick={() => setAttempt((n) => n + 1)}>Retry</button>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   if (!identity) {
     return (
@@ -35,6 +56,11 @@ export default function App() {
       </div>
     )
   }
+
+  // No "not signed in" gate here on purpose: a backend running with auth
+  // disabled legitimately works without a loginId, so blocking the whole app on
+  // an empty one would break that. When auth IS enforced, the API's own 401
+  // reaches the UI's normal error display.
 
   return (
     <div className="app">

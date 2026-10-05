@@ -132,6 +132,11 @@ def period_containing(d: date, unit: str, fy_start: int = 1) -> tuple[date, date
     if unit == "week":
         mon = d - timedelta(days=d.weekday())
         return mon, mon + timedelta(days=6)
+    if unit == "fortnight":
+        # Fortnightly returns close on the 15th and on the last day of the month.
+        if d.day <= 15:
+            return date(d.year, d.month, 1), date(d.year, d.month, 15)
+        return date(d.year, d.month, 16), month_end(d.year, d.month)
     if unit == "month":
         return date(d.year, d.month, 1), month_end(d.year, d.month)
     months = UNIT_MONTHS[unit]

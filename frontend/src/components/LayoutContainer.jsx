@@ -15,7 +15,7 @@
  *   TOP    : ControlBar — compact two-row toolbar, always visible
  *   BOTTOM : Analysis area — hidden until first compute succeeds.
  */
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
 import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery, getAvailableDates, SKIP_ANSWER } from '../api.js'
@@ -23,7 +23,9 @@ import { VARIANCE_STEPS, COMPARISON_MODES } from '../types.js'
 
 import ControlBar         from './ControlBar.jsx'
 import TablePanel         from './TablePanel.jsx'
-import VisualizationPanel from './VisualizationPanel.jsx'
+// Loaded on first use: recharts is most of the bundle and nothing needs it before a result
+// exists (code review L-20).
+const VisualizationPanel = lazy(() => import('./VisualizationPanel.jsx'))
 import NoticeToast        from './NoticeToast.jsx'
 
 // Stable identity, so the "no hidden columns" case hands the same array down
@@ -80,6 +82,8 @@ export default function LayoutContainer({ loginId = '' }) {
   // e.g. Set { "2001", "2007", "4016", "6001", ... }
   const [allowedFormIds,    setAllowedFormIds]    = useState(null)   // null = not loaded yet
   const [authLoading,       setAuthLoading]       = useState(true)
+  const [permissionsError,  setPermissionsError]  = useState(false)  // /auth/my-returns FAILED -> fail closed
+  const [permissionsNoticeOpen, setPermissionsNoticeOpen] = useState(true)
 
   // ─── NLP bar state ───────────────────────────────────────────────────────
   const [nlpQuery, setNlpQuery] = useState('')
@@ -224,9 +228,19 @@ export default function LayoutContainer({ loginId = '' }) {
   // Feeds the manual Date dropdown (ControlBar's DateField) with the real
   // submission dates on file, instead of a free calendar where most picks
   // return zero rows.
+  //
+  // Keyed on the PRIMITIVES that identify the table, not on the returnInfo object
+  // (code review M-25): any state update that re-created that object used to re-run this
+  // effect and wipe the dates the user had just ticked. A failed request now leaves a
+  // message and a retry instead of a dropdown that silently says "No data found".
+  const dateReturnId = returnInfo?.return_id
+  const dateMappingPath = returnInfo?.table_mapping_path
+  const [datesError, setDatesError] = useState(false)
+  const [datesRetry, setDatesRetry] = useState(0)
   useEffect(() => {
-    if (!returnInfo || !tableName) {
+    if (!dateReturnId || !tableName) {
       setAvailableDates([])
+      setDatesError(false)
       // A fetch cancelled by this change never reaches its own reset.
       setDatesLoading(false)
       return
@@ -234,9 +248,10 @@ export default function LayoutContainer({ loginId = '' }) {
 
     let cancelled = false
     setDatesLoading(true)
+    setDatesError(false)
     setSelectedDates([]) // stale dates from a previous table must not linger
 
-    getAvailableDates(returnInfo.return_id, returnInfo.table_mapping_path, tableName)
+    getAvailableDates(dateReturnId, dateMappingPath, tableName)
       .then((data) => {
         if (cancelled) return
         setAvailableDates(data.dates || [])
@@ -244,14 +259,15 @@ export default function LayoutContainer({ loginId = '' }) {
       .catch((err) => {
         if (cancelled) return
         setAvailableDates([])
-        console.warn('Failed to load available dates:', err.message)
+        setDatesError(true)
+        if (import.meta.env.DEV) console.warn('Failed to load available dates:', err.message)
       })
       .finally(() => {
         if (!cancelled) setDatesLoading(false)
       })
 
     return () => { cancelled = true }
-  }, [returnInfo, tableName])
+  }, [dateReturnId, dateMappingPath, tableName, datesRetry])
 
   // ─── Step 1: Fetch allowed form IDs on mount ─────────────────────────────
   useEffect(() => {
@@ -263,6 +279,8 @@ export default function LayoutContainer({ loginId = '' }) {
 
     let cancelled = false
     setAuthLoading(true)
+    setPermissionsError(false)
+    setPermissionsNoticeOpen(true)
     getMyReturns()
       .then((data) => {
         if (cancelled) return
@@ -271,9 +289,12 @@ export default function LayoutContainer({ loginId = '' }) {
       })
       .catch((err) => {
         if (cancelled) return
-        // If the backend auth layer is disabled, allow the app to proceed without access filtering.
+        // FAIL CLOSED: a failed request is not "auth disabled" (that case is a
+        // successful response with allowed_count 0). Nothing is allowed until
+        // the user reloads and the request succeeds.
         setAllowedFormIds(new Set())
-        console.warn('Auth permissions unavailable, continuing without access filtering:', err.message)
+        setPermissionsError(true)
+        if (import.meta.env.DEV) console.warn('Auth permissions unavailable:', err.message)
       })
       .finally(() => {
         if (!cancelled) setAuthLoading(false)
@@ -284,6 +305,7 @@ export default function LayoutContainer({ loginId = '' }) {
 
   // ─── Filter helper — check if a return_id is allowed ─────────────────────
   const isAllowed = (returnId) => {
+    if (permissionsError) return false
     if (!allowedFormIds) return true
     return allowedFormIds.size === 0 || allowedFormIds.has(String(returnId))
   }
@@ -350,6 +372,12 @@ export default function LayoutContainer({ loginId = '' }) {
       return
     }
 
+    if (permissionsError) {
+      setError('Permissions are unavailable. Please reload or contact your administrator.')
+      return
+    }
+
+    const seq = ++requestSeqRef.current
     setLoading(true)
     setError('')
     setCandidates(null)
@@ -357,12 +385,14 @@ export default function LayoutContainer({ loginId = '' }) {
 
     try {
       const raw  = await findReturnTables(name)
+      if (seq !== requestSeqRef.current) return
       const info = filterByAccess(raw)         // ← filter here
 
       if (info.candidates) {
         // If only 1 allowed candidate, auto-select instead of showing pick-list
         if (info._autoSelect) {
           const full = await loadCandidate(info.candidates[0])
+          if (seq !== requestSeqRef.current) return
           setReturnInfo(full)
           setTableName(full.tables?.[0]?.table_name ?? '')
           setStep(VARIANCE_STEPS.TABLE)
@@ -376,26 +406,28 @@ export default function LayoutContainer({ loginId = '' }) {
         setStep(VARIANCE_STEPS.TABLE)
       }
     } catch (err) {
-      setError(err.message || 'Failed to find return.')
+      if (seq === requestSeqRef.current) setError(err.message || 'Failed to find return.')
     } finally {
-      setLoading(false)
+      if (seq === requestSeqRef.current) setLoading(false)
     }
   }
 
   const handleSelectCandidate = async (candidate) => {
+    const seq = ++requestSeqRef.current
     setLoading(true)
     setError('')
     setCandidates(null)
     setNlColumns(null)
     try {
       const info = await loadCandidate(candidate)
+      if (seq !== requestSeqRef.current) return
       setReturnInfo(info)
       setTableName(info.tables?.[0]?.table_name ?? '')
       setStep(VARIANCE_STEPS.TABLE)
     } catch (err) {
-      setError(err.message || 'Failed to load return.')
+      if (seq === requestSeqRef.current) setError(err.message || 'Failed to load return.')
     } finally {
-      setLoading(false)
+      if (seq === requestSeqRef.current) setLoading(false)
     }
   }
 
@@ -407,6 +439,9 @@ export default function LayoutContainer({ loginId = '' }) {
   // compute response) surfaces exactly which requested dates had no
   // submission at all, so a popup can explain it instead of a silent gap.
   const applyMissingPeriodsNotice = (res) => {
+    // A result the backend had to cut off at its row cap (res.truncated) can carry
+    // wrong figures. It is flagged by a banner that stays for as long as the result
+    // is on screen (see the render below), not by this auto-dismissing toast.
     if (res?.missing_periods?.length) {
       const list = res.missing_periods.join(', ')
       const plural = res.missing_periods.length > 1 ? 's' : ''
@@ -548,6 +583,12 @@ export default function LayoutContainer({ loginId = '' }) {
 
     if (authLoading) {
       setError('Loading user permissions, please wait...')
+      return
+    }
+
+    // Fail closed here too: with permissions unavailable, do not send the query.
+    if (permissionsError) {
+      setError('Permissions are unavailable. Please reload or contact your administrator.')
       return
     }
 
@@ -733,6 +774,7 @@ export default function LayoutContainer({ loginId = '' }) {
         tableName={tableName}     setTableName={setTableName}
         selectedDates={selectedDates} setSelectedDates={setSelectedDates}
         availableDates={availableDates} datesLoading={datesLoading}
+        datesError={datesError} onRetryDates={() => setDatesRetry((n) => n + 1)}
         periods={periods}         setPeriods={setPeriods}
         comparisonMode={comparisonMode} setComparisonMode={setComparisonMode}
         loading={loading}         error={error}
@@ -754,6 +796,22 @@ export default function LayoutContainer({ loginId = '' }) {
         onClarificationCancel={handleClarificationCancel}
         onClarificationOthers={handleClarificationOthers}
       />
+
+      {result?.truncated && (
+        <div className="lc-truncation-banner" role="alert">
+          {result.truncation_notice ||
+            'The result was cut off at the maximum number of rows, so some rows and variances may be incomplete.'}
+        </div>
+      )}
+
+      {/* Data-quality notes from the backend: a key that is not unique, and rows that
+          existed in an earlier period but are gone (code review H-13, M-15). */}
+      {result?.duplicate_notice && (
+        <div className="lc-truncation-banner" role="status">{result.duplicate_notice}</div>
+      )}
+      {result?.removed_notice && (
+        <div className="lc-truncation-banner" role="status">{result.removed_notice}</div>
+      )}
 
       {/* ── Analysis area ────────────────────────────────────────────── */}
       {/* react-resizable-panels treats a bare number on minSize/maxSize/
@@ -833,14 +891,16 @@ export default function LayoutContainer({ loginId = '' }) {
               }}
               style={{ overflow: 'hidden' }}
             >
-              <VisualizationPanel
-                result={result}
-                hiddenCols={hiddenCols}
-                vizState={vizState}
-                vizOpen={vizOpen}
-                onExpand={handleVizExpand}
-                onMinimize={handleVizMinimize}
-              />
+              <Suspense fallback={null}>
+                <VisualizationPanel
+                  result={result}
+                  hiddenCols={hiddenCols}
+                  vizState={vizState}
+                  vizOpen={vizOpen}
+                  onExpand={handleVizExpand}
+                  onMinimize={handleVizMinimize}
+                />
+              </Suspense>
             </Panel>
           </Group>
         </div>
@@ -868,6 +928,13 @@ export default function LayoutContainer({ loginId = '' }) {
       )}
 
       <NoticeToast message={notice} onDismiss={() => setNotice('')} />
+      {permissionsError && permissionsNoticeOpen && (
+        <NoticeToast
+          message="Permissions are unavailable. Please reload or contact your administrator."
+          autoDismissMs={0}
+          onDismiss={() => setPermissionsNoticeOpen(false)}
+        />
+      )}
 
     </div>
   )

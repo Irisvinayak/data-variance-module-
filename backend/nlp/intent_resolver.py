@@ -24,6 +24,8 @@ from typing import Any, Optional
 import requests
 
 from .. import ai_audit
+from .llm_guard import make_session
+from .prompt_safety import DATA_NOTICE, sanitize_model_echo, sanitize_question
 from .nlp_config import (
     INTENT_FAILURE_COOLDOWN_SEC,
     INTENT_MAX_COLS_PER_TABLE,
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # Reused across calls — avoids a fresh TCP/TLS handshake per Ollama request
 # (this module makes up to 2 calls per query: initial attempt + one retry).
-_session = requests.Session()
+_session = make_session()
 
 # Circuit-breaker state — set when a call fails at the TRANSPORT level
 # (unreachable/timed out), so subsequent requests skip the LLM and use the
@@ -74,6 +76,9 @@ def _build_prompt(
     tables = shortlist["tables"]
     columns = shortlist["columns"]
     matched_labels = shortlist.get("matched_labels") or []
+    # Keep the question inside its quotes (code review LLM-02). Ordinary
+    # questions pass through unchanged; see prompt_safety.py.
+    query = sanitize_question(query)
 
     lines = []
     for t in tables:
@@ -121,6 +126,7 @@ Candidates:
 {candidates_block}
 
 Question: "{query}"
+{DATA_NOTICE}
 
 Rules:
 - return_id and table_name MUST be copied verbatim from the candidates above — never invent new ones.
@@ -157,6 +163,7 @@ def _build_retry_prompt(
     must still be repeated in full."""
     tables = shortlist["tables"]
     columns = shortlist["columns"]
+    query = sanitize_question(query)
     lines = []
     for t in tables:
         # Same rank-then-cap rule as _build_prompt — this prompt truncated an
@@ -169,14 +176,24 @@ def _build_retry_prompt(
         lines.append(f"- return_id={t.get('return_id')} table_name={t['table']!r} columns: {cols_str}")
     candidates_block = "\n".join(lines)
 
-    return f"""Your previous answer was invalid: {bad_raw[:200]!r}
+    return f"""Your previous answer was invalid: {sanitize_model_echo(bad_raw)!r}
 
 It must be ONLY a JSON object using values copied verbatim from these candidates — nothing else:
 {candidates_block}
 
 Question: "{query}"
+{DATA_NOTICE}
 
 Output ONLY: {{"return_id": "<return_id>", "table_name": "<table_name>", "selected_columns": ["<column>", ...]}}"""
+
+
+def _tag(result: Optional[dict[str, Any]], mode: str) -> Optional[dict[str, Any]]:
+    """Record HOW the answer was reached: "llm" (the model's choice, grounded) or
+    "fallback" (the deterministic resolver stood in). Additive key; the caller echoes it
+    so a user can tell a model answer from a fallback one (code review M-41)."""
+    if result is None:
+        return None
+    return {**result, "mode": mode}
 
 
 def _in_cooldown() -> bool:
@@ -226,7 +243,15 @@ def _call_ollama(prompt: str, attempt: int = 1) -> tuple:
         )
         raise _TransportError(f"Ollama request failed: {exc}") from exc
 
-    text = response.json().get("response", "")
+    # A non-JSON body (a proxy error page) used to raise ValueError past every
+    # handler here as a 500. It is a transport-level failure like any other, so
+    # it takes the same path: cooldown, then the deterministic fallback
+    # (code review LLM-05).
+    try:
+        text = response.json().get("response", "")
+    except ValueError as exc:
+        logger.error("[nlp.intent_resolver] Ollama returned a non-JSON body | model=%s | attempt=%d", INTENT_MODEL, attempt)
+        raise _TransportError("Ollama returned a non-JSON response") from exc
     latency_ms = int((time.monotonic() - started) * 1000)
     logger.info(
         "[nlp.intent_resolver] Ollama responded in %.1fs | model=%s | attempt=%d | response_chars=%d",
@@ -238,13 +263,20 @@ def _call_ollama(prompt: str, attempt: int = 1) -> tuple:
 def _parse_json_response(raw: str) -> Optional[dict[str, Any]]:
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
     cleaned = re.sub(r"```\s*$", "", cleaned).strip()
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
+    # raw_decode reads exactly ONE object starting at a "{". The old greedy {.*} span
+    # swallowed everything between the first "{" and the last "}", so two objects, or
+    # prose containing braces, made valid output unparseable (code review L-14).
+    decoder = json.JSONDecoder()
+    start = cleaned.find("{")
+    while start != -1:
+        try:
+            obj, _end = decoder.raw_decode(cleaned[start:])
+        except ValueError:
+            obj = None
+        if isinstance(obj, dict):
+            return obj
+        start = cleaned.find("{", start + 1)
+    return None
 
 
 def _validate_grounding(
@@ -254,6 +286,8 @@ def _validate_grounding(
     return_id = str(parsed.get("return_id", "")).strip()
     table_name = str(parsed.get("table_name", "")).strip()
     selected_columns = parsed.get("selected_columns") or []
+    if not isinstance(selected_columns, list):
+        return None                      # a string would be iterated character by character
 
     table_meta = tables_by_name.get(table_name)
     if table_meta is None:
@@ -465,7 +499,7 @@ def resolve_intent(
     # that on every single request.
     if _in_cooldown():
         logger.info("[nlp.intent_resolver] In Ollama cooldown — using deterministic resolution")
-        return _resolve_deterministic(rank_text, shortlist)
+        return _tag(_resolve_deterministic(rank_text, shortlist), "fallback")
 
     prompt = _build_prompt(query, shortlist, rank_text)
 
@@ -475,7 +509,7 @@ def resolve_intent(
         # Nothing answered — a retry would just pay the timeout twice.
         logger.error("[nlp.intent_resolver] %s", exc)
         _start_cooldown()
-        return _resolve_deterministic(rank_text, shortlist)
+        return _tag(_resolve_deterministic(rank_text, shortlist), "fallback")
 
     parsed = _parse_json_response(raw)
     resolved = _validate_grounding(parsed, shortlist) if parsed else None
@@ -493,7 +527,7 @@ def resolve_intent(
         except _TransportError as exc:
             logger.error("[nlp.intent_resolver] Retry failed: %s", exc)
             _start_cooldown()
-            return _resolve_deterministic(rank_text, shortlist)
+            return _tag(_resolve_deterministic(rank_text, shortlist), "fallback")
 
     if resolved is None:
         logger.warning(
@@ -506,11 +540,11 @@ def resolve_intent(
             attempt=2, latency_ms=latency_ms, raw=raw[:500],
             grounded=False, fell_back_to_deterministic=True,
         )
-        return _resolve_deterministic(rank_text, shortlist)
+        return _tag(_resolve_deterministic(rank_text, shortlist), "fallback")
 
     ai_audit.record(
         caller="intent_resolver.resolve_intent", model=INTENT_MODEL, query=query,
         latency_ms=latency_ms, grounded=True, fell_back_to_deterministic=False,
         resolved=resolved,
     )
-    return resolved
+    return _tag(resolved, "llm")

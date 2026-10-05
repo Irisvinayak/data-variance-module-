@@ -37,7 +37,7 @@ build/
 .eggs/
 .venv/
 venv/
-env/
+/env/
 
 # ── Node / frontend ───────────────────────────────────────────────────────────
 frontend/node_modules/

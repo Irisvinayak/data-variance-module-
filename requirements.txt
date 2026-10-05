@@ -4,6 +4,7 @@ pydantic>=2.0.0
 oracledb>=2.0.0
 python-dateutil>=2.9.0
 python-dotenv>=1.0.0
+defusedxml>=0.7.1   # safe parsing of the repository XML (entity-expansion attacks)
 
 # ── backend/nlp — embedding-based NL query layer ────────────────────────────
 sentence-transformers>=2.7.0
@@ -11,3 +12,4 @@ faiss-cpu>=1.13.0
 rank-bm25>=0.2.2
 numpy>=1.26.0
 requests>=2.31.0
+sqlglot>=25,<31   # structural SQL validation (validate_sql)

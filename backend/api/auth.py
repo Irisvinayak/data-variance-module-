@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, status
 
 from ..auth.deps import require_login
 from ..config import RequestContext
+from .schemas import MyReturnsResponse
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ router = APIRouter()
 
 
 # ── GET /auth/my-returns ───────────────────────────────────────────────────────
-@router.get("/auth/my-returns", status_code=status.HTTP_200_OK, tags=["Auth"])
+@router.get("/auth/my-returns", status_code=status.HTTP_200_OK, tags=["Auth"], response_model=MyReturnsResponse, response_model_exclude_unset=True)
 def my_returns(ctx: RequestContext = Depends(require_login)) -> dict:
     """Return the list of return IDs the current user is allowed to access.
 

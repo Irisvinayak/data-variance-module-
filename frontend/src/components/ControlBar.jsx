@@ -43,12 +43,18 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
   }
 
   return (
-    <div className="disambig-dropdown-wrap" ref={dropRef}>
+    <div
+      className="disambig-dropdown-wrap"
+      ref={dropRef}
+      onKeyDown={(e) => { if (e.key === 'Escape' && open) { setOpen(false); onCancel() } }}
+    >
       {/* Trigger button — shows how many matches */}
       <button
         className="disambig-trigger"
         onClick={() => setOpen((o) => !o)}
         type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
       >
         <span className="disambig-trigger-icon">⚡</span>
         <span className="disambig-trigger-label">
@@ -65,6 +71,7 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
             <input
               className="disambig-search-input"
               placeholder="Filter matches…"
+              aria-label="Filter matches"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               autoFocus
@@ -73,6 +80,7 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
               className="disambig-cancel-btn"
               onClick={() => { setOpen(false); onCancel() }}
               title="Cancel"
+              aria-label="Cancel"
               type="button"
             >
               ✕
@@ -80,7 +88,7 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
           </div>
 
           {/* Candidate list */}
-          <div className="disambig-list">
+          <div className="disambig-list" role="listbox" aria-label="Matching returns">
             {filtered.length === 0 ? (
               <div className="disambig-empty">No matches for &ldquo;{filter}&rdquo;</div>
             ) : (
@@ -92,6 +100,8 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
                     className="disambig-item"
                     onClick={() => handleSelect(c)}
                     type="button"
+                    role="option"
+                    aria-selected="false"
                   >
                     <span className={`ctrl-score-badge ${badge.cls}`}>
                       {badge.label}
@@ -424,7 +434,7 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
 // is unchanged. That's stated in the summary line so it isn't a hidden rule.
 const MAX_DATES = 3
 
-function DateField({ selectedDates, setSelectedDates, availableDates, datesLoading }) {
+function DateField({ selectedDates, setSelectedDates, availableDates, datesLoading, datesError, onRetryDates }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -434,6 +444,14 @@ function DateField({ selectedDates, setSelectedDates, availableDates, datesLoadi
     return (
       <button className="ctrl-select ctrl-input-date" disabled type="button">
         Loading dates&hellip;
+      </button>
+    )
+  }
+
+  if (datesError) {
+    return (
+      <button className="ctrl-select ctrl-input-date" type="button" role="alert" onClick={onRetryDates}>
+        Could not load dates &mdash; click to retry
       </button>
     )
   }
@@ -476,6 +494,8 @@ function DateField({ selectedDates, setSelectedDates, availableDates, datesLoadi
         type="button"
         className={'ctrl-select ctrl-input-date' + (selectedDates.length ? ' ctrl-input-date-on' : '')}
         onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
         title={
           selectedDates.length > 1
             ? `Newest (${selectedDates[0]}) is the current period; the rest are compared against it`
@@ -545,6 +565,9 @@ function DateField({ selectedDates, setSelectedDates, availableDates, datesLoadi
 }
 
 // ── Main ControlBar ────────────────────────────────────────────────────────────
+// Voice input is not implemented (handler is a no-op); keep the button hidden.
+const SHOW_VOICE_INPUT = false
+
 export default function ControlBar({
   step,
   returnName,
@@ -557,6 +580,8 @@ export default function ControlBar({
   setSelectedDates,
   availableDates,
   datesLoading,
+  datesError,
+  onRetryDates,
   periods,
   setPeriods,
   comparisonMode,
@@ -608,25 +633,30 @@ export default function ControlBar({
           type="text"
           className="nlp-mini-input"
           placeholder="Ask..."
+          aria-label="Ask a question about your data"
           value={nlpQuery}
           onChange={(e) => setNlpQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && nlpQuery.trim()) handleNlpSearch(nlpQuery)
+            if (e.key === 'Enter' && nlpQuery.trim() && !loading) handleNlpSearch(nlpQuery)
           }}
         />
-        <button
-          type="button"
-          className="nlp-mini-btn"
-          onClick={handleVoiceInput}
-          title="Voice Input"
-        >
-          🎤
-        </button>
+        {SHOW_VOICE_INPUT && (
+          <button
+            type="button"
+            className="nlp-mini-btn"
+            onClick={handleVoiceInput}
+            title="Voice Input"
+          >
+            🎤
+          </button>
+        )}
         <button
           type="button"
           className="nlp-mini-btn nlp-search"
           onClick={() => nlpQuery.trim() && handleNlpSearch(nlpQuery)}
+          disabled={loading}
           title="Search"
+          aria-label="Ask the question"
         >
           🔍
         </button>
@@ -664,6 +694,7 @@ export default function ControlBar({
             e.key === 'Enter' && !loading && handleFindReturn()
           }
           placeholder="e.g. CIMS, RAQ, BSR1"
+          aria-label="Return name"
           disabled={loading && !returnInfo}
         />
 
@@ -740,6 +771,8 @@ export default function ControlBar({
             setSelectedDates={setSelectedDates}
             availableDates={availableDates}
             datesLoading={datesLoading}
+            datesError={datesError}
+            onRetryDates={onRetryDates}
           />
 
           {/* Periods/Compare are hidden — not merely ignored — once dates are

@@ -73,6 +73,7 @@ _FREQ_PERIOD = {
     "A": ("year", 4), "ANNUAL": ("year", 4), "Y": ("year", 4), "FY": ("year", 4),
     "B": ("year", 1), "CY": ("year", 1),
     "W": ("week", 1), "WEEKLY": ("week", 1),
+    "F": ("fortnight", 1), "FORTNIGHTLY": ("fortnight", 1), "HM": ("fortnight", 1),
     "D": ("day", 1), "DAILY": ("day", 1), "G": ("day", 1),
 }
 

@@ -41,6 +41,7 @@
 
 from __future__ import annotations
 
+from ..envutil import env_float
 import logging
 import os
 import re
@@ -68,7 +69,7 @@ _FROM_RE = re.compile(r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_$#]*)", re.IGNORE
 # constructs we don't care about.
 _NON_TABLES = {"DUAL", "SELECT", "TABLE", "LATERAL"}
 
-_TTL = float(os.getenv("DV_XML_QUERY_TTL_SEC", "3600"))
+_TTL = env_float("DV_XML_QUERY_TTL_SEC", "3600")
 _cache: dict[tuple, tuple] = {}
 _lock = threading.Lock()
 

@@ -38,6 +38,7 @@ from .embedder import embed_query
 from .index_store import subset_search
 from .lexical_search import search_bm25
 from .nlp_config import (
+    LEXICAL_OVERLAP_BONUS,
     BM25_INDEX_PATH,
     BM25_SIGNAL_WEIGHT,
     BM25_TOP_K,
@@ -181,7 +182,7 @@ def rank_within_tables(
         for tbl in scores
     }
     for tbl, overlap in lexical_overlaps.items():
-        scores[tbl] += overlap * 0.03
+        scores[tbl] += overlap * LEXICAL_OVERLAP_BONUS
 
     # Demote the return's key-value submission header. Its embedded text is
     # short and led by the return name, so naming the return in the query

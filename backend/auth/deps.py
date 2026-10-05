@@ -15,13 +15,69 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import HTTPException, Query, status
+from fastapi import Header, HTTPException, Query, status
 
 from ..config import AUTH_ENABLED, DEV_TENANT_ID, RequestContext
+from ..config import settings as cfg
 from ..hosts import HostProfileError, get_profile
+from .identity import TokenError, extract_bearer, identity_from_claims, verify_jwt
 from .service import get_allowed_form_ids, is_return_allowed
 
 logger = logging.getLogger(__name__)
+
+_GENERIC_TENANT_DENIED = "This tenant is not authorised to use this application."
+
+
+def _unauthorized(detail: str = "Authentication failed.") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _verified_identity(authorization: str | None, profile) -> tuple[str, str] | None:
+    """(login_id, tenant_id) from a VERIFIED bearer token, or None to use the URL.
+
+    Governed by DV_IDENTITY_MODE (settings.py):
+      off       -> the header is ignored entirely (today's behaviour);
+      optional  -> a token that is present MUST verify; none -> None (URL identity);
+      required  -> no verified token means 401.
+    A token that is present but does not verify is always a 401, never a silent
+    fallback to the URL: otherwise an attacker (or an expired token) would be
+    downgraded to the unauthenticated path instead of being refused.
+    """
+    mode = cfg.IDENTITY_MODE
+    if mode == "off":
+        return None
+
+    token = extract_bearer(authorization)
+    if token is None:
+        if mode == "required":
+            logger.warning("[AUTH_DEP] REJECTED — DV_IDENTITY_MODE=required and no bearer token")
+            raise _unauthorized()
+        return None
+
+    try:
+        claims = verify_jwt(
+            token,
+            secret=cfg.JWT_SECRET,
+            algorithms=cfg.JWT_ALGORITHMS,
+            issuer=cfg.JWT_ISSUER,
+            audience=cfg.JWT_AUDIENCE,
+            leeway=cfg.JWT_LEEWAY_SEC,
+        )
+        who = identity_from_claims(
+            claims,
+            login_claim=cfg.JWT_LOGIN_CLAIM,
+            tenant_claim=cfg.JWT_TENANT_CLAIM,
+            requires_tenant=profile.requires_tenant,
+        )
+    except TokenError as exc:
+        # The reason is for operators only; the client always sees the same 401.
+        logger.warning("[AUTH_DEP] REJECTED — bearer token not accepted: %s", exc)
+        raise _unauthorized() from exc
+    return who.login_id, who.tenant_id
 
 
 # Emitted once per process rather than once per request: "auth is disabled" is
@@ -52,10 +108,43 @@ def require_login(
         default="",
         description="Tenant ID passed by the iDEAL 6.0 host. Ignored under 5.5.",
     ),
+    authorization: str | None = Header(
+        default=None,
+        description="Optional 'Bearer <jwt>' from the host. Verified when DV_IDENTITY_MODE is optional/required.",
+    ),
+    x_tenant_id: str | None = Header(
+        default=None,
+        alias="X-Tenant-Id",
+        description="Tenant the caller believes it belongs to. Never trusted on its own: "
+                    "with a verified token it must equal the token's tenant (403 otherwise).",
+    ),
 ) -> RequestContext:
     """Validate the caller and return the context the data layer needs."""
-    ctx = RequestContext(login_id=loginId, tenant_id=tenantId)
     profile = get_profile()
+    verified = _verified_identity(authorization, profile)
+    if verified is not None:
+        # The tenant is whatever the VERIFIED token says. A tenant supplied any
+        # other way (the X-Tenant-Id header, the ?tenantId= parameter) is only a
+        # claim to be checked against it: a mismatch is a request for another
+        # tenant's data and is refused (403), not quietly rewritten (code review
+        # C-01). Only meaningful under a tenant-scoped host; 5.5 has no tenants.
+        if profile.requires_tenant:
+            for source, supplied in (("X-Tenant-Id header", x_tenant_id), ("tenantId parameter", tenantId)):
+                if supplied and supplied.strip() and supplied.strip() != verified[1]:
+                    logger.warning(
+                        "[AUTH_DEP] REJECTED — %s does not match the tenant in the verified token", source
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="The supplied tenant does not match your authenticated tenant.",
+                    )
+        # The login is not a security boundary here (the token's wins, and a
+        # differing URL value is only logged): hosts format it differently.
+        if loginId and loginId.strip().lower() != verified[0].lower():
+            logger.warning("[AUTH_DEP] query-string loginId differs from the verified token; using the token")
+        ctx = RequestContext(login_id=verified[0], tenant_id=verified[1])
+    else:
+        ctx = RequestContext(login_id=loginId, tenant_id=tenantId)
 
     if not AUTH_ENABLED:
         # The bypass skips *authorisation*, but path resolution still needs a
@@ -85,6 +174,16 @@ def require_login(
 
         _announce_auth_disabled()
         logger.debug("[AUTH_DEP] AUTH_DISABLED — bypassing login validation | %s", ctx)
+        # Authorisation is skipped, but a tenant the host does not know (or one with no
+        # repository) used to surface as a 500 from a missing folder somewhere later.
+        # Same fixed 403 as the authenticated path (code review L-13).
+        try:
+            profile.validate_context(ctx)
+        except HostProfileError as exc:
+            logger.warning("[AUTH_DEP] REJECTED (auth disabled) — %s | %s", exc, ctx)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=_GENERIC_TENANT_DENIED
+            ) from exc
         return ctx
 
     if not ctx.login_id:
@@ -106,9 +205,11 @@ def require_login(
     try:
         profile.validate_context(ctx)
     except HostProfileError as exc:
+        # The profile's message can name every active tenant; it goes to the
+        # log for operators and the client gets a fixed sentence (SEC-03).
         logger.warning("[AUTH_DEP] REJECTED — %s | %s", exc, ctx)
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+            status_code=status.HTTP_403_FORBIDDEN, detail=_GENERIC_TENANT_DENIED
         ) from exc
 
     allowed = get_allowed_form_ids(ctx)
@@ -116,11 +217,61 @@ def require_login(
         logger.warning("[AUTH_DEP] REJECTED — login_id=%r not found in user master", ctx.login_id)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"User '{ctx.login_id}' is not authorised to use this application.",
+            detail="This user is not authorised to use this application.",
         )
 
     logger.debug("[AUTH_DEP] %s authenticated | %d form(s) in allowed set", ctx, len(allowed))
     return ctx
+
+
+def require_tables_access(ctx: RequestContext, tables: list[dict]) -> None:
+    """Gate a set of retrieved tables before any SQL is generated or run.
+
+    Same contract as the sql_agent's H-02 gate: every table is mapped to the
+    return that owns it, and EVERY one of those returns must be in the caller's
+    department allow-list (Forms + NXForms under 5.5, ReturnId + NXReturnId under
+    6.0 -- get_allowed_form_ids already unions both and is host-agnostic).
+
+    Fail closed: a table whose return cannot be determined is denied, never
+    assumed allowed, and a request spanning an allowed and a disallowed return
+    is denied in full rather than partially answered.
+    """
+    if not AUTH_ENABLED:
+        _announce_auth_disabled()
+        return
+
+    allowed = get_allowed_form_ids(ctx)
+    if allowed is None:
+        logger.warning("[AUTH_DEP] TABLE ACCESS DENIED (user not found) | %s", ctx)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This user is not authorised to use this application.",
+        )
+
+    return_ids = {str(t.get("return_id") or "").strip() for t in tables}
+    if not tables or "" in return_ids:
+        logger.warning(
+            "[AUTH_DEP] TABLE ACCESS DENIED (return unresolved) | %s | tables=%s",
+            ctx, [t.get("table") for t in tables],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not determine which return this question refers to, "
+                   "so access cannot be confirmed. Please name the return in your question.",
+        )
+
+    if not return_ids <= allowed:
+        logger.warning(
+            "[AUTH_DEP] TABLE ACCESS DENIED | %s | return_ids=%s | denied=%s",
+            ctx, sorted(return_ids), sorted(return_ids - allowed),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "You do not have access to this return. "
+                "Contact your administrator to update your department's access list."
+            ),
+        )
 
 
 def require_return_access(ctx: RequestContext, return_id: str) -> None:
@@ -134,7 +285,7 @@ def require_return_access(ctx: RequestContext, return_id: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"User '{ctx.login_id}' does not have access to return '{return_id}'. "
+                "You do not have access to this return. "
                 "Contact your administrator to update your department's access list."
             ),
         )

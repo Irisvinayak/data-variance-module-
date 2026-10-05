@@ -13,15 +13,20 @@
 
 from __future__ import annotations
 
+from ..envutil import ConfigError, env_float, env_int
 import os
 
 from dotenv import load_dotenv
 
 # Load .env from the project root (two levels above this file: backend/config/ -> backend/ -> root).
-# override=True ensures .env values always win over OS-level environment variables.
+# By default override=True: .env values win over OS-level environment variables (the
+# behaviour every existing server relies on). Set the REAL OS variable
+# DV_DOTENV_OVERRIDE=false to flip that, so an orchestrator / service-level variable beats
+# a stale .env (code review M-08). It is read from the OS only: it cannot live in .env.
+DOTENV_OVERRIDE: bool = os.environ.get("DV_DOTENV_OVERRIDE", "true").strip().lower() not in {"0", "false", "no", "off"}
 load_dotenv(
     dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
-    override=True,
+    override=DOTENV_OVERRIDE,
 )
 
 # ── Per-instance overlay (running two host versions side by side) ─────────────
@@ -41,11 +46,19 @@ load_dotenv(
 # version-keyed in the base .env. See config/env/.env.55.example / config/env/.env.60.example.
 _ENV_OVERLAY = os.environ.get("DV_ENV_FILE", "").strip()
 if _ENV_OVERLAY:
-    load_dotenv(dotenv_path=_ENV_OVERLAY, override=True)
+    load_dotenv(dotenv_path=_ENV_OVERLAY, override=DOTENV_OVERRIDE)
 
 
 def _truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _int_setting(name: str, value: str) -> int:
+    """int(value) for a setting resolved by _versioned(); a typo names the variable."""
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        raise ConfigError(f"{name}[_55/_60]={value!r} is not a whole number (check .env or the server environment)") from None
 
 
 def _flag(name: str, default: str = "false") -> bool:
@@ -111,11 +124,11 @@ def _versioned(name: str, default_55: str, default_60: str | None = None) -> str
 # first query ("database is not configured") rather than silently connecting
 # somewhere a developer's machine happened to point once.
 DB_HOST: str = _versioned("DB_HOST", "")
-DB_PORT: int = int(_versioned("DB_PORT", "1521"))
+DB_PORT: int = _int_setting("DV_DB_PORT", _versioned("DB_PORT", "1521"))
 DB_SERVICE: str = _versioned("DB_SERVICE", "XE")
 DB_USER: str = _versioned("DB_USER", "")
 DB_PASSWORD: str = _versioned("DB_PASSWORD", "")
-DB_MAX_ROWS: int = int(_versioned("DB_MAX_ROWS", "5000"))
+DB_MAX_ROWS: int = _int_setting("DV_DB_MAX_ROWS", _versioned("DB_MAX_ROWS", "5000"))
 
 # ── Base path ──────────────────────────────────────────────────────────────────
 # Root of the iDEAL repository installation. In 5.5 this is the repo itself
@@ -181,8 +194,79 @@ PATH_OVERRIDES: dict[str, str] = {
 # NEVER false in production.
 AUTH_ENABLED: bool = _flag("DV_AUTH_ENABLED", "true")
 
+# ── Server-side identity verification (code review C-01 / SEC-01) ─────────────
+# The host passes identity on the query string, which anyone can edit. The iDEAL
+# 6.0 host also issues a signed JWT (HS512; claims LoginId + TenantId, see
+# docs / the host's AuthenticationService). With a token available the backend
+# can derive identity from VERIFIED claims instead of from the URL.
+#
+#   DV_IDENTITY_MODE=off       (default) today's behaviour: Authorization header
+#                              ignored, identity from ?loginId=&tenantId=.
+#   DV_IDENTITY_MODE=optional  a Bearer token, when sent, MUST verify (401
+#                              otherwise) and its claims win; with no token the
+#                              query-string identity is used as before.
+#   DV_IDENTITY_MODE=required  no verified token -> 401.
+#
+# Roll out off -> optional -> required as the hosts start sending tokens. The
+# secret must be the host's JwtSettings:SecretKey, supplied by environment or
+# secret store, never committed.
+_identity_mode_raw = os.getenv("DV_IDENTITY_MODE", "off").strip().lower()
+IDENTITY_MODE: str = _identity_mode_raw if _identity_mode_raw in {"off", "optional", "required"} else "off"
+IDENTITY_MODE_INVALID: bool = _identity_mode_raw not in {"off", "optional", "required"}
+JWT_SECRET: str = os.getenv("DV_JWT_SECRET", "")
+# true = refuse to start while DV_AUTH_ENABLED=false (code review M-04). Off by default so
+# existing servers keep starting; turn it on once each server runs with auth enabled.
+REQUIRE_AUTH: bool = _flag("DV_REQUIRE_AUTH", "false")
+# true = refuse to start while DV_NLP_OLLAMA_URL is unset (the built-in default is a public IP
+# over plain http; code review H-07).
+REQUIRE_EXPLICIT_LLM_URL: bool = _flag("DV_REQUIRE_EXPLICIT_LLM_URL", "false")
+JWT_ALGORITHMS: tuple[str, ...] = tuple(
+    a.strip().upper() for a in os.getenv("DV_JWT_ALGORITHMS", "HS512").split(",") if a.strip()
+)
+JWT_ISSUER: str = os.getenv("DV_JWT_ISSUER", "").strip()
+JWT_AUDIENCE: str = os.getenv("DV_JWT_AUDIENCE", "").strip()
+JWT_LEEWAY_SEC: int = env_int("DV_JWT_LEEWAY_SEC", "300")
+JWT_LOGIN_CLAIM: str = os.getenv("DV_JWT_LOGIN_CLAIM", "LoginId").strip() or "LoginId"
+JWT_TENANT_CLAIM: str = os.getenv("DV_JWT_TENANT_CLAIM", "TenantId").strip() or "TenantId"
+
+# Operational endpoints that disclose internals (resolved paths, index folders,
+# model names) and the OpenAPI docs are off unless explicitly enabled (SEC-05,
+# SEC-07). /health stays a bare liveness probe either way.
+DIAGNOSTICS_ENABLED: bool = _flag("DV_DIAGNOSTICS_ENABLED", "false")
+API_DOCS_ENABLED: bool = _flag("DV_ENABLE_API_DOCS", "false")
+
+# COUNT(*) + DISTINCT over the whole table whenever a query returns no rows
+# (DATA-03). Log-only output, so opt-in.
+TABLE_DIAGNOSTICS: bool = _flag("DV_TABLE_DIAGNOSTICS", "false")
+
+# Load the embedding model in a background thread at startup so the first NL
+# request is not the one that pays for it (RAG-05). Never delays startup.
+NLP_WARMUP: bool = _flag("DV_NLP_WARMUP", "true")
+
+# Hide returns the caller cannot open from /variance/find (SEC-06). Off by
+# default because the UI currently shows such returns (greyed) and filtering
+# changes what users see; enable once that is the intended behaviour.
+FIND_FILTER_BY_ACCESS: bool = _flag("DV_FIND_FILTER_BY_ACCESS", "false")
+
+# Include generated SQL in /variance/nlquery responses (it discloses schema and
+# validator behaviour). Off for normal clients.
+NLQUERY_RETURN_SQL: bool = _flag("DV_NLQUERY_RETURN_SQL", "false")
+
+# Per-key request budget over a sliding 60 s window (API-01). Keyed by the
+# caller's login (IP behind IIS is always 127.0.0.1, so it cannot separate
+# users). Generous defaults: they stop floods, not normal use. 0 disables.
+RATE_LIMIT_PER_MIN: int = env_int("DV_RATE_LIMIT_PER_MIN", "240")
+RATE_LIMIT_NL_PER_MIN: int = env_int("DV_RATE_LIMIT_NL_PER_MIN", "30")
+MAX_BODY_BYTES: int = env_int("DV_MAX_BODY_BYTES", 256 * 1024)
+
+# POST /variance/nlquery lets an LLM write the SQL that runs, guarded only by a
+# regex validator on the same Oracle account every other query uses. The UI
+# never calls it, so it is off unless explicitly enabled — and should only be
+# enabled together with a read-only DB user (code review C-03).
+NLQUERY_ENABLED: bool = _flag("DV_NLQUERY_ENABLED", "false")
+
 # TTL for the resolved login -> allowed-returns cache.
-AUTH_TTL_SEC: float = float(os.getenv("AUTH_TTL_SEC", "3600"))
+AUTH_TTL_SEC: float = env_float("AUTH_TTL_SEC", "3600")
 
 # Tenant assumed when auth is bypassed and the caller sent no tenantId.
 #
@@ -220,9 +304,18 @@ API_BASE_PATH: str = _versioned("API_BASE_PATH", "")
 # 5.5 -> 8004, 6.0 -> 8003. Distinct by default so both can run at once on one
 # box without configuration; 8000/8001 are avoided because they collide with
 # other iDEAL services already on these servers.
-SERVER_HOST: str = os.getenv("DV_SERVER_HOST", "0.0.0.0")
+# Loopback by default: IIS reverse-proxies to 127.0.0.1, and identity arrives
+# on the query string unverified (code review C-01), so a backend reachable on
+# the network can be called as any user directly. Bind wider only behind a
+# firewall, and never with DV_AUTH_ENABLED=false (dev_server.py refuses that).
+SERVER_HOST: str = os.getenv("DV_SERVER_HOST", "127.0.0.1")
 
-SERVER_PORT: int = int(_versioned("SERVER_PORT", "8004", "8003"))
+
+def is_loopback_host(host: str) -> bool:
+    """True when `host` only accepts connections from this machine."""
+    return host.strip().lower() in {"127.0.0.1", "localhost", "::1"}
+
+SERVER_PORT: int = _int_setting("DV_SERVER_PORT", _versioned("SERVER_PORT", "8004", "8003"))
 
 # ── CORS origins ───────────────────────────────────────────────────────────────
 _DEFAULT_CORS = "http://localhost:5173,http://localhost:3001"

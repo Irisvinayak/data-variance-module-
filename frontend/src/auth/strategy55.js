@@ -4,7 +4,12 @@
  * The MVC host builds the iframe/redirect URL itself and appends the login as a
  * plain query parameter:
  *
- *   http://localhost:3001?loginId=iris810&uid=104&aspSession=xyz
+ *   http://localhost:3001?loginId=iris810
+ *
+ * Session credentials (the session cookie value, the session id) are NOT part of
+ * this URL and are never read: an older host that still sends `aspSession` or
+ * `uid` has them removed from the address bar by auth/urlScrub.js before this
+ * strategy runs.
  *
  * There is no tenant in 5.5, so tenantId is always ''. Nothing is stored: the
  * host re-supplies the parameters on every navigation, and keeping a stale copy
@@ -21,6 +26,6 @@ export function resolve() {
   return {
     loginId:  params.get('loginId') || '',
     tenantId: '',
-    uid:      params.get('uid') || '',
+    uid:      '',
   }
 }

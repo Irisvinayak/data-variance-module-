@@ -12,20 +12,20 @@
 
 from __future__ import annotations
 
+from ..envutil import env_float
 import logging
-import os
 import threading
 import time
 from typing import Any, Optional
 
 from ..config import ANONYMOUS, RequestContext
 from ..data import query_xml_lookup
-from ..data.report_lookup import parse_returns
+from ..data.report_lookup import parse_all_returns
 from ..data.service import _load_table_mapping
 
 logger = logging.getLogger(__name__)
 
-_TTL = float(os.getenv("DV_NLP_RETURN_LOOKUP_TTL_SEC", "3600"))
+_TTL = env_float("DV_NLP_RETURN_LOOKUP_TTL_SEC", "3600")
 # Keyed by tenant ("" under 5.5). This map is built from ONE tenant's
 # Return.xml and table-mapping files; a single shared slot would hand
 # whichever tenant warmed it first to every other tenant afterwards —
@@ -64,7 +64,7 @@ def _build_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, A
     correctly. See _select_candidate()."""
     lookup: dict[str, list[dict[str, Any]]] = {}
 
-    for ret in parse_returns(ctx):
+    for ret in parse_all_returns(ctx):
         return_id = ret.get("Id")
         return_name = ret.get("Name", "")
         report_freq = ret.get("RepFreq", "")
@@ -165,6 +165,17 @@ def _build_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, A
     return lookup
 
 
+_build_locks: dict[str, threading.Lock] = {}
+
+
+def _build_lock_for(key: str) -> threading.Lock:
+    with _lock:
+        lock = _build_locks.get(key)
+        if lock is None:
+            lock = _build_locks[key] = threading.Lock()
+        return lock
+
+
 def _rebuild_in_background(ctx: RequestContext) -> None:
     """Runs _build_lookup() off the request thread and swaps the cache in
     when done. Any exception just leaves the stale cache in place — a table
@@ -199,10 +210,17 @@ def _get_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, Any
     key = ctx.tenant_id
 
     if key not in _cache:
-        with _lock:
-            if key not in _cache:  # re-check: another thread may have built it while we waited for the lock
-                _cache[key] = _build_lookup(ctx)
-                _cache_ts[key] = time.monotonic()
+        # One lock PER TENANT for the (slow) first build. The old single global
+        # lock was held for the whole XML walk, so tenant 1002's first NL query
+        # waited behind tenant 1001's cold build, and every cached lookup for
+        # any tenant queued behind it too (code review CONC-03). The shared
+        # _lock below now only guards the dict writes.
+        with _build_lock_for(key):
+            if key not in _cache:  # re-check: another thread may have built it while we waited
+                built = _build_lookup(ctx)
+                with _lock:
+                    _cache[key] = built
+                    _cache_ts[key] = time.monotonic()
         return _cache[key]
 
     if (time.monotonic() - _cache_ts.get(key, 0.0)) >= _TTL:

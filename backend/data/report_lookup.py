@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
+from ..envutil import env_float
 import logging
 import os
 import re
+import threading
 import time
 from typing import Any
 
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # ── TTL cache ──────────────────────────────────────────────────────────────────
 
-_returns_ttl = float(os.getenv("DV_RETURNS_TTL_SEC", "3600"))
+_returns_ttl = env_float("DV_RETURNS_TTL_SEC", "3600")
 
 
 class _TTLCache:
@@ -34,44 +36,56 @@ class _TTLCache:
     to _ttl seconds — the TTL is kept only as a safety net.
     """
 
-    __slots__ = ("_ttl", "_data", "_ts", "_mtime")
+    # One tuple per key — (data, stored_at, mtime) — written and read under a
+    # lock. This used to be three parallel dicts updated one after another with
+    # no lock, so a concurrent reader could pair fresh data with an old timestamp
+    # or mtime (code review CONC-02). The public methods are unchanged.
+    __slots__ = ("_ttl", "_entries", "_lock", "_max_keys")
 
-    def __init__(self, ttl: float) -> None:
-        self._ttl   = ttl
-        self._data:  dict = {}
-        self._ts:    dict = {}
-        self._mtime: dict = {}
+    def __init__(self, ttl: float, max_keys: int = 256) -> None:
+        self._ttl      = ttl
+        self._entries: dict = {}
+        self._lock     = threading.Lock()
+        self._max_keys = max_keys
 
     def loaded_at(self, key: str = "") -> float:
-        return self._ts.get(key, 0.0)
+        with self._lock:
+            entry = self._entries.get(key)
+        return entry[1] if entry else 0.0
 
     def peek(self, key: str = "") -> tuple:
         """(data, mtime) as last stored, ignoring freshness — for reload diffs."""
-        return self._data.get(key), self._mtime.get(key)
+        with self._lock:
+            entry = self._entries.get(key)
+        return (entry[0], entry[2]) if entry else (None, None)
 
     def discard(self, key: str = "") -> None:
-        self._data.pop(key, None)
+        with self._lock:
+            self._entries.pop(key, None)
 
     def get(self, key: str = "", mtime: float | None = None):
-        data = self._data.get(key)
-        if data is None:
+        with self._lock:
+            entry = self._entries.get(key)
+        if entry is None or entry[0] is None:
             return None
-        if (time.monotonic() - self._ts.get(key, 0.0)) >= self._ttl:
+        data, stored_at, stored_mtime = entry
+        if (time.monotonic() - stored_at) >= self._ttl:
             return None
-        if mtime is not None and self._mtime.get(key) != mtime:
+        if mtime is not None and stored_mtime != mtime:
             return None
         return data
 
     def set(self, data, key: str = "", mtime: float = 0.0):
-        self._data[key]  = data
-        self._ts[key]    = time.monotonic()
-        self._mtime[key] = mtime
+        with self._lock:
+            self._entries[key] = (data, time.monotonic(), mtime)
+            overflow = len(self._entries) - self._max_keys
+            for stale in list(self._entries)[: max(overflow, 0)]:
+                self._entries.pop(stale, None)
         return data
 
     def clear(self) -> None:
-        self._data.clear()
-        self._ts.clear()
-        self._mtime.clear()
+        with self._lock:
+            self._entries.clear()
 
 
 _returns_cache          = _TTLCache(ttl=_returns_ttl)
@@ -145,6 +159,25 @@ def _parse_returns_master(ctx: RequestContext, cache: _TTLCache, non_xbrl: bool)
 def parse_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
     """Parse the XBRL returns master; one attribute dict per return row."""
     return _parse_returns_master(ctx, _returns_cache, non_xbrl=False)
+
+
+def parse_all_returns(ctx: RequestContext = ANONYMOUS) -> tuple:
+    """XBRL returns followed by the Excel (non-XBRL) ones, XBRL winning an id clash.
+
+    parse_returns() alone omits every non-XBRL return, so code that looked a return
+    up only there treated Excel returns as unknown: their tables got the `_DP` suffix
+    (ORA-00942 or the wrong table) and were dropped from NL retrieval as
+    unauthorised (code review M-12, M-13). A missing or unreadable non-XBRL master is
+    not an error: those returns simply are not offered.
+    """
+    xbrl = tuple(parse_returns(ctx))
+    try:
+        extra = tuple(_parse_non_xbrl_returns(ctx))
+    except Exception as exc:  # noqa: BLE001 - optional master file
+        logger.info("[report_lookup] non-XBRL returns master not available (%s: %s)", type(exc).__name__, exc)
+        return xbrl
+    taken = {str(r.get("Id", "")) for r in xbrl}
+    return xbrl + tuple(r for r in extra if str(r.get("Id", "")) not in taken)
 
 
 def _parse_non_xbrl_returns(ctx: RequestContext = ANONYMOUS) -> tuple:

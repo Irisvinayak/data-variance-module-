@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from ..envutil import env_float, env_int
 import os
 
 # ── Embedding model ────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ QUERY_PREFIX: str = os.getenv(
 # reasons: one normalisation rule for the whole app ("6", "6.0", "6.0.1" all
 # mean 6.0), and importing backend.config guarantees its load_dotenv() has run
 # before anything below reads os.getenv.
-from ..config.settings import APP_VERSION, is_legacy_mode
+from ..config.settings import APP_VERSION, is_legacy_mode  # noqa: E402 - follows the load_dotenv() note above
 
 NLP_DIR: str = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR: str = os.path.dirname(NLP_DIR)
@@ -148,13 +149,13 @@ ROW_LABEL_META_PATH: str = os.path.join(INDEX_DIR, "row_label_meta.pkl")
 # k=5 -> 77%, k=2 -> 78%. Top-3 peaks at 98% at k=5. Chose 5: it captures
 # essentially all of the available gain while still smoothing rank noise, where
 # k<=2 approaches "trust rank 0 absolutely".
-RRF_K: int = int(os.getenv("DV_NLP_RRF_K", "5"))
+RRF_K: int = env_int("DV_NLP_RRF_K", "5")
 
-TOP_K_TABLES: int = int(os.getenv("DV_NLP_TOP_K_TABLES", "5"))
-TOP_K_COLUMNS: int = int(os.getenv("DV_NLP_TOP_K_COLUMNS", "12"))
-TOP_K_LABELS: int = int(os.getenv("DV_NLP_TOP_K_LABELS", "10"))
-MIN_TABLE_SCORE: float = float(os.getenv("DV_NLP_MIN_TABLE_SCORE", "0.25"))
-MIN_COLUMN_SCORE: float = float(os.getenv("DV_NLP_MIN_COLUMN_SCORE", "0.20"))
+TOP_K_TABLES: int = env_int("DV_NLP_TOP_K_TABLES", "5")
+TOP_K_COLUMNS: int = env_int("DV_NLP_TOP_K_COLUMNS", "12")
+TOP_K_LABELS: int = env_int("DV_NLP_TOP_K_LABELS", "10")
+MIN_TABLE_SCORE: float = env_float("DV_NLP_MIN_TABLE_SCORE", "0.25")
+MIN_COLUMN_SCORE: float = env_float("DV_NLP_MIN_COLUMN_SCORE", "0.20")
 
 # ── Lexical (BM25) + QA-pairs signals ──────────────────────────────────────────
 # Additive to the dense FAISS signals above — built by the same external tool,
@@ -162,12 +163,12 @@ MIN_COLUMN_SCORE: float = float(os.getenv("DV_NLP_MIN_COLUMN_SCORE", "0.20"))
 # no-op if their file is missing (see backend/nlp/lexical_search.py), so
 # leaving these files out of INDEX_DIR reproduces today's exact behavior.
 BM25_INDEX_PATH: str = os.path.join(INDEX_DIR, "bm25_table_index.pkl")
-BM25_SIGNAL_WEIGHT: float = float(os.getenv("DV_NLP_BM25_SIGNAL_WEIGHT", "1.5"))
-BM25_TOP_K: int = int(os.getenv("DV_NLP_BM25_TOP_K", str(TOP_K_TABLES * 3)))
+BM25_SIGNAL_WEIGHT: float = env_float("DV_NLP_BM25_SIGNAL_WEIGHT", "1.5")
+BM25_TOP_K: int = env_int("DV_NLP_BM25_TOP_K", TOP_K_TABLES * 3)
 
 QA_PAIRS_PATH: str = os.path.join(INDEX_DIR, "qa_pairs.json")
-QA_STRONG_MATCH_THRESHOLD: float = float(os.getenv("DV_NLP_QA_STRONG_MATCH_THRESHOLD", "0.95"))
-QA_STRONG_MATCH_BONUS: float = float(os.getenv("DV_NLP_QA_STRONG_MATCH_BONUS", "10.0"))
+QA_STRONG_MATCH_THRESHOLD: float = env_float("DV_NLP_QA_STRONG_MATCH_THRESHOLD", "0.95")
+QA_STRONG_MATCH_BONUS: float = env_float("DV_NLP_QA_STRONG_MATCH_BONUS", "10.0")
 
 # Optional embedding pre-filter ahead of the QA strong-match difflib scan —
 # at 145 pairs a full difflib scan is instant, but difflib's per-comparison
@@ -180,7 +181,7 @@ QA_STRONG_MATCH_BONUS: float = float(os.getenv("DV_NLP_QA_STRONG_MATCH_BONUS", "
 # signal here.
 QA_INDEX_PATH: str = os.path.join(INDEX_DIR, "qa_index.faiss")
 QA_META_PATH: str = os.path.join(INDEX_DIR, "qa_meta.pkl")
-QA_PREFILTER_TOP_N: int = int(os.getenv("DV_NLP_QA_PREFILTER_TOP_N", "20"))
+QA_PREFILTER_TOP_N: int = env_int("DV_NLP_QA_PREFILTER_TOP_N", "20")
 
 # ── Table-resolution confidence / ambiguity (backend/nlp/confidence.py) ────────
 # table_confidence >= AUTO_PROCEED  -> resolve automatically, exactly as today.
@@ -193,16 +194,29 @@ QA_PREFILTER_TOP_N: int = int(os.getenv("DV_NLP_QA_PREFILTER_TOP_N", "20"))
 # the highest value that still keeps full coverage of the plateau. Raising it
 # back toward 0.72 does not buy accuracy, it only converts answers into
 # questions.
-CONFIDENCE_AUTO_PROCEED: float = float(os.getenv("DV_NLP_CONFIDENCE_AUTO_PROCEED", "0.60"))
-CONFIDENCE_ASK_FLOOR: float = float(os.getenv("DV_NLP_CONFIDENCE_ASK_FLOOR", "0.35"))
-TIE_EPSILON: float = float(os.getenv("DV_NLP_TIE_EPSILON", "0.08"))
+CONFIDENCE_AUTO_PROCEED: float = env_float("DV_NLP_CONFIDENCE_AUTO_PROCEED", "0.60")
+CONFIDENCE_ASK_FLOOR: float = env_float("DV_NLP_CONFIDENCE_ASK_FLOOR", "0.35")
+TIE_EPSILON: float = env_float("DV_NLP_TIE_EPSILON", "0.08")
 
 # Relative margin over the runner-up at which the winner is considered fully
 # separated: margin = (top1 - top2) / top1, and MARGIN_FULL_SEPARATION is where
 # that term saturates. Fused RRF margins are small in absolute terms even for a
 # clear winner (measured mean 0.18 on correct answers), so without this scaling
 # the margin term would contribute almost nothing to confidence.
-MARGIN_FULL_SEPARATION: float = float(os.getenv("DV_NLP_MARGIN_FULL_SEPARATION", "0.25"))
+MARGIN_FULL_SEPARATION: float = env_float("DV_NLP_MARGIN_FULL_SEPARATION", "0.25")
+
+# How the table-confidence score is blended (confidence.py): the leader's share of the
+# score, how far it leads the runner-up, and how many question tokens the top table covers.
+# The three are meant to sum to 1.0. They were inline literals (code review L-32); the
+# defaults below are exactly those literals, so behaviour is unchanged.
+CONFIDENCE_WEIGHT_LEADER: float = env_float("DV_NLP_CONF_W_LEADER", "0.45")
+CONFIDENCE_WEIGHT_MARGIN: float = env_float("DV_NLP_CONF_W_MARGIN", "0.40")
+CONFIDENCE_WEIGHT_OVERLAP: float = env_float("DV_NLP_CONF_W_OVERLAP", "0.15")
+
+# Score added to a table per question token that also appears in its name/description,
+# on top of the fused retrieval score (retriever.py and scoped_retriever.py). About one
+# primary reciprocal-rank-fusion hit at three tokens.
+LEXICAL_OVERLAP_BONUS: float = env_float("DV_NLP_LEXICAL_OVERLAP_BONUS", "0.03")
 
 # Stage-2 return-scoped ranking (backend/nlp/scoped_retriever.py). When false,
 # main.py's _shortlist_for_return falls back to _unranked_shortlist — the
@@ -214,8 +228,13 @@ SCOPED_RETRIEVAL_ENABLED: bool = (
 
 # ── Ollama (LLM-assisted intent resolution + SQL generation) ──────────────────
 # Reuses the same self-hosted Ollama endpoint sql_agent already talks to.
+# The built-in default is a public IP over plain http (code review H-07). It is kept so
+# existing servers keep working, but start-up logs a warning while it is in use, and
+# DV_REQUIRE_EXPLICIT_LLM_URL=true refuses to start until DV_NLP_OLLAMA_URL is set.
+_DEFAULT_OLLAMA_URL = "http://3.109.51.228/OllamaProxy/api/generate"
+OLLAMA_URL_IS_DEFAULT: bool = not os.getenv("DV_NLP_OLLAMA_URL", "").strip()
 OLLAMA_URL: str = os.getenv(
-    "DV_NLP_OLLAMA_URL", "http://3.109.51.228/OllamaProxy/api/generate"
+    "DV_NLP_OLLAMA_URL", _DEFAULT_OLLAMA_URL
 )
 
 # Two SEPARATE model settings, deliberately — these are different tasks with
@@ -233,12 +252,12 @@ OLLAMA_URL: str = os.getenv(
 # resolution always uses DV_NLP_INTENT_MODEL regardless of that setting.
 OLLAMA_MODEL: str = os.getenv("DV_NLP_OLLAMA_MODEL", "hf.co/defog/sqlcoder-7b-2:Q5_K_M")
 INTENT_MODEL: str = os.getenv("DV_NLP_INTENT_MODEL", "qwen2.5:7b")
-OLLAMA_TIMEOUT_SEC: int = int(os.getenv("DV_NLP_OLLAMA_TIMEOUT_SEC", "60"))
+OLLAMA_TIMEOUT_SEC: int = env_int("DV_NLP_OLLAMA_TIMEOUT_SEC", "60")
 
 # intent_resolver's expected output is a ~100-char JSON object — capping
 # num_predict bounds worst-case latency and stops the model rambling past
 # the closing brace instead of stopping cleanly.
-INTENT_NUM_PREDICT: int = int(os.getenv("DV_NLP_INTENT_NUM_PREDICT", "200"))
+INTENT_NUM_PREDICT: int = env_int("DV_NLP_INTENT_NUM_PREDICT", "200")
 
 # Intent resolution gets its OWN (much tighter) timeout, separate from
 # OLLAMA_TIMEOUT_SEC which sql_generator.py still uses. Rationale: intent
@@ -248,7 +267,7 @@ INTENT_NUM_PREDICT: int = int(os.getenv("DV_NLP_INTENT_NUM_PREDICT", "200"))
 # resolve_intent() now has an instant deterministic fallback (see
 # intent_resolver._resolve_deterministic), waiting a full minute to
 # discover that buys nothing but a very slow request.
-INTENT_TIMEOUT_SEC: int = int(os.getenv("DV_NLP_INTENT_TIMEOUT_SEC", "20"))
+INTENT_TIMEOUT_SEC: int = env_int("DV_NLP_INTENT_TIMEOUT_SEC", "20")
 
 # Circuit breaker: after a TRANSPORT failure (timeout/connection refused —
 # not a merely-badly-formatted answer), skip the LLM entirely for this many
@@ -256,9 +275,7 @@ INTENT_TIMEOUT_SEC: int = int(os.getenv("DV_NLP_INTENT_TIMEOUT_SEC", "20"))
 # Ollama outage costs every single request the full INTENT_TIMEOUT_SEC
 # before falling back, turning a working-but-degraded endpoint into a
 # uniformly slow one.
-INTENT_FAILURE_COOLDOWN_SEC: float = float(
-    os.getenv("DV_NLP_INTENT_FAILURE_COOLDOWN_SEC", "60")
-)
+INTENT_FAILURE_COOLDOWN_SEC: float = env_float("DV_NLP_INTENT_FAILURE_COOLDOWN_SEC", "60")
 
 # Cap on candidate columns listed per table in the intent prompt.
 # retriever.py's backfill deliberately injects a table's COMPLETE column
@@ -268,7 +285,7 @@ INTENT_FAILURE_COOLDOWN_SEC: float = float(
 # ranked, so the tail is the least likely to be the answer anyway.
 # Validation still accepts any column in the full shortlist, so this only
 # narrows what the model is shown, never what it's allowed to pick.
-INTENT_MAX_COLS_PER_TABLE: int = int(os.getenv("DV_NLP_INTENT_MAX_COLS_PER_TABLE", "40"))
+INTENT_MAX_COLS_PER_TABLE: int = env_int("DV_NLP_INTENT_MAX_COLS_PER_TABLE", "40")
 
 # Per-model prompt/behavior profile — ported from sql_agent/src/config.py's
 # MODEL_PROFILES so switching DV_NLP_OLLAMA_MODEL picks the right prompt style.

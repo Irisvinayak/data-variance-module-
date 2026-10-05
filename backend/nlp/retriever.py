@@ -28,6 +28,7 @@ from .query_analyzer import QueryAnalysis, analyze_query
 from . import confidence as confidence_mod
 from . import ranking
 from .nlp_config import (
+    LEXICAL_OVERLAP_BONUS,
     BM25_INDEX_PATH,
     BM25_SIGNAL_WEIGHT,
     BM25_TOP_K,
@@ -242,7 +243,7 @@ def get_relevant_schema(
     for tbl in scores:
         overlap = _lexical_overlap(query_tokens, " ".join(texts_by_table.get(tbl, [])))
         lexical_overlap_by_table[tbl] = overlap
-        scores[tbl] += overlap * 0.03
+        scores[tbl] += overlap * LEXICAL_OVERLAP_BONUS
 
     # Demote each return's key-value submission header (FILING_INFO and
     # friends) unless the query actually asks for filing metadata. Its text is

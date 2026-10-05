@@ -21,7 +21,19 @@ from collections.abc import Iterable
 import faiss
 import numpy as np
 
+from .index_manifest import pickle_is_trusted
+
 logger = logging.getLogger(__name__)
+
+
+class IndexInconsistentError(RuntimeError):
+    """An index and its metadata (or the query embedding) do not belong together.
+
+    Raised instead of letting the mismatch surface later as an IndexError deep in
+    a search, or worse as silently wrong table/column records (code review
+    RAG-01/RAG-02). The message names the file and the fix.
+    """
+
 
 _cache: dict[str, tuple[float, faiss.Index, list[dict[str, Any]]]] = {}
 _cache_lock = threading.Lock()
@@ -31,8 +43,13 @@ def load_index(index_path: str, meta_path: str) -> tuple[faiss.Index, list[dict[
     """Load an index fresh from disk, bypassing the cache. Prefer search()
     for normal use — this is exposed mainly for tooling/tests."""
     index = faiss.read_index(index_path)
+    trusted, why = pickle_is_trusted(meta_path)
+    if not trusted:
+        # Never unpickle a file that is not what the operator pinned (code review M-07).
+        logger.error("[nlp.index_store] refusing to load %s: %s", meta_path, why)
+        raise IndexInconsistentError(f"{os.path.basename(meta_path)} was not loaded: {why}")
     with open(meta_path, "rb") as fh:
-        meta = pickle.load(fh)
+        meta = pickle.load(fh)  # noqa: S301 - gated by pickle_is_trusted above
     return index, meta
 
 
@@ -58,6 +75,16 @@ def _load_cached(index_path: str, meta_path: str) -> tuple[faiss.Index, list[dic
             index_path, meta_path, type(exc).__name__, exc,
         )
         raise
+    # A partially copied rebuild (the .faiss from one build, the .pkl from
+    # another) loads without complaint and then answers with the wrong record.
+    if index.ntotal != len(meta):
+        message = (
+            f"index {os.path.basename(index_path)} holds {index.ntotal} vector(s) but "
+            f"{os.path.basename(meta_path)} holds {len(meta)} record(s) - the two files are "
+            "from different builds. Re-copy the complete index folder."
+        )
+        logger.error("[nlp.index_store] INCONSISTENT index | %s | %s", index_path, message)
+        raise IndexInconsistentError(message)
     with _cache_lock:
         _cache[key] = (mtime, index, meta)
     logger.info("[nlp.index_store] Loaded %d record(s) from %s (cached in memory)", len(meta), index_path)
@@ -249,6 +276,16 @@ def search(
 
     effective_k = min(k, len(meta))
     q_vec = np.array([query_vector], dtype="float32")
+    # A different embedding model gives vectors of a different size (or, worse,
+    # the same size in a different space). FAISS reports a size mismatch only as
+    # a bare assertion; say what actually happened (code review RAG-02).
+    if q_vec.shape[1] != index.d:
+        message = (
+            f"the query embedding has {q_vec.shape[1]} dimensions but {os.path.basename(index_path)} "
+            f"was built with {index.d} - DV_NLP_EMBED_MODEL does not match the model that built this index."
+        )
+        logger.error("[nlp.index_store] EMBEDDING MODEL MISMATCH | %s | %s", index_path, message)
+        raise IndexInconsistentError(message)
     distances, indices = index.search(q_vec, effective_k)
 
     results = []

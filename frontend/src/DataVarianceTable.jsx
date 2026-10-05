@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import { freqLabel } from './types.js'
 
 // One SVG triangle for both directions, rotated for a decrease. The ↑/↓ text
 // glyphs used before come from different font glyphs, so the two rendered at

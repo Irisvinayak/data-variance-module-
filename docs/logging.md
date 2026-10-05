@@ -62,8 +62,8 @@ property of the deployment, not of any one call.
 
 ## Prefixes
 
-Messages carry a `[module]` tag — `[main]`, `[db]`, `[AUTH]`, `[nlp.retriever]`,
-`[variance]`. The convention is not perfectly consistent (`backend/data/` uses
+Messages carry a `[module]` tag — `[main]`, `[api.variance]`, `[api.nlp]`, `[db]`, `[AUTH]`,
+`[nlp.retriever]`, `[variance]`. The convention is not perfectly consistent (`backend/data/` uses
 bare names and `[table_resolution]` spans two modules; `auth/` shouts). Since
 `%(name)s` is already in the format, the useful tags are the sub-stage ones
 (`[row_match]`, `[seq_link]`, `[DIAG]`) rather than the module restatements.

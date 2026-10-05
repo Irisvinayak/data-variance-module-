@@ -18,7 +18,8 @@
  * awaits it before rendering.
  */
 
-import { authQuery, withAuth } from './auth/index.js'
+import { authQuery, withAuth, postReady, currentTenantId } from './auth/index.js'
+import { getToken, clearToken } from './auth/token.js'
 import { API_BASE_URL } from './config.js'
 
 // FastAPI sends `detail` as a string for HTTPException but as a list of
@@ -32,8 +33,55 @@ function errorDetail(detail) {
   return null
 }
 
-async function request(path, label, options) {
-  const res = await fetch(`${API_BASE_URL}${path}`, options)
+const DEFAULT_TIMEOUT_MS = 120_000
+const NL_TIMEOUT_MS      = 300_000   // first NL call loads the embedding model lazily
+
+// options: fetch options plus optional { signal, timeoutMs } (consumed here,
+// never forwarded to fetch). A caller abort rethrows the native AbortError and
+// is NOT reported as a timeout.
+async function request(path, label, options = {}) {
+  const { signal: callerSignal, timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options
+
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
+  const onCallerAbort = () => controller.abort()
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort()
+    else callerSignal.addEventListener('abort', onCallerAbort, { once: true })
+  }
+
+  const token = getToken()
+  if (token) {
+    const headers = new Headers(fetchOptions.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+    // Name the tenant too. The server never trusts it on its own: it must equal the
+    // tenant inside the verified token, or the request is refused (403).
+    const tenant = currentTenantId()
+    if (tenant) headers.set('X-Tenant-Id', tenant)
+    fetchOptions.headers = headers
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, signal: controller.signal })
+    if (res.status === 401 && token) {
+      // The host token was rejected: drop it and ask the host for a fresh one.
+      clearToken()
+      postReady()
+    }
+    return await parseResponse(res, label)
+  } catch (err) {
+    if (timedOut && err?.name === 'AbortError') {
+      throw new Error('The request timed out. Please try again.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+    callerSignal?.removeEventListener('abort', onCallerAbort)
+  }
+}
+
+async function parseResponse(res, label) {
   if (!res.ok) {
     // Error bodies are not always JSON (proxy/IIS error pages), and a JSON
     // body can be null — fall back to the status line either way.
@@ -113,11 +161,15 @@ export async function computeVariance(payload) {
 // result. No server-side session is kept between the two calls.
 export const SKIP_ANSWER = '__skip__'
 
-export async function resolveNlQuery(query, { dimension, clarificationAnswer, resolvedContext } = {}) {
-  return request(`/variance/nlresolve?${authQuery()}`, 'NL resolve', postJson({
-    query,
-    ...(dimension ? { dimension } : {}),
-    ...(clarificationAnswer ? { clarification_answer: clarificationAnswer } : {}),
-    ...(resolvedContext ? { resolved_context: resolvedContext } : {}),
-  }))
+export async function resolveNlQuery(query, { dimension, clarificationAnswer, resolvedContext, signal } = {}) {
+  return request(`/variance/nlresolve?${authQuery()}`, 'NL resolve', {
+    ...postJson({
+      query,
+      ...(dimension ? { dimension } : {}),
+      ...(clarificationAnswer ? { clarification_answer: clarificationAnswer } : {}),
+      ...(resolvedContext ? { resolved_context: resolvedContext } : {}),
+    }),
+    timeoutMs: NL_TIMEOUT_MS,
+    ...(signal ? { signal } : {}),
+  })
 }

@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..auth.deps import require_login, require_return_access
+from ..auth.deps import require_login, require_return_access, require_tables_access
 from ..auth.service import get_allowed_form_ids
 from ..config import AUTH_ENABLED, RequestContext
+from ..config import settings as cfg
 from ..data import service
+from ..data.calculate_variance import is_no_data_error, result_error
 from ..data.db import execute_query
+from ..data.validation import InvalidInput, ensure_safe_return_id, ensure_safe_table_ref
 from ..data.models import NLResolveRequest
 from ..data.report_lookup import parse_returns
-from .errors import http_error
+from .errors import http_error, server_error_detail
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +277,7 @@ def _shortlist_for_return(
     table_names = indexed_returns.tables_for_return(return_id, ctx)
     if not table_names:
         logger.warning(
-            "[main] _shortlist_for_return | return_id=%s | the embedding index covers "
+            "[api.nlp] _shortlist_for_return | return_id=%s | the embedding index covers "
             "none of this return's tables — nothing to resolve against",
             return_id,
         )
@@ -377,7 +381,7 @@ def _nlp_stage(stage: str, ctx: RequestContext, query: str, fn, *args, **kwargs)
         raise                       # a deliberate 404/400 — not a stage failure
     except Exception as exc:
         logger.error(
-            "[main] /variance/nlresolve | %s | query=%r | stage=%s FAILED | %s: %s",
+            "[api.nlp] /variance/nlresolve | %s | query=%r | stage=%s FAILED | %s: %s",
             ctx, query, stage, type(exc).__name__, exc, exc_info=True,
         )
         raise
@@ -415,7 +419,7 @@ def variance_nlresolve(
         from ..nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
     except Exception as exc:
         logger.error(
-            "[main] /variance/nlresolve | %s | NLP module import FAILED | %s: %s "
+            "[api.nlp] /variance/nlresolve | %s | NLP module import FAILED | %s: %s "
             "| the NL path needs faiss-cpu, sentence-transformers and rank-bm25 "
             "(pip install -r requirements.txt) — check GET /variance/nlp-health",
             ctx, type(exc).__name__, exc, exc_info=True,
@@ -424,7 +428,7 @@ def variance_nlresolve(
 
     query = payload.query.strip()
     logger.info(
-        "[main] POST /variance/nlresolve | %s | query=%r | dimension=%r | answer=%r",
+        "[api.nlp] POST /variance/nlresolve | %s | query=%r | dimension=%r | answer=%r",
         ctx, query, payload.dimension, payload.clarification_answer,
     )
 
@@ -464,7 +468,7 @@ def variance_nlresolve(
     if analysis.unindexed_return_names and not analysis.return_ids:
         named = analysis.unindexed_return_names[0]
         logger.info(
-            "[main] /variance/nlresolve | %s | query=%r | names return %r which has "
+            "[api.nlp] /variance/nlresolve | %s | query=%r | names return %r which has "
             "no embeddings -> refusing rather than answering from another return",
             ctx, query, named,
         )
@@ -488,6 +492,20 @@ def variance_nlresolve(
     pinned_return_id = resolved_context.get("return_id")
     answer = payload.clarification_answer
 
+    # Clarification ids come back from the browser, so check their SHAPE before
+    # they reach any lookup or path (code review SEC-09). Real option ids are
+    # return ids and table names, which always pass; "__skip__" is handled below.
+    try:
+        if pinned_return_id:
+            ensure_safe_return_id(pinned_return_id)
+        if answer and answer != _SKIP_ANSWER:
+            if payload.dimension == "return":
+                ensure_safe_return_id(answer)
+            elif payload.dimension == "table":
+                ensure_safe_table_ref(answer)
+    except InvalidInput as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     if payload.dimension == "return" and answer:
         if answer == _SKIP_ANSWER:
             # No return picked — best-effort: fall back to whatever the
@@ -501,7 +519,7 @@ def variance_nlresolve(
                     detail="Still couldn't find a matching return/table for this query — please add more detail.",
                 )
             logger.info(
-                "[main] /variance/nlresolve | %s | query=%r | return clarification skipped -> best-effort guess",
+                "[api.nlp] /variance/nlresolve | %s | query=%r | return clarification skipped -> best-effort guess",
                 ctx, query,
             )
         else:
@@ -512,7 +530,7 @@ def variance_nlresolve(
             if shortlist is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selected return is no longer available.")
             logger.info(
-                "[main] /variance/nlresolve | %s | query=%r | return answered -> return_id=%s (%d table(s))",
+                "[api.nlp] /variance/nlresolve | %s | query=%r | return answered -> return_id=%s (%d table(s))",
                 ctx, query, answer, len(shortlist["tables"]),
             )
             if shortlist["table_ambiguous"]:
@@ -541,7 +559,7 @@ def variance_nlresolve(
                     detail="No accessible return/table matches this query.",
                 )
             logger.info(
-                "[main] /variance/nlresolve | %s | query=%r | table clarification skipped -> best-effort guess",
+                "[api.nlp] /variance/nlresolve | %s | query=%r | table clarification skipped -> best-effort guess",
                 ctx, query,
             )
         else:
@@ -555,7 +573,7 @@ def variance_nlresolve(
                     detail="Selected option is no longer valid for this query.",
                 )
             logger.info(
-                "[main] /variance/nlresolve | %s | query=%r | table answered -> table=%s",
+                "[api.nlp] /variance/nlresolve | %s | query=%r | table answered -> table=%s",
                 ctx, query, answer,
             )
 
@@ -573,7 +591,7 @@ def variance_nlresolve(
         # two- or three-item question, not a browse through the full list.
         if len(analysis.return_ids) > 1:
             logger.info(
-                "[main] /variance/nlresolve | %s | query=%r | names %d return "
+                "[api.nlp] /variance/nlresolve | %s | query=%r | names %d return "
                 "variants %s -> asking which",
                 ctx, query, len(analysis.return_ids), analysis.return_names,
             )
@@ -603,7 +621,7 @@ def variance_nlresolve(
                 )
                 if named_shortlist is not None:
                     logger.info(
-                        "[main] /variance/nlresolve | %s | query=%r | "
+                        "[api.nlp] /variance/nlresolve | %s | query=%r | "
                         "query names return_id=%s directly -> using it instead of asking",
                         ctx, query, named_return_ids[0],
                     )
@@ -630,7 +648,7 @@ def variance_nlresolve(
                             query_related_return_ids.append(rid)
 
                 logger.info(
-                    "[main] /variance/nlresolve | %s | query=%r | no usable table/return signal "
+                    "[api.nlp] /variance/nlresolve | %s | query=%r | no usable table/return signal "
                     "(table_confidence=%.3f, query_related_return_ids=%s) -> asking for return",
                     ctx, query, table_confidence, query_related_return_ids,
                 )
@@ -644,7 +662,7 @@ def variance_nlresolve(
 
         if table_ambiguous or table_confidence < CONFIDENCE_AUTO_PROCEED:
             logger.info(
-                "[main] /variance/nlresolve | %s | query=%r | table ambiguous "
+                "[api.nlp] /variance/nlresolve | %s | query=%r | table ambiguous "
                 "(confidence=%.3f, tied=%s) -> asking clarification",
                 ctx, query, table_confidence, table_ambiguous,
             )
@@ -659,12 +677,16 @@ def variance_nlresolve(
     # scoring above, so there's no lower number to report here.
     final_confidence = shortlist.get("table_confidence", 1.0)
 
+    # sql_agent's H-02 order: authorize the tables the LLM will pick from before
+    # any LLM call, whichever branch (free-form or client-named) built them.
+    require_tables_access(ctx, shortlist["tables"])
+
     resolution = _nlp_stage(
         "intent_resolution", ctx, query, resolve_intent, query, shortlist,
         analysis=analysis,
     )
     if resolution is None:
-        logger.warning("[main] 404 /variance/nlresolve | %s | query=%r | intent resolution failed", ctx, query)
+        logger.warning("[api.nlp] 404 /variance/nlresolve | %s | query=%r | intent resolution failed", ctx, query)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Could not resolve this query to a known table/column.",
@@ -678,12 +700,12 @@ def variance_nlresolve(
 
     return_row = _return_row(resolution["return_id"], ctx)
     if return_row is None:
-        logger.warning("[main] 404 /variance/nlresolve | %s | resolved return_id=%s not found", ctx, resolution["return_id"])
+        logger.warning("[api.nlp] 404 /variance/nlresolve | %s | resolved return_id=%s not found", ctx, resolution["return_id"])
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resolved return not found.")
 
     found = service.find_return_and_tables(return_row.get("Name", ""), ctx)
-    if found.get("error") or found.get("candidates") or not found.get("table_mapping_path"):
-        logger.warning("[main] 404 /variance/nlresolve | %s | return_name=%r | table mapping unresolved", ctx, return_row.get("Name"))
+    if result_error(found) or found.get("candidates") or not found.get("table_mapping_path"):
+        logger.warning("[api.nlp] 404 /variance/nlresolve | %s | return_name=%r | table mapping unresolved", ctx, return_row.get("Name"))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resolved return could not be mapped to a table-mapping file.",
@@ -716,7 +738,7 @@ def variance_nlresolve(
         # if it has no entry either, compute_variance raises FileNotFoundError
         # and the existing handler turns it into a 404 with a real reason.
         logger.info(
-            "[main] /variance/nlresolve | %s | table=%r not in return %s's "
+            "[api.nlp] /variance/nlresolve | %s | table=%r not in return %s's "
             "table mapping — proceeding via XML_Query.xml fallback",
             ctx, resolution["table_name"], found["return_id"],
         )
@@ -736,11 +758,11 @@ def variance_nlresolve(
             ctx=ctx,
         )
     except ValueError as exc:
-        logger.warning("[main] 404 /variance/nlresolve | %s | date resolution failed: %s", ctx, exc)
+        logger.warning("[api.nlp] 404 /variance/nlresolve | %s | date resolution failed: %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     logger.info(
-        "[main] POST /variance/nlresolve | %s | query=%r | return_id=%s | table=%s | "
+        "[api.nlp] POST /variance/nlresolve | %s | query=%r | return_id=%s | table=%s | "
         "columns=%s | reporting_date=%s | reporting_period=%s",
         ctx, query, found["return_id"], resolved_table["table_name"],
         resolution["selected_columns"], reporting_date, reporting_period,
@@ -773,14 +795,14 @@ def variance_nlresolve(
         # The anchor exists in the date list but its rows can still come back
         # empty (e.g. a filter on the physical table). One retry on the next
         # real date keeps the query answering instead of dead-ending.
-        if (computed.get("error") or "").startswith("No data found") and len(comparison_dates) > 1:
+        if is_no_data_error(result_error(computed)) and len(comparison_dates) > 1:
             retry_dates = comparison_dates[1:]
             logger.info(
-                "[main] /variance/nlresolve | %s | no rows for %s — retrying from %s",
+                "[api.nlp] /variance/nlresolve | %s | no rows for %s — retrying from %s",
                 ctx, comparison_dates[0], retry_dates[0],
             )
             retried = _compute(retry_dates)
-            if not retried.get("error"):
+            if not result_error(retried):
                 date_notes = list(date_notes) + [
                     f"No rows for {comparison_dates[0]}; showing {retry_dates[0]} instead."
                 ]
@@ -788,14 +810,14 @@ def variance_nlresolve(
     except Exception as exc:
         raise http_error(exc, "/variance/nlresolve", ctx) from exc
 
-    if computed.get("error"):
-        logger.warning("[main] 500 /variance/nlresolve | %s | compute_variance error: %s", ctx, computed["error"])
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=computed["error"])
+    if result_error(computed):
+        logger.warning("[api.nlp] 500 /variance/nlresolve | %s | compute_variance error: %s", ctx, result_error(computed))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result_error(computed))
 
     computed = _restrict_result_columns(computed, resolution["selected_columns"])
 
     logger.info(
-        "[main] 200 /variance/nlresolve | %s | return_id=%s | table=%s | rows=%d",
+        "[api.nlp] 200 /variance/nlresolve | %s | return_id=%s | table=%s | rows=%d",
         ctx, found["return_id"], resolved_table["table_name"], len(computed.get("rows", [])),
     )
 
@@ -804,8 +826,13 @@ def variance_nlresolve(
         "return_id":          found["return_id"],
         "return_name":        found["return_name"],
         "report_freq":        report_freq,
-        "table_mapping_path": found["table_mapping_path"],
+        # File name only: the browser echoes it back but the server ignores it, so
+        # the absolute repository path was pure disclosure (code review SEC-06).
+        "table_mapping_path": os.path.basename(str(found["table_mapping_path"]).replace("\\", "/")),
         "confidence":         round(final_confidence, 3),
+        # "llm" when the model's choice was used, "fallback" when the deterministic
+        # resolver stood in (code review M-41). Additive.
+        "resolution_mode":    resolution.get("mode"),
         # What the query was understood to mean, echoed back so the UI can
         # show it rather than the resolution being a black box the user can
         # only judge by whether the numbers look right (frontend:
@@ -852,23 +879,54 @@ def variance_nlquery(
     authorized returns before the LLM ever sees a table name, and
     validate_sql() rejects anything outside that shortlist, any non-SELECT,
     and any DML/DDL keyword before backend/db.execute_query ever runs it.
+
+    DISABLED BY DEFAULT (DV_NLQUERY_ENABLED=false): the shipped UI never calls
+    this route, and LLM-authored SQL runs on the same Oracle account as every
+    other query, so its regex validator is the only boundary (code review
+    C-03). Enable it only together with a read-only DB user granted just the
+    indexed tables.
     """
+    from ..config.settings import NLQUERY_ENABLED
+
+    if not NLQUERY_ENABLED:
+        logger.warning("[api.nlp] 404 /variance/nlquery | %s | route disabled (DV_NLQUERY_ENABLED=false)", ctx)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
     from ..nlp.retriever import get_relevant_schema
     from ..nlp.sql_generator import generate_sql
 
     query = payload.query.strip()
-    logger.info("[main] POST /variance/nlquery | %s | query=%r", ctx, query)
+    logger.info("[api.nlp] POST /variance/nlquery | %s | query=%r", ctx, query)
 
     if not query:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="query must not be empty.")
 
+    from ..nlp.nlp_config import CONFIDENCE_ASK_FLOOR, CONFIDENCE_AUTO_PROCEED
+
     shortlist = get_relevant_schema(query, ctx)
+
+    # Same confidence gate as /nlresolve (code review LLM-06): a question the
+    # retriever cannot place with confidence is asked about, not sent to a
+    # model that will write SQL for whatever table scored highest.
+    table_confidence = shortlist.get("table_confidence", 0.0)
+    if shortlist["tables"] and (
+        shortlist.get("table_ambiguous", False) or table_confidence < CONFIDENCE_AUTO_PROCEED
+    ) and table_confidence >= CONFIDENCE_ASK_FLOOR:
+        return _build_table_clarification(query, shortlist, table_confidence)
+    if shortlist["tables"] and table_confidence < CONFIDENCE_ASK_FLOOR:
+        shortlist = {**shortlist, "tables": []}
+
     if not shortlist["tables"]:
-        logger.warning("[main] 404 /variance/nlquery | %s | query=%r | no authorized table matched", ctx, query)
+        logger.warning("[api.nlp] 404 /variance/nlquery | %s | query=%r | no authorized table matched", ctx, query)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No accessible return/table matches this query.",
         )
+
+    # Authorize the tables BEFORE any LLM call (sql_agent's H-02 order): the
+    # retriever already pre-filters, but this route lets a model write SQL, so
+    # the boundary is re-checked on exactly the tables that SQL may touch.
+    require_tables_access(ctx, shortlist["tables"])
 
     # Relative phrases ("last quarter") resolve against the newest date the
     # top table actually has, not the wall clock — the data lags the calendar,
@@ -880,7 +938,7 @@ def variance_nlquery(
         cands = _candidate_dates(top["return_id"], top["table"], top.get("filter_col") or "RDATE", ctx)
         today_date = cands[0] if cands else None
     except Exception as exc:
-        logger.info("[main] /variance/nlquery | %s | no data date for %s (%s) — using today", ctx, top.get("table"), exc)
+        logger.info("[api.nlp] /variance/nlquery | %s | no data date for %s (%s) — using today", ctx, top.get("table"), exc)
 
     result = generate_sql(
         query, shortlist["tables"], shortlist["columns"],
@@ -889,23 +947,29 @@ def variance_nlquery(
     )
     if not result.get("sql") or result.get("warnings"):
         logger.warning(
-            "[main] 422 /variance/nlquery | %s | query=%r | warnings=%s",
+            "[api.nlp] 422 /variance/nlquery | %s | query=%r | warnings=%s",
             ctx, query, result.get("warnings"),
         )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Could not generate a valid SQL query: {result.get('warnings')}",
+            # The warnings name tables and validator rules; they stay in the log.
+            detail="Could not generate a valid SQL query for this question. Please rephrase it.",
         )
 
     logger.info(
-        "[main] /variance/nlquery generated SQL | %s | query=%r | sql=%s",
+        "[api.nlp] /variance/nlquery generated SQL | %s | query=%r | sql=%s",
         ctx, query, result["sql"],
     )
 
     columns, rows, err = execute_query(result["sql"])  # validated by generate_sql
     if err:
-        logger.error("[main] 500 /variance/nlquery | %s | sql=%s | %s", ctx, result["sql"], err)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err)
+        logger.error("[api.nlp] 500 /variance/nlquery | %s | sql=%s | %s", ctx, result["sql"], err)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=server_error_detail())
 
-    logger.info("[main] 200 /variance/nlquery | %s | rows=%d", ctx, len(rows))
-    return {"sql": result["sql"], "columns": columns, "rows": rows}
+    logger.info("[api.nlp] 200 /variance/nlquery | %s | rows=%d", ctx, len(rows))
+    response = {"columns": columns, "rows": rows}
+    # The generated SQL reveals schema and validator behaviour: only on request
+    # of the operator (DV_NLQUERY_RETURN_SQL=true), never to a normal client.
+    if cfg.NLQUERY_RETURN_SQL:
+        response["sql"] = result["sql"]
+    return response

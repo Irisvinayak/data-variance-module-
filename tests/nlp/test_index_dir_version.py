@@ -69,7 +69,7 @@ def test_version_spellings_normalise_the_same_way_as_the_rest_of_the_app(raw, ex
 
 def test_configured_index_dir_matches_the_configured_version():
     from backend.config import APP_VERSION
-    assert nlp_config.INDEX_DIR == nlp_config.index_dir_for(APP_VERSION)
+    assert nlp_config.index_dir_for(APP_VERSION) == nlp_config.INDEX_DIR
 
 
 def test_every_artifact_path_sits_under_index_dir():

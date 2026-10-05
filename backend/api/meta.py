@@ -6,11 +6,16 @@ import importlib
 import json
 import logging
 import os
+import threading
+import time
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from ..config import ANONYMOUS, APP_VERSION
+from ..config import settings as cfg
 from ..hosts import HostProfileError, get_profile
+from .schemas import AppConfigResponse, HealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,12 @@ router = APIRouter()
 @router.get("/variance/nlp-health", tags=["Meta"])
 def nlp_health(check_model: bool = False) -> dict:
     from ..nlp import nlp_config
+
+    # Forcing the ~1.3 GB model to load, and the paths/package errors below, are
+    # operator tools, not public output (code review SEC-05). Without
+    # DV_DIAGNOSTICS_ENABLED=true this is a bare status and never loads the model.
+    diagnostics = cfg.DIAGNOSTICS_ENABLED
+    check_model = check_model and diagnostics
 
     packages: dict[str, str] = {}
     for mod in ("faiss", "sentence_transformers", "rank_bm25", "numpy"):
@@ -110,6 +121,23 @@ def nlp_health(check_model: bool = False) -> dict:
     except (OSError, ValueError):
         pass  # already reported above as a MISSING/unreadable index file
 
+    # Broader than the file-presence check above: build-stamp checksums, vector/
+    # record counts, and the embedding model the build recorded (RAG-01/RAG-02).
+    index_problems: list[str] = []
+    if diagnostics:
+        try:
+            from ..nlp import index_manifest
+
+            index_problems = index_manifest.verify_index_folder(nlp_config.INDEX_DIR, nlp_config.EMBED_MODEL)
+        except Exception as exc:  # noqa: BLE001 - a report, never a failure
+            index_problems = [f"index verification failed: {type(exc).__name__}: {exc}"]
+        problems = problems + [f"index: {p}" for p in index_problems]
+
+    if not diagnostics:
+        if problems:
+            logger.warning("[meta] /variance/nlp-health degraded | %s", problems)
+        return {"status": "ok" if not problems else "degraded"}
+
     return {
         "status":           "ok" if not problems else "degraded",
         "problems":         problems,
@@ -130,7 +158,66 @@ def nlp_health(check_model: bool = False) -> dict:
 
 
 # ── Health check (no auth — used by infra/monitoring probes) ──────────────────
-@router.get("/health", tags=["Meta"])
+# ── GET /ready ────────────────────────────────────────────────────────────────
+# Readiness, as opposed to /health's liveness: can this instance actually do its job?
+# Reports two booleans only (no hosts, paths or error text). 503 when the database is
+# unreachable; the LLM is reported but never makes the instance "not ready", because the
+# NL path degrades to the deterministic resolver without it (code review L-17).
+# Unauthenticated and cheap: the answer is cached for READY_CACHE_SEC so a probe cannot
+# be used to hammer Oracle.
+READY_CACHE_SEC = 10.0
+_ready_lock = threading.Lock()
+_ready_cache: dict = {"at": 0.0, "value": None}
+
+
+def _probe_database() -> bool:
+    from ..data.db import execute_query
+
+    try:
+        _cols, _rows, err = execute_query("SELECT 1 FROM DUAL")
+        return err is None
+    except Exception:  # noqa: BLE001 - any failure means "not ready"
+        return False
+
+
+def _probe_llm() -> bool:
+    """True when the LLM host answers at all (any HTTP status): reachable, not necessarily healthy."""
+    from urllib.parse import urlparse
+
+    import requests
+
+    from ..nlp import nlp_config
+
+    parsed = urlparse(nlp_config.OLLAMA_URL)
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    try:
+        requests.get(f"{parsed.scheme}://{parsed.netloc}/", timeout=2)
+        return True
+    except requests.exceptions.RequestException:
+        return False
+
+
+def _readiness() -> dict:
+    now = time.monotonic()
+    with _ready_lock:
+        cached = _ready_cache["value"]
+        if cached is not None and now - _ready_cache["at"] < READY_CACHE_SEC:
+            return cached
+    value = {"database": _probe_database(), "llm": _probe_llm()}
+    with _ready_lock:
+        _ready_cache.update(at=time.monotonic(), value=value)
+    return value
+
+
+@router.get("/ready", tags=["Meta"])
+def ready():
+    checks = _readiness()
+    body = {"status": "ready" if checks["database"] else "not_ready", **checks}
+    return JSONResponse(status_code=200 if checks["database"] else 503, content=body)
+
+
+@router.get("/health", tags=["Meta"], response_model=HealthResponse, response_model_exclude_unset=True)
 def health():
     info = {"status": "ok", "version": APP_VERSION}
     try:
@@ -140,18 +227,21 @@ def health():
         # tenant-free repository — so the paths are reported as unavailable
         # rather than guessed from an arbitrary tenant.
         info["profile"] = profile.name
-        try:
-            info["paths"] = profile.describe(ANONYMOUS)
-        except HostProfileError as exc:
-            info["paths"] = {"detail": f"tenant-scoped; not resolvable without a request ({exc})"}
+        # Resolved filesystem paths are operator detail: shown only when
+        # DV_DIAGNOSTICS_ENABLED=true (code review SEC-05).
+        if cfg.DIAGNOSTICS_ENABLED:
+            try:
+                info["paths"] = profile.describe(ANONYMOUS)
+            except HostProfileError as exc:
+                info["paths"] = {"detail": f"tenant-scoped; not resolvable without a request ({exc})"}
     except HostProfileError as exc:
+        logger.error("[meta] /health - profile unavailable: %s", exc)
         info["status"] = "misconfigured"
-        info["detail"] = str(exc)
     return info
 
 
 # ── GET /app-config ────────────────────────────────────────────────────────────
-@router.get("/app-config", tags=["Meta"])
+@router.get("/app-config", tags=["Meta"], response_model=AppConfigResponse, response_model_exclude_unset=True)
 def app_config():
     """Which iDEAL host this backend is configured for.
 

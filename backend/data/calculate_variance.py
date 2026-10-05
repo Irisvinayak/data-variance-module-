@@ -8,7 +8,7 @@ import calendar
 import logging
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
 from typing import Any, Optional
 from collections.abc import Callable
@@ -19,11 +19,52 @@ logger = logging.getLogger(__name__)
 # the SELECT list, and `selected_columns` arrives in the /variance/compute
 # request body, so anything else (a subquery, a comment, a UNION) would run as
 # SQL against the live connection.
+# Both "no rows" results below start with this, and /variance/nlresolve decides
+# whether to retry from an earlier date by testing for it. One constant instead of
+# two copies of a string keeps producer and consumer from drifting apart
+# (code review ERR-01). The message text itself is unchanged.
+NO_DATA_PREFIX = "No data found"
+
+# Response-size caps for the diagnostic lists added to a compute result.
+MAX_REMOVED_ROWS = 200
+MAX_REPORTED_DUPLICATES = 50
+
+
+def result_error(result: object) -> str | None:
+    """The error text of a service result, or None when it is a success.
+
+    Service functions report failure as a returned {"error": "..."} dict rather
+    than raising (code review M-43). Every caller used its own `.get("error")`
+    test; this is the one place that defines what an error result is, so the two
+    styles cannot drift apart. The wire format is unchanged.
+    """
+    if isinstance(result, dict):
+        err = result.get("error")
+        if err:
+            return str(err)
+    return None
+
+
+def is_no_data_error(error: object) -> bool:
+    return isinstance(error, str) and error.startswith(NO_DATA_PREFIX)
+
+
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
 
 
 def is_safe_identifier(name: Any) -> bool:
     return isinstance(name, str) and bool(_IDENTIFIER_RE.match(name))
+
+
+# A column or table reference as it is written UNQUOTED in the generated SQL:
+# letters, digits, _ $ # and a dot for SCHEMA.TABLE. Anything else (a quote, space,
+# semicolon, parenthesis, comment marker) cannot be part of a name that works
+# unquoted in Oracle, so it can only be an attempt to leave the identifier position.
+_SQL_REF_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$#]*(\.[A-Za-z_][A-Za-z0-9_$#]*){0,2}$")
+
+
+def is_safe_sql_ref(name: Any) -> bool:
+    return isinstance(name, str) and len(name) <= 261 and bool(_SQL_REF_RE.match(name))
 
 
 def sql_literal(value: Any) -> str:
@@ -310,52 +351,98 @@ def validate_reporting_date(report_date: datetime, report_freq: str) -> bool:
 
 
 def _to_decimal(v: Any) -> Decimal:
+    """A finite Decimal from a cell value, or InvalidOperation.
+
+    Accepts thousands separators and accounting negatives, "(100)" -> -100.
+    NaN / Infinity are refused (a "NaN" cell used to flow into the arithmetic and
+    print "NaN%"); None is not a number (code review M-16).
+    """
     if v is None:
         raise InvalidOperation("None")
-    return Decimal(str(v).replace(",", ""))
+    text = str(v).strip().replace(",", "")
+    if len(text) > 2 and text.startswith("(") and text.endswith(")"):
+        text = "-" + text[1:-1].strip()
+    d = Decimal(text)
+    if not d.is_finite():
+        raise InvalidOperation("not finite")
+    return d
+
+
+_CENT = Decimal("0.01")
+
+
+def _q(d: Decimal) -> Decimal:
+    """Round to 2 places, half UP (the default would be banker's rounding: 0.125 -> 0.12)."""
+    return d.quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _sign_color(rounded: Decimal) -> str:
+    """Colour from the figure the user SEES: a change that rounds to 0.00 is not green/red."""
+    return "success" if rounded > 0 else ("danger" if rounded < 0 else "")
 
 
 def get_difference(prev_val: Any, curr_val: Any) -> Optional[dict[str, Any]]:
+    # An explicit NULL policy (code review M-16): both missing -> nothing to show;
+    # exactly one missing -> "N/A", never the other value presented as the change.
+    if prev_val is None and curr_val is None:
+        return None
+    if prev_val is None or curr_val is None:
+        return {"value": "N/A", "color": ""}
     try:
         p = _to_decimal(prev_val)
         c = _to_decimal(curr_val)
-        diff  = (c - p).quantize(Decimal("0.01"))
-        color = "danger" if c < p else ("success" if c > p else "")
-        return {"value": str(diff), "color": color}
+        diff = _q(c - p)
+        return {"value": str(diff), "color": _sign_color(diff)}
     except Exception:
         try:
             if str(prev_val).strip().lower() != str(curr_val).strip().lower():
                 return {"value": str(curr_val), "color": ""}
-            # Equal string values — return zero-change dict rather than None
+            # Equal string values - return zero-change dict rather than None
             return {"value": "0.00", "color": ""}
         except Exception:
             return None
 
 
+def _pct(p: Decimal, c: Decimal) -> Optional[Decimal]:
+    """Percentage change, or None when it is undefined (a non-zero value after a zero base)."""
+    if p == 0:
+        return Decimal("0") if c == 0 else None
+    return ((c - p) / abs(p)) * Decimal("100")
+
+
 def get_pct_change(prev_val: Any, curr_val: Any) -> Optional[dict[str, Any]]:
     try:
-        p       = _to_decimal(prev_val)
-        c       = _to_decimal(curr_val)
-        pct     = ((c - p) / abs(p)) * Decimal("100") if p != 0 else Decimal("0")
-        rounded = pct.quantize(Decimal("0.01"))
-        color   = "danger" if c < p else ("success" if c > p else "")
-        return {"value": f"{rounded}%", "color": color}
+        p = _to_decimal(prev_val)
+        c = _to_decimal(curr_val)
+        pct = _pct(p, c)
+        if pct is None:
+            # 0 -> x is not "0.00%": the change is undefined (code review H-12). The
+            # colour still follows the direction, since the value did move.
+            return {"value": "N/A", "color": _sign_color(c - p)}
+        rounded = _q(pct)
+        return {"value": f"{rounded}%", "color": _sign_color(rounded)}
     except Exception:
         return None
 
 
 def get_variance_summary(prev_val: Any, curr_val: Any) -> Optional[dict[str, Any]]:
     try:
-        p           = _to_decimal(prev_val)
-        c           = _to_decimal(curr_val)
-        pct         = ((c - p) / abs(p)) * Decimal("100") if p != 0 else Decimal("0")
-        rounded_pct = pct.quantize(Decimal("0.01"))
-        arrow       = "▲" if c > p else ("▼" if c < p else "")
-        color       = "success" if c > p else ("danger" if c < p else "")
+        p = _to_decimal(prev_val)
+        c = _to_decimal(curr_val)
+        pct = _pct(p, c)
+        if pct is None:
+            arrow = "\u25b2" if c > p else "\u25bc"
+            return {
+                "text": f"{c:,.2f} {arrow} N/A (Prev: {p:,.2f})",
+                "arrow": arrow,
+                "color": _sign_color(c - p),
+            }
+        rounded_pct = _q(pct)
+        arrow = "\u25b2" if rounded_pct > 0 else ("\u25bc" if rounded_pct < 0 else "")
         return {
             "text": f"{c:,.2f} {arrow} {rounded_pct:+.2f}% (Prev: {p:,.2f})",
             "arrow": arrow,
-            "color": color,
+            "color": _sign_color(rounded_pct),
         }
     except Exception:
         return None
@@ -388,6 +475,15 @@ def build_identifier(row: dict[str, Any], comp_filter_cols: list[str]) -> str:
     return "_".join(p for p in parts if p)
 
 
+def build_key(row: dict[str, Any], comp_filter_cols: list[str]) -> tuple[str, ...]:
+    """The row's identity for MATCHING across periods: one part per identifier column,
+    empty parts kept in place. build_identifier() joins the non-empty parts with "_" for
+    display, which merges distinct rows ("A_B","C" vs "A","B_C") and rows whose empty
+    part sits in a different column (code review H-14); matching must not use it."""
+    row_upper = {k.upper(): v for k, v in row.items()}
+    return tuple(str(row_upper.get(col.upper(), "")).strip() for col in comp_filter_cols)
+
+
 def build_query(
     table_name: str,
     metadata: dict[str, Any],
@@ -398,9 +494,24 @@ def build_query(
 ) -> str:
 
     fc         = metadata["filter_col"]
+    # Identifiers cannot be bound as variables, so every name that is spliced into
+    # the statement is shape-checked first (code review M-06). Values are handled
+    # by sql_literal() and by format_oracle_date() on real date objects.
+    refs = [("table", table_name), ("filter column", fc)]
+    if metadata.get("is_single"):
+        refs.append(("return-code column", metadata.get("return_code_col")))
+    if metadata.get("freq_col") and metadata.get("freq_val"):
+        refs.append(("frequency column", metadata.get("freq_col")))
+    for label, ref in refs:
+        if not is_safe_sql_ref(ref):
+            raise ValueError(f"Unsafe {label} name in query metadata")
     all_dates  = [current_date] + prev_dates
+    # A half-open day range instead of `= TO_DATE(...)`: an Oracle DATE that carries a
+    # time part (10:30:00) never equals midnight, so those rows were silently missed
+    # (code review M-17). For midnight-only data the two forms select the same rows.
     conditions = [
-        f"{fc} = TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY')"
+        f"({fc} >= TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY') "
+        f"AND {fc} < TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY') + 1)"
         for d in all_dates
     ]
     date_sql = " OR ".join(conditions)
@@ -431,7 +542,7 @@ def build_query(
 
 # Tried in order; the two-digit-year forms come last.
 _DATE_LIKE_FORMATS = (
-    "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y",
+    "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y",
     "%d-%m-%Y %H:%M:%S", "%d-%b-%Y %H:%M:%S",
     "%d-%b-%y", "%d-%m-%y",
 )
@@ -574,12 +685,15 @@ def calculate_variance(
         else:
             all_rows = execute_query_fn(query)
     except Exception as exc:
+        # The exception text can carry Oracle messages, host names and table
+        # names; the full detail is logged, the client gets a fixed sentence
+        # (code review SEC-04).
         logger.error("[variance] Query execution failed | table=%s | %s", table_name, exc)
-        return {"error": str(exc)}
+        return {"error": "The data could not be retrieved. Please try again or contact support."}
 
     if not all_rows:
         logger.warning("[variance] No rows returned at all | table=%s | date=%s", table_name, reporting_date)
-        return {"error": f"No data found for {table_name} on {reporting_date}"}
+        return {"error": f"{NO_DATA_PREFIX} for {table_name} on {reporting_date}"}
 
     all_rows = [_normalize_row_keys(r) for r in all_rows]
     fc       = metadata["filter_col"].upper()
@@ -603,7 +717,7 @@ def calculate_variance(
 
     # All columns to display (exclude date/filter col and identifier/comp cols)
     all_display_cols = [
-        k for k in all_rows[0].keys()
+        k for k in all_rows[0]
         if k.upper() != fc and k.upper() not in set(comp_cols)
     ]
 
@@ -638,14 +752,14 @@ def calculate_variance(
     if not comp_cols:
         numeric_set = {c.upper() for c in (selected_columns or [])}
         auto_id = [
-            k for k in all_rows[0].keys()
+            k for k in all_rows[0]
             if k.upper() != fc
             and k.upper() not in numeric_set
             and not _is_numeric_col(k, all_rows)
         ]
         # Last resort: any non-date column
         if not auto_id:
-            auto_id = [k for k in all_rows[0].keys() if k.upper() != fc]
+            auto_id = [k for k in all_rows[0] if k.upper() != fc]
         if not auto_id:
             logger.error(
                 "[row_match] Cannot build row identifier for table '%s' — "
@@ -666,7 +780,7 @@ def calculate_variance(
         )
         # Recompute all_display_cols now that comp_cols is known
         all_display_cols = [
-            k for k in all_rows[0].keys()
+            k for k in all_rows[0]
             if k.upper() != fc and k.upper() not in set(comp_cols)
         ]
 
@@ -701,16 +815,18 @@ def calculate_variance(
     # filed then" instead of a silent, unexplained blank comparison.
     prev_row_sets: dict[str, Any] = {}
     missing_periods: list[str] = []
+    all_duplicates: set = set()      # identifiers that are not unique within one period (H-13)
     for i, pd in enumerate(prev_dates):
         period_rows = [r for r in all_rows if dates_match(r.get(fc), pd)]
-        lookup: dict[str, Any] = {}
+        lookup: dict[tuple, Any] = {}
         duplicate_ids: set = set()
         for row in period_rows:
-            ident = build_identifier(row, comp_cols)
-            if ident in lookup:
-                duplicate_ids.add(ident)
-            lookup[ident] = row
+            key = build_key(row, comp_cols)
+            if key in lookup:
+                duplicate_ids.add(build_identifier(row, comp_cols))
+            lookup[key] = row
         if duplicate_ids:
+            all_duplicates.update(duplicate_ids)
             logger.error(
                 "[row_match] Duplicate previous-row identifiers on %s: %s | "
                 "Identifier columns=%s. "
@@ -730,29 +846,30 @@ def calculate_variance(
     if comparison_mode == "sequential":
         for d in list(reversed(prev_dates)) + [rdate]:
             period_rows = [r for r in all_rows if dates_match(r.get(fc), d)]
-            lookup: dict[str, Any] = {}
+            lookup: dict[tuple, Any] = {}
             for row in period_rows:
-                ident = build_identifier(row, comp_cols)
-                lookup[ident] = row
+                lookup[build_key(row, comp_cols)] = row
             date_lookups.append(lookup)
 
     chronological = list(reversed(prev_dates)) + [rdate]
     seq_links = list(zip(chronological, chronological[1:]))
 
     result_rows = []
-    seen_current_ids: set = set()
+    seen_current_keys: set = set()
 
     for curr_row in current_rows:
         identifier = build_identifier(curr_row, comp_cols)
+        row_key = build_key(curr_row, comp_cols)
 
-        if identifier in seen_current_ids:
+        if row_key in seen_current_keys:
+            all_duplicates.add(identifier)
             logger.error(
                 "[row_match] Duplicate current-row identifier: '%s' | "
                 "Identifier columns=%s. "
                 "Add more columns to CompFilterColName so the key is unique.",
                 identifier, comp_cols,
             )
-        seen_current_ids.add(identifier)
+        seen_current_keys.add(row_key)
 
         row_result: dict[str, Any] = {
             "identifier":    identifier,
@@ -765,12 +882,12 @@ def calculate_variance(
             # ── Sequential mode: chain each consecutive date pair ────────
 
             for link_idx, (date_a, date_b) in enumerate(seq_links):
-                from_row = date_lookups[link_idx].get(identifier)
+                from_row = date_lookups[link_idx].get(row_key)
                 # For the last link, to_row IS curr_row (already available)
                 if link_idx == len(seq_links) - 1:
                     to_row = curr_row
                 else:
-                    to_row = date_lookups[link_idx + 1].get(identifier)
+                    to_row = date_lookups[link_idx + 1].get(row_key)
 
                 link_metrics: dict[str, Any] = {}
                 if from_row is not None and to_row is not None:
@@ -796,7 +913,7 @@ def calculate_variance(
         else:
             # ── vs_current mode: existing behavior ──────────────────────
             for period_key, pdata in prev_row_sets.items():
-                matched = pdata["lookup"].get(identifier)
+                matched = pdata["lookup"].get(row_key)
                 if not matched:
                     logger.debug(
                         "[row_match] No previous row found | Identifier=%s | period=%s",
@@ -810,7 +927,41 @@ def calculate_variance(
 
         result_rows.append(row_result)
 
+    # M-15: rows that existed in a comparison period but are gone now. They used to
+    # vanish from the result, so a row that dropped to nothing never showed as a change.
+    removed_rows: list[dict[str, Any]] = []
+    removed_total = 0
+    for period_key, pdata in prev_row_sets.items():
+        for key, prow in pdata["lookup"].items():
+            if key in seen_current_keys:
+                continue
+            removed_total += 1
+            if len(removed_rows) < MAX_REMOVED_ROWS:
+                ident = build_identifier(prow, comp_cols)
+                removed_rows.append({
+                    "identifier":    ident,
+                    "display_label": build_identifier(prow, label_cols) or ident,
+                    "period":        period_key,
+                    "previous":      prow,
+                })
+
+    extras: dict[str, Any] = {}
+    if all_duplicates:
+        # H-13: the same business key twice in one period. Which row wins is arbitrary,
+        # so say so instead of letting one silently overwrite the other.
+        extras["duplicate_identifiers"] = sorted(all_duplicates)[:MAX_REPORTED_DUPLICATES]
+        extras["duplicate_notice"] = (
+            f"{len(all_duplicates)} row key(s) appear more than once in the same period, so their "
+            "comparison may use the wrong row. The table mapping needs more identifier columns."
+        )
+    if removed_total:
+        extras["removed_rows"] = removed_rows
+        extras["removed_notice"] = (
+            f"{removed_total} row(s) present in a comparison period are missing from the current period."
+        )
+
     return {
+        **extras,
         "table_name":         table_name,
         "reporting_date":     reporting_date,
         "comparison_periods": [format_oracle_date(pd) for pd in prev_dates],
