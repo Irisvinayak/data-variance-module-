@@ -73,3 +73,37 @@ class ComputeResponse(_Loose):
     removed_rows: Optional[list[dict[str, Any]]] = None
     removed_notice: Optional[str] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
+
+
+class ClarificationFields(_Loose):
+    """A "needs more detail" answer (200) instead of a result: the NL layer could not decide."""
+
+    needs_clarification: Optional[bool] = None
+    dimension: Optional[str] = None                 # "return" | "table"
+    question: Optional[str] = None
+    options: Optional[list[dict[str, Any]]] = None  # [{"id", "label"}]
+    skippable: Optional[bool] = None
+    allow_other: Optional[bool] = None
+    confidence: Optional[float] = None
+    resolved_context: Optional[dict[str, Any]] = None
+    interpretation: Optional[dict[str, Any]] = None
+
+
+class NlResolveResponse(ComputeResponse, ClarificationFields):
+    """/variance/nlresolve: either a clarification, or a compute result (all ComputeResponse
+    fields) plus the return it was resolved to."""
+
+    return_id: Optional[str] = None
+    return_name: Optional[str] = None
+    report_freq: Optional[str] = None
+    table_mapping_path: Optional[str] = None
+    resolution_mode: Optional[str] = None           # "llm" | "fallback" | "qa"
+
+
+class NlQueryResponse(ClarificationFields):
+    """/variance/nlquery (disabled by default): raw result columns/rows, or a clarification."""
+
+    columns: Optional[list[str]] = None
+    rows: Optional[list[Any]] = None
+    sql: Optional[str] = None                       # only when DV_NLQUERY_RETURN_SQL=true

@@ -112,6 +112,50 @@ def redact_identity(text: str) -> str:
     return _EMAIL_RE.sub(lambda m: pseudonym(m.group(0)), text)
 
 
+# ── Secrets: always redacted (code review M-09) ───────────────────────────────
+# Nothing in this code base logs a password or token on purpose, but a log line can still
+# carry one by accident: an access-log query string, a driver error that quotes a connect
+# string, an exception that echoes a header. Unlike identity (above), secrets have no
+# debugging value, so this filter is ALWAYS on and not configurable. It replaces only the
+# value, never the surrounding line, so the line stays useful.
+_SECRET_PARTS = (
+    # Authorization: Bearer <token>   /   Bearer <token>
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"), lambda m: f"{m.group(1)} ***"),
+    # a JWT anywhere (three base64url segments starting with the header's "eyJ")
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*"), lambda m: "***jwt***"),
+    # password=..., "password": "...", token: ..., api_key=..., a session-cookie value, DV_JWT_SECRET=...
+    (
+        re.compile(
+            r"(?i)(?P<k>['\"]?\b(?:[a-z0-9_]*(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|"
+            r"auth[_-]?token|jwt|asp[_-]?session|session[_-]?id)|token|_at)['\"]?\s*[:=]\s*)"
+            r"(?:(?P<q>['\"])[^'\"]*(?P=q)|[^'\"&\s,;|)}]+)"
+        ),
+        lambda m: m.group("k") + (f"{m.group('q')}***{m.group('q')}" if m.group("q") else "***"),
+    ),
+    # Oracle easy-connect / SQL*Plus style  user/password@host
+    (re.compile(r"\b([A-Za-z0-9_$#]+)/([^\s@/'\"]+)@([A-Za-z0-9_.:/-]+)"), lambda m: f"{m.group(1)}/***@{m.group(3)}"),
+)
+
+
+def redact_secrets(text: str) -> str:
+    for pattern, repl in _SECRET_PARTS:
+        text = pattern.sub(repl, text)
+    return text
+
+
+class _RedactSecretsFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - never lose a log line over a bad format string
+            return True
+        cleaned = redact_secrets(message)
+        if cleaned != message:
+            record.msg = cleaned
+            record.args = ()
+        return True
+
+
 class _RedactIdentityFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         try:
@@ -208,6 +252,7 @@ def configure_logging() -> None:
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     console.addFilter(request_id_filter)
+    console.addFilter(_RedactSecretsFilter())
     if _REDACT_IDENTITY:
         console.addFilter(_RedactIdentityFilter())
     root.addHandler(console)
@@ -215,6 +260,7 @@ def configure_logging() -> None:
     file_handler = DailyFileHandler(LOG_DIR, LOG_RETENTION_DAYS)
     file_handler.setFormatter(formatter)
     file_handler.addFilter(request_id_filter)
+    file_handler.addFilter(_RedactSecretsFilter())
     if _REDACT_IDENTITY:
         file_handler.addFilter(_RedactIdentityFilter())
     root.addHandler(file_handler)

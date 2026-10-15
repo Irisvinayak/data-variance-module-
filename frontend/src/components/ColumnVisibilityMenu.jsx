@@ -10,6 +10,7 @@
  * See DataVarianceBlock's allDisplayCols filter for where it lands.
  */
 import { useRef, useState } from 'react'
+import { PropTypes } from '../propTypes.js'
 import useClickOutside from '../hooks/useClickOutside.js'
 
 // Above this many columns a flat checklist stops being scannable and the
@@ -138,4 +139,13 @@ export default function ColumnVisibilityMenu({
       )}
     </div>
   )
+}
+
+ColumnVisibilityMenu.propTypes = {
+  columns: PropTypes.arrayOf(PropTypes.string),
+  comparableSet: PropTypes.oneOfType([PropTypes.instanceOf(Set), PropTypes.array]),
+  hidden: PropTypes.arrayOf(PropTypes.string),
+  onToggle: PropTypes.func.isRequired,
+  onShowAll: PropTypes.func,
+  onHideAll: PropTypes.func,
 }

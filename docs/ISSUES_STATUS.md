@@ -4,7 +4,7 @@ The single record of the code-review findings for the Data Variance module (iDEA
 
 | | |
 |---|---|
-| **Updated** | 2026-10-05 |
+| **Updated** | 2026-10-06 |
 | **Branch** | `6-host-profile-config` — all changes are uncommitted; nothing is deployed |
 | **Findings tracked** | 108 (3 Critical, 24 High, 46 Medium, 35 Low), plus issues found in the host applications |
 | **Rule followed** | Do not break working behaviour: every risky change is behind a setting whose default equals the old behaviour, or is additive |
@@ -30,8 +30,8 @@ Contents: [1. Summary](#1-summary) · [2. Remaining issues](#2-remaining-issues)
 
 | Check | Result |
 |---|---|
-| Data Variance automated tests | **744 pass** (106 at the start of this work) |
-| Data Variance frontend tests (vitest + jsdom, added in the 2026-10-05 verification pass) | **82 pass** |
+| Data Variance automated tests | **1200 pass, 6 expected failures** (213 of them, with the 6, are another contributor's `tests/nlp` work) (106 at the start of this work) |
+| Data Variance frontend tests (vitest + jsdom, added in the 2026-10-05 verification pass) | **111 pass** |
 | Lint (`ruff`, rules F, E9, B, PLE) | Clean |
 | Frontend builds, 6.0 and 5.5 | Both succeed; each ships one `web.config` (6.0 → port 8003, 5.5 → port 8004) |
 | Live HTTP smoke test of the hardened backend | 27 of 27 checks passed |
@@ -274,6 +274,69 @@ The five open **High** issues are H-07, H-12, H-13, H-14 and H-16: four of them 
 
 *Blocked by / note:* M-24 changes the `{error}`-with-HTTP-200 contract and must be coordinated with the frontend.
 
+
+### 2.7 Third completion pass, 2026-10-06 — the remaining code-side work
+
+Everything below was finished locally with stand-ins. **No Oracle, browser, server or GitHub run was involved**; each "needs" cell is a step someone must still do on the real system.
+
+| ID | What was done | Needs (real environment / decision) |
+|---|---|---|
+| M-14 | Fiscal period-end months for the financial-year frequency codes (A/Y/FY, H/HY/FH) now follow the host: 5.5 (April start) keeps March / March+September exactly; 6.0 (calendar year) accepts 31 Dec / 30 Jun+31 Dec. NL date snapping follows the same rule. 29 tests with mock yearly-return dates | **A real 6.0 yearly return** to confirm it closes on 31 Dec. The UI label `freqLabel` still says "31-Mar" for code A (cosmetic, host-dependent) |
+| L-09 | Behaviour pinned by tests, **not changed**: explicit dates are capped at 3 *including* the current date (2 previous), while the Periods chips allow 3 previous. The code comments contradict each other, so the intent is unclear | **Product decision**: if 3 previous is intended, raise `MAX_COMPARISON_DATES`, `date_resolver._MAX_COMPARISON_DATES` and the UI `MAX_DATES` together |
+| M-21, M-22, L-10, L-11 | `scripts/eval_retrieval.py` now takes `--cases-file` (JSON-lines), `--from-index N` (cases derived from the shipped index), `--json` (save a summary) and `--baseline … --max-drop` (exit 1 on a regression); logic in `scripts/retrieval_bench.py`, 20 tests. **Retrieval itself is unchanged.** Local baseline on the 6 built-in cases: top-1 4/6, top-k 5/6 | Run `--from-index 300 --json baseline.json` before each retrieval change and compare after; no benchmark numbers are stored in the repository |
+| M-28 | `requirements.lock` (62 packages, the exact versions the 1200 tests ran against; made with Python 3.14.4 on Windows) and `scripts/make_lock.py [--check]`. Install with `pip install -r requirements.txt -c requirements.lock` | Server Python version unknown: regenerate in an environment built for it and run the suite there. `requirements.txt` is unchanged |
+| Dependencies | Vulnerable packages upgraded **in the dev environment only** and validated: starlette 1.2.1 → 1.3.1, anyio 4.13.0 → 4.14.2, cryptography 48.0.0 → 50.0.0, urllib3 2.7.0 → 2.8.0 (`pip check` clean, 1200 tests pass). `pip` itself (tooling) not touched; `requirements.txt` carries no pins | Apply the same four on each server and re-run the smoke test; `pip-audit` should then report none |
+| M-24 | Additive error contract: every HTTP error is `{"detail": <unchanged>, "code": "<machine code>", "request_id": "…"}` (codes: `invalid_request`, `unauthenticated`, `forbidden`, `not_found`, `no_data`, `validation_error`, `payload_too_large`, `rate_limited`, `tenant_unavailable`, `unavailable`, `server_error`); `/variance/compute`'s 200 `{"error"}` gains `error_code`. The frontend throws an `ApiError` (same `message`, plus `status`, `code`, `requestId`). **No status code changed, nothing removed.** 38 backend + 6 frontend tests | Turning 200-with-error and 500-on-no-data into 404/422 is a separate breaking step the UI must adopt first (it can now key on `code`) |
+| H-07 | Start-up warns while the built-in public-IP default is used; `DV_REQUIRE_EXPLICIT_LLM_URL=true` refuses to start. **The code default is kept**: removing it would silently switch natural-language resolution to its fallback on any server that has not set the variable | Set `DV_NLP_OLLAMA_URL` on every server, then set `DV_REQUIRE_EXPLICIT_LLM_URL=true` |
+| M-08 | Precedence is one tested function (`load_environment`): default unchanged (`.env` beats OS variables); `DV_DOTENV_OVERRIDE=false` (a real OS variable) makes OS variables win. **Fixed a flaw in the earlier version**: with the switch off the per-instance overlay could no longer beat the root `.env`, which would have broken the 5.5/6.0 side-by-side setup. 24 tests | Audit each server's OS variables for stale values before flipping it |
+| M-07 | `scripts/pin_index_hashes.py` writes/verifies `pickle_manifest.json`; the backend refuses to unpickle a file that is unpinned-and-listed-elsewhere, changed, or (with `DV_REQUIRE_INDEX_MANIFEST=true`) unpinned. The pin tool never modifies the files it pins. Tests include a malicious pickle that must not run | An operator pins each production index and restricts write access to the index folders. **Nothing was pinned in the repository** (a rebuilt index would be refused until re-pinned) |
+| M-09 | Secrets are **always** redacted from log lines (bearer tokens, JWTs, `password=`/`token=`/`api_key=`-style values, session values, `user/password@host` connect strings); identity pseudonymisation stays optional (`DV_LOG_REDACT_IDENTITY`). 22 tests | Decide whether to turn identity redaction on in production |
+| M-19 | **No limit raised.** A reply that stops at the token cap (`done_reason=length`) is now logged and counted (`dv_llm_truncated_total`), and `scripts/bench_llm_budget.py` measures the cut-off rate per cap (arithmetic tested with a fake model, 17 tests). The compact retry prompt was not built: it changes model behaviour | Run the benchmark against the real model, then set `DV_SQL_NUM_PREDICT` |
+| L-17 | `GET /metrics` (Prometheus text, no new dependency, **off** unless `DV_METRICS_ENABLED=true`): HTTP requests/latency by route template, rate-limit hits, database outcomes/latency/truncation, LLM calls/latency/cut-offs, NL resolution mode. No identity, SQL, table names or paths appear in any label or value. 22 tests | Point a scraper at it if wanted; the database/LLM numbers need real traffic |
+| M-45 | Complete keyboard pattern for both match pickers: combobox with `aria-activedescendant`, arrows (wrap), Home/End, Enter, Escape, typing filters and resets the highlight, mouse unchanged, focus stays in the input. 11 jsdom tests | A real screen-reader pass (NVDA/JAWS); focus return after Escape |
+| M-42 | Response models now also cover `/variance/nlresolve` and `/variance/nlquery` (clarification and result shapes; no field removed, unknown fields kept, no `null` added). 9 tests | — |
+| M-44 | PropTypes on the main components (`ControlBar` and its pickers, `LayoutContainer`, `TablePanel`, `VisualizationPanel`, `PanelHeader`, `ColumnVisibilityMenu`, `NoticeToast`) with shared loose shapes in `src/propTypes.js`; a test renders the real flows and fails on any "Failed prop type" | No TypeScript (deliberately: not a rewrite) |
+| C-01 | Start-up now **refuses** `DV_IDENTITY_MODE=required` without `DV_JWT_SECRET`, and a mistyped mode (it used to read as `off` and run with unverified identity). Verified by tests: HS512 signature, expiry, issuer, audience, tenant match (403), login derived from the token, 401/403 behaviour, 5.5 without a tenant, auth-disabled vs enabled, the postMessage handshake (exact origin only), configuration check script. **No secret was generated, printed or stored** | Manual steps below |
+| H-01 | Required mode proven (6 tests): answers only for the token holder, ignores a spoofed `loginId`, refuses URL-only requests, wrong-tenant 403, bad token 401 | Set `DV_IDENTITY_MODE=required` per server after the rollout |
+| H-05 | Verified (existing 5 tests): single, candidate-list, off-by-default and auth-off paths of `DV_FIND_FILTER_BY_ACCESS` | **Decision**: enable it (users then see "No matching return found" instead of "no access") |
+| M-02 | Verified (6 tests): `VITE_ALLOW_URL_TOKEN=false` ignores and strips `?_at=`; explicit `true` and the default keep the legacy path; other parameters survive; identity still resolves | Set it per host once every host answers the handshake |
+| M-04 | Verified by tests: `DV_REQUIRE_AUTH=true` refuses to start with auth off; default unchanged | Set it per server after auth is enabled there |
+| H-10 | Verified by tests and real builds: `VITE_HOST_ORIGIN` narrows `frame-ancestors`; `VITE_CSP_ENFORCE=true` renames the header; enforcing without an origin **fails the build** | Real-browser and IIS check with the true host origin; watch violation reports before enforcing |
+| M-06 | `DV_USE_BIND_VARIABLES=true` sends dates and the return/frequency values as named binds (`:d0…`, `:rc`, `:fv`, `:before`); identifiers are never bound and stay validated. Default **off**; the bound statement is proven to equal the literal one with the values substituted back. 23 tests | **Oracle**: confirm a bound compute returns the same rows as the literal one on one 5.5 and one 6.0 return, then enable |
+| M-20 | `scripts/stamp_embed_model.py [--write]` adds `embed_model` and `embed_dim` (read from the index files) to `build_stamp.json`, keeping every other key, and refuses on any disagreement; the backend also compares the stamped vector size. The external index builder is not in this repository, so it could not be changed. 14 tests | Run it once per index folder on the server, or add the two keys in the builder |
+
+**Manual deployment steps still required for C-01** (nothing here was done):
+1. Generate one new secret with a cryptographically secure generator (§2.1 step 1) — do not paste it anywhere.
+2. Set it as `JwtSettings__SecretKey` on the 6.0 API server (and `IDEALApies` if deployed) and as `DV_JWT_SECRET` on the Data Variance server, with `DV_JWT_ISSUER` / `DV_JWT_AUDIENCE` from the API's real `JwtSettings`. Run `python scripts/check_identity_config.py --require` on that server.
+3. Deploy the 6.0 API, the 6.0 React host and the module together (users are logged out once).
+4. Run `DV_IDENTITY_MODE=optional`, watch for rejected tokens, then `required`; then `DV_AUTH_ENABLED=true`; then `DV_REQUIRE_AUTH=true`.
+5. Verify 5.5 and 6.0 login end to end in a browser; build the frontend with `VITE_HOST_ORIGIN`; then enforce the CSP.
+6. Settle D1–D4 (§2.1). Delete `D:\project_work\_c01_backup_2026-10-05` once the new secret is live.
+
+**The 13 failing 6.0 API tests** were re-run on 2026-10-06: the same 13 fail (168 pass). They fail identically on the code from before this work (stored baseline), and this work touched only `ServiceExtensions.cs` and `web.config` in that project, so none is a regression. Cause per group — all stale tests or drift, none a defect found in this work: `ActionDetailAuditIgnoreTests` ×3 (the test expects `AuditLog` / `AuditLogDto` to have no `Id`; the classes have one); `BankDetailControllerTests` ×1 (expects `false`, controller returns `true`); `MappingControllerTests` ×1 (asserts `IEnumerable<string>`, controller returns `object[]`); `RoleAccessControllerTests` ×1 (expects a NotFound result, the controller throws `ItemNotFoundException`); `DataPreparationModelTests` ×2 (reflection finds a method that no longer exists); `AuthenticationControllerTests` ×4 (NullReferenceException in the test setup); `DataPreparationControllerTests` ×1 (expects a `[FromForm]` attribute that is not there). **Not modified**: each needs the owning team to decide whether the test or the code is right.
+
+**D3 — other committed secrets** (inventory by file and key; values were never printed, only their lengths were used to filter placeholders; nothing was rotated or changed):
+
+| Project / file | Key | Kind | Safe fix | Rotate? |
+|---|---|---|---|---|
+| 6.0 `iDeal.Api/web.config` | `IdealAppSettings__ConnectionString` | database connection string (with credentials) | Move to a machine-level environment variable or secret store; the API reads configuration from the environment already | **Yes** (it has been committed) |
+| 6.0 `iDeal.Api/web.config` | `NanoBI__ApiKey` | third-party API key | Same; issue a new key | **Yes** |
+| 6.0 `iDeal.Api/web.config` | `Secrets__AesPassphrase` | encryption passphrase | Same; rotation needs a data re-encryption plan first | **Yes, with a migration** |
+| 6.0 `XBRLGenerationService/appsettings.json` | `AesPassphrase`, `ConnectionString` | passphrase, database connection string | Environment / secret store | **Yes** |
+| 6.0 `iDeal.Api.Common/Utils/RsaEncryption.cs` | `_rsaKeyPwd` | password for an RSA private key, in source | Load from a secret store; the key itself needs a new password | **Yes** |
+| 5.5 `IDEALApies/appsettings.json` | `ConnectionString`; `SecretKeyAuthSettings.SecretKey` | database connection string; a second signing key | Environment variables; `SecretKeyAuthSettings` needs its own provisioning before removal | **Yes** |
+| 5.5 `IDEALApies/Utils/RsaEncryption.cs` | `_rsaKeyPwd` | RSA key password in source | As above | **Yes** |
+| 5.5 `WebiDEAL/Models/ETLSsoIntegration.cs` | `SecretKey` | HMAC signing key in source (also HX-04, HX-08) | Move to configuration; rotate together with the SSO partner | **Yes** |
+| 5.5 `CommonClass/ClsAESOperations.cs` | `PPhrase` | AES passphrase in source (HX-04) | Configuration + a re-encryption plan | **Yes, with a migration** |
+| 5.5 `WebiDEAL/appsettings.json` | `ApiKey`, `Pwd`, `PrivateKeyFilePath` | API key, password, path of a private key | Environment variables / secret store | **Yes** (key and password) |
+| 5.5 `XBRLGenerationService`, `XBRLCSVGenerationService`, `SDMXGenerationService`, `SDMXReturnValidationService`, `NONXBRLGenerationService` — `appsettings.json` | `Pwd`, `SFMS_Pwd`, `PrivateKeyFilePath`, `SFMS_PrivateKeyFilePath` | passwords and key paths (the same pattern in five services) | One shared secret source for all five | **Yes** |
+| 5.5 `iDEALNotificationService/appsettings.json` | `SenderEmailPwd` | e-mail account password | Secret store | **Yes** |
+| 5.5 `iDEALTools/*/App.config` | `connectionString`, `MySqlConnectionString`, `Password` | connection strings and a password in developer tools | Remove from the repository; tools read their own local config | **Yes** if the credentials are real |
+| 6.0 `iDeal.Api/appsettings.json` | `_comment_Secrets` | a comment describing where secrets must come from (no secret) | — | No |
+
+Also listed by the scan but **not** secrets: test fixtures (`*Tests.cs` passwords), cookie names (`AccessTokenCookie`), `TokenType` constants. Dependencies, the 5.5 chatbot iframe (D1) and HX-04/HX-05/HX-08 remain host-team work.
+
+**Not changed, and why:** the deferred refactors M-40, L-28, L-29, M-46, L-25, L-31, L-33, L-35 (need browser regression first, as instructed); M-21/M-22/L-10/L-11 retrieval changes (no benchmark proof); H-07's code default (would silently disable the LLM path where unset); the 13 failing 6.0 tests (stale; owners decide).
 
 ### 2.4 Issues in the host applications (outside this repository)
 

@@ -10,7 +10,7 @@ import threading
 import time
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from ..config import ANONYMOUS, APP_VERSION
 from ..config import settings as cfg
@@ -158,6 +158,20 @@ def nlp_health(check_model: bool = False) -> dict:
 
 
 # ── Health check (no auth — used by infra/monitoring probes) ──────────────────
+# ── GET /metrics ──────────────────────────────────────────────────────────────
+# In-process counters and latency histograms in the Prometheus text format (backend/metrics.py).
+# Off by default: it answers 404 until DV_METRICS_ENABLED=true, so nothing about load or
+# error rates is published unless an operator asks for it. Contains no identity, SQL, table
+# or path information.
+@router.get("/metrics", tags=["Meta"], include_in_schema=False)
+def metrics_endpoint():
+    from .. import metrics
+
+    if not cfg.METRICS_ENABLED:
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return PlainTextResponse(metrics.render_prometheus(), media_type="text/plain; version=0.0.4")
+
+
 # ── GET /ready ────────────────────────────────────────────────────────────────
 # Readiness, as opposed to /health's liveness: can this instance actually do its job?
 # Reports two booleans only (no hosts, paths or error text). 503 when the database is

@@ -1,0 +1,29 @@
+{
+  "qcb_f010_filing_info": [
+    "description"
+  ],
+  "qcb_f010_rcm_in_qtr": [
+    "description"
+  ],
+  "qcb_f010_rcm_out_qtr": [
+    "description"
+  ],
+  "qcb_f013_break_exposure": [
+    "country"
+  ],
+  "qcb_f013_filing_info": [
+    "description"
+  ],
+  "qcb_f014_filing_info": [
+    "description"
+  ],
+  "qcb_f014_funding_geo": [
+    "country"
+  ],
+  "qcb_f015_bank_cap_base": [
+    "description"
+  ],
+  "qcb_f015_filing_info": [
+    "description"
+  ]
+}

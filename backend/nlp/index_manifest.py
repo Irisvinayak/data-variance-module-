@@ -126,6 +126,12 @@ def verify_index_folder(folder: str, embed_model: str = "", embed_dim: int | Non
             problems.append(
                 f"the build used embedding model {recorded!r} but DV_NLP_EMBED_MODEL is {embed_model!r}"
             )
+        stamped_dim = stamp.get("embed_dim")
+        if isinstance(stamped_dim, int) and embed_dim is not None and stamped_dim != embed_dim:
+            problems.append(
+                f"the build stamp records {stamped_dim}-dimensional vectors but the configured model "
+                f"{embed_model!r} produces {embed_dim}-dimensional ones"
+            )
 
     try:
         import faiss

@@ -1,0 +1,292 @@
+QCB 6.0 NLP RETURN-IDENTIFICATION TEST SCENARIOS
+============================================================
+Returns under test: F010 Maturity Ladder (id 4091), F013 Exposures by geography (4079),
+F014 Funding by geography (4080), F015 Foreign Currency Net Open Positions (4092).
+Version: 6.0 | Tenant: 1001 | Index: artifacts/nlp-index/ideal-60 | Run date: 2026-10-14
+Test user: vaibhav@irisindia.net (Compliance department, allowed all four returns)
+
+NOTE ON THE 26 SCENARIOS: this is a set I designed from the six requirements and from what
+was tested. It is NOT your own list of 26 (I did not have it). If you send yours, map or
+replace rows here.
+
+HOW TO READ EACH SCENARIO
+  Query   : type exactly this in the NLP bar.
+  Target  : what the six requirements say should happen.
+  Today   : what the current build did when run for real (observed, not predicted).
+  Verdict : OK = matches target | PARTIAL = right outcome with a weakness |
+            GAP = does not match target | AS-IS = current behaviour, to be replaced.
+  Result  : blank line for the tester: PASS / FAIL + notes.
+
+SUMMARY (current build): AS-IS: 1, GAP: 7, OK: 12, PARTIAL: 6
+
+------------------------------------------------------------
+GROUP: Explicit return
+------------------------------------------------------------
+[01] Query  : F010
+     Target : Return pinned to F010; no 'which return?' question.
+     Today  : return named in query: QCB_F010 | top table: qcb_f010_filing_info (return 4091) | confidence 0.97 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f010_filing_info, qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr (returns 4091)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[02] Query  : F013 exposure to banks
+     Target : Return pinned to F013; table qcb_f013_break_exposure ranked first.
+     Today  : return named in query: QCB_F013 | top table: qcb_f013_break_exposure (return 4079) | confidence 0.95 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f013_break_exposure, qcb_f013_filing_info (returns 4079)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[03] Query  : QCB_F014_Breakdown of Funding by geography funding to banks
+     Target : Full return name accepted; pinned to F014; funding table ranked first.
+     Today  : return named in query: QCB_F014 | top table: qcb_f014_funding_geo (return 4080) | confidence 1.0 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f014_funding_geo, qcb_f014_filing_info (returns 4080)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[04] Query  : maturity ladder of assets and liabilities
+     Target : Return pinned to F010. Only the inside/outside-Qatar question may be asked.
+     Today  : return named in query: QCB_F010 | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.68 | ambiguous: True | QA match: none
+             route result: asks a 'table' question (options: qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f010_filing_info)
+     Verdict: OK (asks table only)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[05] Query  : QCB F015 net open position
+     Target : 'QCB' prefix accepted; pinned to F015.
+     Today  : return named in query: QCB_F015 | top table: qcb_f015_foreign_cur_nop (return 4092) | confidence 0.85 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f015_foreign_cur_nop, qcb_f015_filing_info (returns 4092)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Explicit return (typo)
+------------------------------------------------------------
+[06] Query  : maturty ladder overnight
+     Target : Typo tolerated; pinned to F010; at most the inside/outside-Qatar question.
+     Today  : return named in query: QCB_F010 | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.54 | ambiguous: True | QA match: none
+             route result: asks a 'table' question (options: qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f010_filing_info)
+     Verdict: OK (asks table only)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Implicit return
+------------------------------------------------------------
+[07] Query  : assets maturing overnight
+     Target : Implicit F010. Ask only inside vs outside Qatar, with options limited to F010.
+     Today  : return named in query: none | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.56 | ambiguous: True | QA match: none
+             route result: asks a 'table' question (options: qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f015_foreign_cur_nop, qcb_f013_break_exposure, qcb_f014_funding_geo)
+     Verdict: PARTIAL (right return ranks first, but options span all 4 returns)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[08] Query  : total liabilities 1 to 3 months inside Qatar
+     Target : Implicit F010 (inside Qatar, maturity bucket). Top table should be qcb_f010_rcm_in_qtr.
+     Today  : return named in query: none | top table: qcb_f015_foreign_cur_nop (return 4092) | confidence 0.56 | ambiguous: True | QA match: none
+             route result: asks a 'table' question (options: qcb_f015_foreign_cur_nop, qcb_f010_rcm_in_qtr, qcb_f010_rcm_out_qtr, qcb_f014_funding_geo, qcb_f013_break_exposure)
+     Verdict: GAP (top table is F015)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[09] Query  : country wise exposure to banks
+     Target : Implicit F013. Retrieval scoped to F013.
+     Today  : return named in query: none | top table: qcb_f013_break_exposure (return 4079) | confidence 0.94 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f013_break_exposure, qcb_f014_funding_geo, qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f015_foreign_cur_nop (returns 4079, 4080, 4091, 4092)
+     Verdict: PARTIAL (F013 ranks first; the LLM still sees tables from all 4 returns)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[10] Query  : funding from banks by country
+     Target : F014 pinned ('funding' identifies it).
+     Today  : return named in query: QCB_F014 | top table: qcb_f014_funding_geo (return 4080) | confidence 0.95 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f014_funding_geo, qcb_f014_filing_info (returns 4080)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[11] Query  : NOP as percent of capital base
+     Target : Implicit F015. Retrieval scoped to F015.
+     Today  : return named in query: none | top table: qcb_f015_foreign_cur_nop (return 4092) | confidence 0.95 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f015_foreign_cur_nop, qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f014_funding_geo, qcb_f013_break_exposure (returns 4079, 4080, 4091, 4092)
+     Verdict: PARTIAL (F015 ranks first; the LLM still sees tables from all 4 returns)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Implicit return (known gap)
+------------------------------------------------------------
+[12] Query  : forex exposure limit
+     Target : Should resolve to F015 (foreign currency / open position limit).
+     Today  : return named in query: none | top table: qcb_f013_break_exposure (return 4079) | confidence 0.86 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f013_break_exposure, qcb_f010_rcm_in_qtr, qcb_f010_rcm_out_qtr, qcb_f015_foreign_cur_nop, qcb_f014_funding_geo (returns 4079, 4080, 4091, 4092)
+     Verdict: GAP (confidently answered from F013)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Ambiguous / off-topic
+------------------------------------------------------------
+[13] Query  : total staff
+     Target : Not about any QCB return: ask for detail or decline; never pin a return.
+     Today  : return named in query: none | top table: qcb_f015_foreign_cur_nop (return 4092) | confidence 0.54 | ambiguous: True | QA match: none
+             route result: asks a 'table' question (options: qcb_f015_foreign_cur_nop, qcb_f013_break_exposure, qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f014_funding_geo)
+     Verdict: PARTIAL (asks, but lists tables across returns)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[14] Query  : show me the data
+     Target : Ask 'which return?'.
+     Today  : return named in query: none | top table: qcb_f013_break_exposure (return 4079) | confidence 0.11 | ambiguous: False | QA match: none
+             route result: asks a 'return' question (options: 4091, 4079, 4080)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Ambiguous (two returns plausible)
+------------------------------------------------------------
+[15] Query  : breakdown by geography
+     Target : F013 and F014 both plausible ('breakdown ... by geography'): ask which return and offer a best guess.
+     Today  : return named in query: QCB_F013 | top table: qcb_f013_break_exposure (return 4079) | confidence 1.0 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f013_break_exposure, qcb_f013_filing_info (returns 4079)
+     Verdict: GAP (silently picks F013 at confidence 1.0)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Ambiguous (one word)
+------------------------------------------------------------
+[16] Query  : total
+     Target : One-word query: ask for detail.
+     Today  : return named in query: none | top table: qcb_f013_break_exposure (return 4079) | confidence 0.72 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f013_break_exposure, qcb_f015_foreign_cur_nop, qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f014_funding_geo (returns 4079, 4080, 4091, 4092)
+     Verdict: GAP (answers from F013 at 0.72; the shortlist spans 4 returns)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Date phrase
+------------------------------------------------------------
+[17] Query  : F015 net open position as of 31-Mar-2025
+     Target : Return pinned to F015; date phrase 'as of 31-Mar-2025' extracted.
+     Today  : return named in query: QCB_F015 | top table: qcb_f015_foreign_cur_nop (return 4092) | confidence 0.85 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f015_foreign_cur_nop, qcb_f015_filing_info (returns 4092)
+     Parsed : date=as of 31-Mar-2025 scope=None
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+[18] Query  : F010 overnight assets last 2 quarters
+     Target : Return pinned to F010; date phrase 'last 2 quarters' extracted; asks inside/outside Qatar.
+     Today  : return named in query: QCB_F010 | top table: qcb_f010_rcm_in_qtr (return 4091) | confidence 0.72 | ambiguous: True | QA match: none
+             route result: asks a 'table' question (options: qcb_f010_rcm_in_qtr, qcb_f010_rcm_out_qtr, qcb_f010_filing_info)
+     Parsed : date=last 2 quarters scope=None
+     Verdict: OK (asks table only)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Scope phrase
+------------------------------------------------------------
+[19] Query  : outside Qatar overnight liabilities
+     Target : Implicit F010 outside Qatar -> qcb_f010_rcm_out_qtr first.
+     Today  : return named in query: none | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.87 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f015_foreign_cur_nop, qcb_f014_funding_geo, qcb_f013_break_exposure (returns 4079, 4080, 4091, 4092)
+     Verdict: PARTIAL (right table first; the LLM sees all 4 returns)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: QA near-duplicate
+------------------------------------------------------------
+[20] Query  : What is the total Assets in the maturity ladder inside Qatar?
+     Target : Verbatim QA question: the QA match should pin qcb_f010_rcm_in_qtr and skip the LLM.
+     Today  : return named in query: QCB_F010 | top table: qcb_f010_rcm_in_qtr (return 4091) | confidence 0.46 | ambiguous: False | QA match: none
+             route result: asks a 'table' question (options: qcb_f010_rcm_in_qtr, qcb_f010_rcm_out_qtr, qcb_f010_filing_info)
+     Verdict: GAP (QA match missed; asks a table question at 0.46)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: QA paraphrase
+------------------------------------------------------------
+[21] Query  : what is the total assets in the maturity ladder inside qatar
+     Target : Same question, lower-cased, no '?': same as 20.
+     Today  : return named in query: QCB_F010 | top table: qcb_f010_rcm_in_qtr (return 4091) | confidence 0.46 | ambiguous: False | QA match: none
+             route result: asks a 'table' question (options: qcb_f010_rcm_in_qtr, qcb_f010_rcm_out_qtr, qcb_f010_filing_info)
+     Verdict: GAP (same cause as 20)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Follow-up: return answer
+------------------------------------------------------------
+[22] Query  : net open position in USD
+     Request: dimension=return, clarification_answer=4092  (follow-up to a clarification)
+     Target : Follow-up with dimension=return, answer=4092: retrieval limited to F015 tables.
+     Today  : return named in query: QCB_F015 | top table: qcb_f015_foreign_cur_nop (return 4092) | confidence 0.9 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: QCB_F015_FOREIGN_CUR_NOP, QCB_F015_FILING_INFO (returns 4092)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Follow-up: table answer
+------------------------------------------------------------
+[23] Query  : assets maturing overnight
+     Request: dimension=table, clarification_answer=qcb_f010_rcm_in_qtr  (follow-up to a clarification)
+     Target : Follow-up with dimension=table, answer=qcb_f010_rcm_in_qtr: that one table only.
+     Today  : return named in query: none | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.56 | ambiguous: True | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f010_rcm_in_qtr (returns 4091)
+     Verdict: OK
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Follow-up: skip (today's best-effort)
+------------------------------------------------------------
+[24] Query  : assets maturing overnight
+     Request: dimension=return, clarification_answer=__skip__  (follow-up to a clarification)
+     Target : Follow-up with answer=__skip__ (today's silent best effort; Best Guess is not built yet).
+     Today  : return named in query: none | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.56 | ambiguous: True | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f010_rcm_out_qtr, qcb_f010_rcm_in_qtr, qcb_f015_foreign_cur_nop, qcb_f013_break_exposure, qcb_f014_funding_geo (returns 4079, 4080, 4091, 4092)
+     Verdict: AS-IS (proceeds across all 4 returns, not labelled a guess)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Permission: user limited to F010
+------------------------------------------------------------
+[25] Query  : breakdown of exposures by geography
+     Setup  : limit the department to F010 only (return id 4091), then ask the F013 question.
+     Target : User allowed only F010 asks about F013: must not receive F013 data and should be told access is missing.
+     Today  : return named in query: none | top table: qcb_f010_rcm_out_qtr (return 4091) | confidence 0.31 | ambiguous: False | QA match: none
+             route result: asks a 'return' question (options: 4091)
+     Verdict: PARTIAL (no F013 data and a 'which return?' prompt, but no access message)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+
+------------------------------------------------------------
+GROUP: Return not indexed
+------------------------------------------------------------
+[26] Query  : total number of staff for CIMS_ROR
+     Target : Query names a return that does not exist in this repo: refuse or ask; never answer from a QCB return.
+     Today  : return named in query: none | top table: qcb_f010_rcm_in_qtr (return 4091) | confidence 0.91 | ambiguous: False | QA match: none
+             route result: proceeds to answer; tables sent to the LLM: qcb_f010_rcm_in_qtr, qcb_f010_rcm_out_qtr, qcb_f010_filing_info (returns 4091)
+     Verdict: GAP (answered from F010 at confidence 0.91)
+     Result : [ ] PASS  [ ] FAIL   Notes: ____________________________
+
+------------------------------------------------------------
+FINDINGS BEHIND THE GAPS
+------------------------------------------------------------
+A. Scenarios 20-21: the QA matcher compares only the 20 nearest questions by embedding. The QA
+   pairs are templated (Assets/Liabilities x inside/outside Qatar x many rows), so near-identical
+   questions crowd the top 20 and the exact question ranks about 52nd. It matches only with a
+   shortlist of 100 (DV_NLP_QA_PREFILTER_TOP_N, no index rebuild needed). In a 300-question
+   sample 293 matched and 7 did not: a small but real miss rate on near-identical rows.
+B. Scenario 26: 'CIMS_ROR' does not exist in this tenant's returns, so it is not flagged as an
+   unindexed return, and the query is answered from F010 at 0.91 confidence.
+C. Scenarios 12, 15, 16: return identity is inferred only after ranking tables across all returns,
+   so wrong or over-confident picks are possible. Return-first resolution addresses this.
+D. Scenarios 7, 9, 11, 13, 16, 19: even when the top table is right, the LLM is shown tables
+   from all four returns, not only the right one.
+E. qcb_f015_bank_cap_base cannot be queried: it is in the index but not in return 4092's
+   TableMapping.xml (repository configuration).
+
+HOW TO RE-RUN
+  Automated: backend/.venv/Scripts/python.exe -m pytest tests/nlp/test_qcb_returns_60.py
+  Manual   : run the app in 6.0 mode, sign in as the test user, type each query above.

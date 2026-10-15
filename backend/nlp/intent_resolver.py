@@ -23,8 +23,8 @@ from typing import Any, Optional
 
 import requests
 
-from .. import ai_audit
-from .llm_guard import make_session
+from .. import ai_audit, metrics
+from .llm_guard import make_session, note_if_cut_off
 from .prompt_safety import DATA_NOTICE, sanitize_model_echo, sanitize_question
 from .nlp_config import (
     INTENT_FAILURE_COOLDOWN_SEC,
@@ -33,6 +33,7 @@ from .nlp_config import (
     INTENT_NUM_PREDICT,
     INTENT_TIMEOUT_SEC,
     OLLAMA_URL,
+    QA_FASTPATH_ENABLED,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,7 +194,65 @@ def _tag(result: Optional[dict[str, Any]], mode: str) -> Optional[dict[str, Any]
     so a user can tell a model answer from a fallback one (code review M-41)."""
     if result is None:
         return None
+    metrics.inc("dv_nl_resolutions_total", mode=mode)
     return {**result, "mode": mode}
+
+
+# Columns that identify a row or a reporting period rather than carry a value. A QA pair's
+# SELECT lists them for readability; they must not become "the metric the user asked for".
+_QA_IDENTIFIER_COLUMNS = {"RDATE", "CODE", "SR_NO", "DESCRIPTION", "COUNTRY", "CURRENCY"}
+_SQL_SELECT_RE = re.compile(r"^\s*SELECT\s+(.*?)\s+FROM\b", re.IGNORECASE | re.DOTALL)
+_SQL_WHERE_COL_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|<>|!=|<|>|\bIN\b|\bLIKE\b)", re.IGNORECASE)
+
+
+def _qa_selected_columns(sql: str) -> list[str]:
+    """Value columns a verified QA pair's SQL reads: its SELECT list minus identifier
+    columns and minus anything it filters on (WHERE/ORDER BY columns are how it finds the
+    row, not what it reports). UPPERCASE, in SELECT order."""
+    select = _SQL_SELECT_RE.match(sql or "")
+    if not select:
+        return []
+    where = re.split(r"\bWHERE\b", sql, maxsplit=1, flags=re.IGNORECASE)
+    filtered = {m.upper() for m in _SQL_WHERE_COL_RE.findall(where[1])} if len(where) > 1 else set()
+    out: list[str] = []
+    for item in select.group(1).split(","):
+        name = item.strip().split()[-1].split(".")[-1].upper() if item.strip() else ""
+        if name and re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) and name not in _QA_IDENTIFIER_COLUMNS \
+                and name not in filtered and name not in out:
+            out.append(name)
+    return out
+
+
+def _resolve_from_qa(
+    qa_match: Optional[dict[str, Any]], shortlist: dict[str, list[dict[str, Any]]]
+) -> Optional[dict[str, Any]]:
+    """Answer straight from a verified QA pair — no LLM — or None to use the LLM instead.
+
+    Held to the SAME grounding rule as an LLM answer (_validate_grounding): the table must
+    be in the authorized shortlist, carry a resolved return_id, and every returned column
+    must be one of that table's shortlisted columns. The index stores table/column names
+    lowercase while QA SQL is uppercase, so both are matched case-insensitively and the
+    shortlist's own spelling is what gets returned.
+    """
+    if not qa_match or not QA_FASTPATH_ENABLED:
+        return None
+    wanted = _qa_selected_columns(qa_match.get("sql", ""))
+    table_meta = next(
+        (t for t in shortlist["tables"] if t["table"].upper() == str(qa_match.get("table", "")).upper()),
+        None,
+    )
+    if not wanted or table_meta is None:
+        return None
+    by_upper = {c["column"].upper(): c["column"] for c in shortlist["columns"] if c["table"] == table_meta["table"]}
+    columns = [by_upper[c] for c in wanted if c in by_upper]
+    if len(columns) != len(wanted):
+        # A column the verified example reads is not in the shortlist: do not answer with
+        # a partial set that silently drops part of what the question asked for.
+        return None
+    return _validate_grounding(
+        {"return_id": table_meta.get("return_id"), "table_name": table_meta["table"], "selected_columns": columns},
+        shortlist,
+    )
 
 
 def _in_cooldown() -> bool:
@@ -212,7 +271,22 @@ def _start_cooldown() -> None:
     )
 
 
-def _call_ollama(prompt: str, attempt: int = 1) -> tuple:
+def _call_ollama(*args, **kwargs):
+    """The model call, with outcome and latency recorded (backend/metrics.py, L-17)."""
+    started = time.perf_counter()
+    try:
+        result = _call_ollama_impl(*args, **kwargs)
+    except Exception:
+        metrics.inc("dv_llm_calls_total", caller="intent", outcome="failed")
+        raise
+    else:
+        metrics.inc("dv_llm_calls_total", caller="intent", outcome="ok")
+        return result
+    finally:
+        metrics.observe("dv_llm_call_seconds", time.perf_counter() - started, caller="intent")
+
+
+def _call_ollama_impl(prompt: str, attempt: int = 1) -> tuple:
     """Returns (response_text, latency_ms)."""
     started = time.monotonic()
     logger.info(
@@ -248,10 +322,12 @@ def _call_ollama(prompt: str, attempt: int = 1) -> tuple:
     # it takes the same path: cooldown, then the deterministic fallback
     # (code review LLM-05).
     try:
-        text = response.json().get("response", "")
+        body = response.json()
+        text = body.get("response", "")
     except ValueError as exc:
         logger.error("[nlp.intent_resolver] Ollama returned a non-JSON body | model=%s | attempt=%d", INTENT_MODEL, attempt)
         raise _TransportError("Ollama returned a non-JSON response") from exc
+    note_if_cut_off("intent_resolver", body, INTENT_MODEL, attempt)
     latency_ms = int((time.monotonic() - started) * 1000)
     logger.info(
         "[nlp.intent_resolver] Ollama responded in %.1fs | model=%s | attempt=%d | response_chars=%d",
@@ -494,6 +570,17 @@ def resolve_intent(
     # The LLM still sees the full question in the prompt; only this token
     # heuristic changes.
     rank_text = getattr(analysis, "metric_text", None) or query
+
+    # A near-duplicate of a verified QA example, on the table that won: answer from it and
+    # skip the model entirely (the slowest step). Anything that does not ground falls through.
+    from_qa = _resolve_from_qa(shortlist.get("qa_match"), shortlist)
+    if from_qa is not None:
+        logger.info("[nlp.intent_resolver] QA fast path (no LLM) | query=%r | %s", query, from_qa)
+        ai_audit.record(
+            caller="intent_resolver.resolve_intent", model="qa-fastpath", query=query,
+            latency_ms=0, grounded=True, fell_back_to_deterministic=False, resolved=from_qa,
+        )
+        return _tag(from_qa, "qa")
 
     # Endpoint known-bad right now -> don't spend the timeout rediscovering
     # that on every single request.

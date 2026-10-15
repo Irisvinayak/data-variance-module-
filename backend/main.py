@@ -12,15 +12,22 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api import ROUTERS
+from .api.error_contract import TENANT_UNAVAILABLE, error_body
 from .api.errors import HOST_PROFILE_DETAIL, server_error_detail
 from .config import API_BASE_PATH, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
+from . import metrics
 from .config import settings as cfg
 from .hosts import HostProfileError
 from .limits import SlidingWindowLimiter, is_nl_path
@@ -97,12 +104,15 @@ _global = SlidingWindowLimiter(cfg.RATE_LIMIT_PER_MIN * 10 if cfg.RATE_LIMIT_PER
 
 @app.middleware("http")
 async def request_limits_middleware(request: Request, call_next):
-    if request.url.path.rstrip("/").endswith(("/health", "/app-config", "/ready")):
+    if request.url.path.rstrip("/").endswith(("/health", "/app-config", "/ready", "/metrics")):
         return await call_next(request)              # probes and bootstrap are never throttled
 
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > cfg.MAX_BODY_BYTES:
-        return JSONResponse(status_code=413, content={"detail": "The request body is too large."})
+        return JSONResponse(
+            status_code=413,
+            content=error_body(413, "The request body is too large.", request_id_var.get()),
+        )
 
     key = (request.query_params.get("loginId") or "").strip().lower() or "anonymous"
     checks = [(_global, "global"), (_per_login, key)]
@@ -112,9 +122,10 @@ async def request_limits_middleware(request: Request, call_next):
         allowed, retry_after = limiter.check(k)
         if not allowed:
             logger.warning("[main] 429 %s %s | rate limit (%s)", request.method, request.url.path, k)
+            metrics.inc("dv_http_rate_limited_total")
             return JSONResponse(
                 status_code=429,
-                content={"detail": "Too many requests. Please wait a moment and try again."},
+                content=error_body(429, "Too many requests. Please wait a moment and try again.", request_id_var.get()),
                 headers={"Retry-After": str(retry_after)},
             )
     return await call_next(request)
@@ -153,6 +164,25 @@ async def request_context_middleware(request: Request, call_next):
     return response
 
 
+# Request metrics (code review L-17). Declared AFTER the other middlewares, so it is the
+# outermost layer and also sees what they answer on their own (413, 429). The route label is
+# the matched route TEMPLATE, never the URL, so it cannot carry an id or a query string.
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    if not cfg.METRICS_ENABLED:
+        return await call_next(request)
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+        metrics.inc("dv_http_requests_total", method=request.method, route=route, status=status_code)
+        metrics.observe("dv_http_request_seconds", time.perf_counter() - started, route=route)
+
+
 # ── App-level exception handlers ──────────────────────────────────────────────
 # A HostProfileError means the request cannot address a repository — no tenant,
 # an unknown tenant, an unprovisioned one. That is a configuration or
@@ -167,7 +197,37 @@ async def host_profile_error_handler(request: Request, exc: HostProfileError) ->
     )
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": HOST_PROFILE_DETAIL},
+        content=error_body(
+            400, HOST_PROFILE_DETAIL, getattr(request.state, "request_id", None), code=TENANT_UNAVAILABLE,
+        ),
+    )
+
+
+# Every HTTP error - raised by a route, by a dependency, or by the framework for an unknown
+# path or method - gets the same additive body: the unchanged "detail" plus a machine "code"
+# and the request id (code review M-24; see backend/api/error_contract.py). Headers set on
+# the exception (Retry-After, WWW-Authenticate) are kept.
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code in (204, 304):
+        return Response(status_code=exc.status_code, headers=exc.headers)
+    request_id = getattr(request.state, "request_id", None) or request_id_var.get()
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_body(exc.status_code, exc.detail, request_id),
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # `detail` stays the framework's list of {loc, msg, type} (the frontend already joins
+    # the `msg` fields), exactly what FastAPI's own handler sent - including its `input` echo of the
+    # rejected values. Only `code` and `request_id` are added.
+    request_id = getattr(request.state, "request_id", None) or request_id_var.get()
+    return JSONResponse(
+        status_code=422,
+        content=error_body(422, jsonable_encoder(exc.errors()), request_id),
     )
 
 
@@ -190,7 +250,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     # so a user can still quote the id from the response headers.
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": server_error_detail(request_id)},
+        content=error_body(500, server_error_detail(request_id), request_id),
         headers={"X-Request-ID": request_id} if request_id else None,
     )
 

@@ -146,11 +146,30 @@ def search_qa_strong_match(
     query_vector: Any = None,
     prefilter_top_n: int = 20,
 ) -> Optional[str]:
-    """Returns the table name of a stored QA pair whose question is a
-    near-duplicate (difflib ratio >= threshold) of `query`, or None if
-    no pair meets the threshold or the file is absent. Deliberately never
-    returns/uses the stored "sql" field — reusing verified SQL directly is
-    sql_generator.py's territory, out of scope here. Compares against the
+    """Table name of the best near-duplicate QA pair, or None. Thin wrapper over
+    search_qa_match() for callers that only need the table."""
+    match = search_qa_match(
+        qa_path, query, threshold, qa_index_path=qa_index_path, qa_meta_path=qa_meta_path,
+        query_vector=query_vector, prefilter_top_n=prefilter_top_n,
+    )
+    return match["table"] if match else None
+
+
+def search_qa_match(
+    qa_path: str,
+    query: str,
+    threshold: float,
+    *,
+    qa_index_path: Optional[str] = None,
+    qa_meta_path: Optional[str] = None,
+    query_vector: Any = None,
+    prefilter_top_n: int = 20,
+) -> Optional[dict[str, Any]]:
+    """Returns the stored QA pair ({"table", "question", "sql", "ratio"}) whose
+    question is a near-duplicate (difflib ratio >= threshold) of `query`, or None if
+    no pair meets the threshold or the file is absent. The pair's "sql" is handed
+    back only so intent_resolver can read WHICH COLUMNS the verified example used;
+    it is never executed (backend/db.py runs unparameterized SQL). Compares against the
     RAW query (not normalize_query()'d) since stored questions are natural,
     non-normalized text, same as what a user actually typed.
 
@@ -179,7 +198,7 @@ def search_qa_strong_match(
 
     query_lower = query.strip().lower()
     best_ratio = 0.0
-    best_table = None
+    best_rec: Optional[dict[str, Any]] = None
     for rec in candidates:
         question = rec.get("question", "")
         if not question:
@@ -187,8 +206,13 @@ def search_qa_strong_match(
         ratio = difflib.SequenceMatcher(None, query_lower, question.strip().lower()).ratio()
         if ratio > best_ratio:
             best_ratio = ratio
-            best_table = rec.get("table")
+            best_rec = rec
 
-    if best_table and best_ratio >= threshold:
-        return best_table
+    if best_rec and best_rec.get("table") and best_ratio >= threshold:
+        return {
+            "table": best_rec["table"],
+            "question": best_rec.get("question", ""),
+            "sql": best_rec.get("sql", ""),
+            "ratio": best_ratio,
+        }
     return None

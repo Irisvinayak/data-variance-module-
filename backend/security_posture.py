@@ -101,6 +101,16 @@ def log_security_posture() -> list[str]:
     )
     for w in warnings:
         logger.warning("[security] %s", w)
+    # Misconfigurations that would leave the server OPEN or unusable are refused outright
+    # (C-01): a mistyped mode used to be read as "off" and run with unverified identity, and
+    # "required" without a secret rejects every single request. Both are start-up errors.
+    if cfg.IDENTITY_MODE_INVALID:
+        raise RuntimeError(
+            "DV_IDENTITY_MODE has an unrecognised value (valid: off, optional, required) - refusing to start "
+            "rather than silently running with unverified identity."
+        )
+    if cfg.IDENTITY_MODE == "required" and not cfg.JWT_SECRET:
+        raise RuntimeError("DV_IDENTITY_MODE=required but DV_JWT_SECRET is not set - refusing to start.")
     if cfg.REQUIRE_AUTH and not cfg.AUTH_ENABLED:
         raise RuntimeError("DV_REQUIRE_AUTH=true but DV_AUTH_ENABLED=false - refusing to start.")
     if cfg.REQUIRE_EXPLICIT_LLM_URL and nlp_config.OLLAMA_URL_IS_DEFAULT:

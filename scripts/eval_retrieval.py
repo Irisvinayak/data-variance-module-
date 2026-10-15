@@ -8,88 +8,109 @@ makes it cheap enough to run after every embedding rebuild or retriever.py
 change, to catch a retrieval-quality regression before it ever reaches an
 LLM call or a real query.
 
-This is the instrument the scaling plan calls for: TOP_K_*/MIN_*_SCORE in
-nlp_config.py were tuned against today's small (~51 table) corpus. Guessing
-new values once the real production corpus lands would just trade one set of
-untested magic numbers for another — this script is what lets those numbers
-be re-tuned against measurements instead of guesses.
-
 Run from the project root:
-    backend/.venv/Scripts/python.exe scripts/eval_retrieval.py
+    backend/.venv/Scripts/python.exe scripts/eval_retrieval.py                  # the six built-in cases
+    ... scripts/eval_retrieval.py --cases-file my_cases.jsonl                    # your own cases
+    ... scripts/eval_retrieval.py --from-index 300                               # cases derived from the index
+    ... scripts/eval_retrieval.py --from-index 300 --json baseline.json          # save the result
+    ... scripts/eval_retrieval.py --from-index 300 --baseline baseline.json --max-drop 0.02
+
+The last form exits 1 when top-1 or top-k accuracy fell by more than --max-drop, which is how a
+retrieval change (M-21, M-22, L-10, L-11 in docs/ISSUES_STATUS.md) is gated. The grading and
+comparison logic lives in scripts/retrieval_bench.py so it is unit-tested without the model.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import sys
 import time
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
+SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+for _p in (ROOT_DIR, SCRIPTS_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-# Each case: (query, expected_table, login_id). expected_table is matched
-# case-insensitively against the ranked "tables" list get_relevant_schema()
-# returns. login_id only matters when DV_AUTH_ENABLED=true; "iris810" is a
-# real active user in this deployment's XML_User.xml either way.
-CASES = [
-    ("What is the total gross NPA for the quarter", "cims_raq_q_sec8_sec_credit", "iris810"),
-    (
-        "provision made for possible losses on doubtful advances, comparing domestic and overseas operations",
-        "cims_raq_q_sec2_part_a",
-        "iris810",
-    ),
-    ("SEC2_PART_A risk category standard provision", "cims_raq_q_sec2_part_a", "iris810"),
-    ("total loan assets domestic", "cims_raq_q_sec1_part_a_dom", "iris810"),
-    ("infra sector credit breakup", "cims_raq_q_sec8_infra_brkup", "iris810"),
-    ("sensitivity to securities part b overseas", "cims_raq_q_sec9_sensec_partb", "iris810"),
-]
+import retrieval_bench as rb  # noqa: E402
 
 
-def main() -> int:
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(description="Retrieval accuracy benchmark (no LLM, no Oracle).")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--cases-file", help="JSON-lines file: {\"query\", \"expected\", \"login_id\"?}")
+    src.add_argument("--from-index", type=int, metavar="N", help="derive N cases from the shipped index (0 = all)")
+    p.add_argument("--seed", type=int, default=7, help="sampling seed for --from-index")
+    p.add_argument("--login", default="iris810", help="login used for the retrieval's authorisation filter")
+    p.add_argument("--json", dest="json_out", help="write the summary to this file")
+    p.add_argument("--baseline", help="summary saved by an earlier --json run to compare against")
+    p.add_argument("--max-drop", type=float, default=0.0, help="allowed accuracy drop as a fraction (0.02 = 2 points)")
+    p.add_argument("--quiet", action="store_true", help="print only the summary and failures")
+    return p.parse_args(argv)
+
+
+def select_cases(args):
+    if args.cases_file:
+        return rb.load_cases_file(args.cases_file, args.login)
+    if args.from_index is not None:
+        return rb.index_cases(None if args.from_index == 0 else args.from_index, args.seed, args.login)
+    return rb.built_in_cases(args.login)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    cases = select_cases(args)
+
     from backend.config import RequestContext
     from backend.nlp.retriever import get_relevant_schema
 
-    top1_hits = 0
-    topk_hits = 0
-    total_elapsed = 0.0
-    failures = []
-
-    for query, expected_table, login_id in CASES:
+    graded, seconds, misses = [], [], []
+    for case in cases:
         start = time.perf_counter()
-        result = get_relevant_schema(query, RequestContext(login_id=login_id))
+        result = get_relevant_schema(case.query, RequestContext(login_id=case.login_id))
         elapsed = time.perf_counter() - start
-        total_elapsed += elapsed
+        seconds.append(elapsed)
 
         ranked = [t["table"].lower() for t in result["tables"]]
-        expected = expected_table.lower()
+        outcome = rb.grade(case, ranked)
+        graded.append(outcome)
+        if outcome == "miss":
+            misses.append((case, ranked))
+        if not args.quiet:
+            print(f"[{outcome.upper():4}] {elapsed*1000:6.1f}ms  {case.query!r}")
+            print(f"        expected={sorted(case.expected)}  got={ranked}")
 
-        is_top1 = bool(ranked) and ranked[0] == expected
-        is_topk = expected in ranked
-
-        top1_hits += int(is_top1)
-        topk_hits += int(is_topk)
-
-        status = "TOP1" if is_top1 else ("TOPK" if is_topk else "MISS")
-        if status == "MISS":
-            failures.append((query, expected_table, ranked))
-
-        print(f"[{status:4}] {elapsed*1000:6.1f}ms  {query!r}")
-        print(f"        expected={expected_table!r}  got={ranked}")
-
-    n = len(CASES)
+    summary = rb.summarize(graded, seconds)
     print()
-    print(f"top-1 accuracy: {top1_hits}/{n} ({100*top1_hits/n:.0f}%)")
-    print(f"top-k accuracy: {topk_hits}/{n} ({100*topk_hits/n:.0f}%)")
-    print(f"total elapsed:  {total_elapsed:.2f}s  (avg {1000*total_elapsed/n:.1f}ms/query)")
+    print(f"cases:          {summary['cases']}")
+    print(f"top-1 accuracy: {summary['top1']}/{summary['cases']} ({summary['top1_rate']:.0%})")
+    print(f"top-k accuracy: {summary['topk']}/{summary['cases']} ({summary['topk_rate']:.0%})")
+    print(f"avg latency:    {summary['avg_ms']:.1f}ms/query")
 
-    if failures:
+    if misses:
         print()
-        print(f"{len(failures)} MISS(ES):")
-        for query, expected, ranked in failures:
-            print(f"  - {query!r} -> expected {expected!r}, got {ranked}")
-        return 1
-    return 0
+        print(f"{len(misses)} MISS(ES):")
+        for case, ranked in misses[:50]:
+            print(f"  - {case.query!r} -> expected {sorted(case.expected)}, got {ranked}")
+
+    if args.json_out:
+        with open(args.json_out, "w", encoding="utf-8") as fh:
+            json.dump(summary, fh, indent=2)
+        print(f"summary written to {args.json_out}")
+
+    if args.baseline:
+        with open(args.baseline, encoding="utf-8") as fh:
+            baseline = json.load(fh)
+        problems = rb.compare(summary, baseline, args.max_drop)
+        for problem in problems:
+            print(f"REGRESSION: {problem}")
+        print("no regression against the baseline" if not problems else f"{len(problems)} regression(s)")
+        return 1 if problems else 0
+
+    # Without a baseline the exit code keeps its old meaning: non-zero if anything missed entirely.
+    return 1 if misses else 0
 
 
 if __name__ == "__main__":

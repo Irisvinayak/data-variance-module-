@@ -162,3 +162,139 @@ describe('L-20 lazy chart panel', () => {
     expect(src).not.toMatch(/^import VisualizationPanel/m)
   })
 })
+
+// ── M-45: the complete keyboard pattern ──────────────────────────────────────
+
+const CANDS = [
+  { return_id: '1', return_name: 'Alpha', report_freq: 'Q', score: 0.9 },
+  { return_id: '2', return_name: 'Beta', report_freq: 'Q', score: 0.8 },
+  { return_id: '3', return_name: 'Gamma', report_freq: 'Q', score: 0.7 },
+]
+
+async function openPicker() {
+  api.findReturnTables.mockImplementation((q) => {
+    if (q === 'R') return Promise.resolve({ candidates: CANDS })
+    const hit = CANDS.find((c) => c.return_name === q || String(c.return_id) === q)
+    return hit ? Promise.resolve(ret(hit.return_id)) : Promise.reject(new Error('unexpected ' + q))
+  })
+  api.getMyReturns.mockResolvedValue({ allowed_forms: ['1', '2', '3'], allowed_count: 3 })
+  render(<LayoutContainer loginId="iris810" />)
+  await waitFor(() => expect(api.getMyReturns).toHaveBeenCalled())
+  await act(async () => {})
+  fireEvent.change(screen.getByLabelText('Return name'), { target: { value: 'R' } })
+  fireEvent.click(screen.getByRole('button', { name: /^Search/ }))
+  await screen.findByRole('listbox', { name: 'Matching returns' })
+  return screen.getByRole('combobox', { name: 'Filter matches' })
+}
+
+const activeName = (input) => {
+  const id = input.getAttribute('aria-activedescendant')
+  return id ? document.getElementById(id).textContent : null
+}
+
+describe('M-45 keyboard navigation', () => {
+  it('the filter is a combobox that controls the listbox and starts on the first option', async () => {
+    const input = await openPicker()
+    const listbox = screen.getByRole('listbox')
+    expect(input.getAttribute('aria-controls')).toBe(listbox.id)
+    expect(input.getAttribute('aria-autocomplete')).toBe('list')
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+    expect(activeName(input)).toContain('Alpha')
+    const options = screen.getAllByRole('option')
+    expect(options.map((o) => o.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false'])
+  })
+
+  it('arrows move the highlight, wrap around, and focus stays in the input', async () => {
+    const input = await openPicker()
+    input.focus()
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(activeName(input)).toContain('Beta')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(activeName(input)).toContain('Gamma')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })                  // wraps to the top
+    expect(activeName(input)).toContain('Alpha')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })                    // wraps to the bottom
+    expect(activeName(input)).toContain('Gamma')
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('Home and End jump to the ends', async () => {
+    const input = await openPicker()
+    fireEvent.keyDown(input, { key: 'End' })
+    expect(activeName(input)).toContain('Gamma')
+    fireEvent.keyDown(input, { key: 'Home' })
+    expect(activeName(input)).toContain('Alpha')
+  })
+
+  it('Enter chooses the highlighted option', async () => {
+    const input = await openPicker()
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(document.body.textContent).toContain('T_2'))
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('typing filters the list, resets the highlight, and Enter picks the match', async () => {
+    const input = await openPicker()
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.change(input, { target: { value: 'gam' } })
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(activeName(input)).toContain('Gamma')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(document.body.textContent).toContain('T_3'))
+  })
+
+  it('with no matches the arrows and Enter do nothing and nothing is announced', async () => {
+    const input = await openPicker()
+    fireEvent.change(input, { target: { value: 'zzz' } })
+    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    expect(input.getAttribute('aria-activedescendant')).toBeNull()
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(api.findReturnTables).toHaveBeenCalledTimes(1)           // only the first search
+  })
+
+  it('Escape closes the picker', async () => {
+    const input = await openPicker()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+  })
+
+  it('the mouse still works: clicking an option chooses it', async () => {
+    await openPicker()
+    fireEvent.click(screen.getByRole('option', { name: /Beta/ }))
+    await waitFor(() => expect(document.body.textContent).toContain('T_2'))
+  })
+
+  it('hovering an option highlights it', async () => {
+    const input = await openPicker()
+    fireEvent.mouseEnter(screen.getByRole('option', { name: /Gamma/ }))
+    expect(activeName(input)).toContain('Gamma')
+  })
+
+  it('other keys are left alone (typing is not swallowed)', async () => {
+    const input = await openPicker()
+    const notPrevented = fireEvent.keyDown(input, { key: 'a' })
+    expect(notPrevented).toBe(true)
+  })
+
+  it('the clarification picker for a natural-language question has the same keyboard support', async () => {
+    api.resolveNlQuery.mockResolvedValue({
+      needs_clarification: true, dimension: 'return', question: 'Which return?',
+      options: [{ id: 'a', label: 'Return A' }, { id: 'b', label: 'Return B' }], skippable: true,
+    })
+    render(<LayoutContainer loginId="iris810" />)
+    await waitFor(() => expect(api.getMyReturns).toHaveBeenCalled())
+    await act(async () => {})
+    fireEvent.change(screen.getByLabelText('Ask a question about your data'), { target: { value: 'loans' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask the question' }))
+    const input = await screen.findByRole('combobox', { name: 'Filter returns' })
+    expect(activeName(input)).toContain('Return A')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(activeName(input)).toContain('Return B')
+    api.resolveNlQuery.mockResolvedValue({ table_name: 'T_NL', rows: [], columns: [], display_columns: [] })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(api.resolveNlQuery).toHaveBeenCalledTimes(2))
+    expect(api.resolveNlQuery.mock.calls[1][1].clarificationAnswer).toBe('b')
+  })
+})

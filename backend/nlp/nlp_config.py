@@ -183,6 +183,11 @@ QA_INDEX_PATH: str = os.path.join(INDEX_DIR, "qa_index.faiss")
 QA_META_PATH: str = os.path.join(INDEX_DIR, "qa_meta.pkl")
 QA_PREFILTER_TOP_N: int = env_int("DV_NLP_QA_PREFILTER_TOP_N", "20")
 
+# When a question matches a stored QA pair at >= QA_STRONG_MATCH_THRESHOLD AND that pair's
+# table is the top authorized candidate, intent_resolver answers from the pair's columns and
+# skips the Ollama call. Set DV_NLP_QA_FASTPATH=false to always use the LLM again.
+QA_FASTPATH_ENABLED: bool = os.getenv("DV_NLP_QA_FASTPATH", "true").strip().lower() == "true"
+
 # ── Table-resolution confidence / ambiguity (backend/nlp/confidence.py) ────────
 # table_confidence >= AUTO_PROCEED  -> resolve automatically, exactly as today.
 # ASK_FLOOR <= table_confidence < AUTO_PROCEED (or a tie is detected even above

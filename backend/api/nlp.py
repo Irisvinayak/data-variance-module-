@@ -17,7 +17,10 @@ from ..data.db import execute_query
 from ..data.validation import InvalidInput, ensure_safe_return_id, ensure_safe_table_ref
 from ..data.models import NLResolveRequest
 from ..data.report_lookup import parse_returns
+from ..nlp.analysis import analyze as analyze_result
+from ..nlp.operation_parser import parse_operation
 from .errors import http_error, server_error_detail
+from .schemas import NlQueryResponse, NlResolveResponse
 
 logger = logging.getLogger(__name__)
 
@@ -388,7 +391,10 @@ def _nlp_stage(stage: str, ctx: RequestContext, query: str, fn, *args, **kwargs)
 
 
 # ── POST /variance/nlresolve ───────────────────────────────────────────────────
-@router.post("/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"])
+@router.post(
+    "/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"],
+    response_model=NlResolveResponse, response_model_exclude_unset=True,
+)
 def variance_nlresolve(
     payload: NLResolveRequest,
     ctx: RequestContext = Depends(require_login),
@@ -816,6 +822,15 @@ def variance_nlresolve(
 
     computed = _restrict_result_columns(computed, resolution["selected_columns"])
 
+    # What the user wants DONE with the numbers (filter, rank, unchanged, new/removed…).
+    # Additive and fail-safe: an analysis problem must never cost the user their table.
+    try:
+        spec = parse_operation(query)
+        if spec.operation not in ("trend", "anomaly"):
+            computed = analyze_result(computed, spec)
+    except Exception:
+        logger.exception("[api.nlp] /variance/nlresolve | %s | analysis stage failed; returning plain variance", ctx)
+
     logger.info(
         "[api.nlp] 200 /variance/nlresolve | %s | return_id=%s | table=%s | rows=%d",
         ctx, found["return_id"], resolved_table["table_name"], len(computed.get("rows", [])),
@@ -863,7 +878,10 @@ def variance_nlresolve(
 
 
 # ── POST /variance/nlquery ─────────────────────────────────────────────────────
-@router.post("/variance/nlquery", status_code=status.HTTP_200_OK, tags=["Variance"])
+@router.post(
+    "/variance/nlquery", status_code=status.HTTP_200_OK, tags=["Variance"],
+    response_model=NlQueryResponse, response_model_exclude_unset=True,
+)
 def variance_nlquery(
     payload: NLResolveRequest,
     ctx: RequestContext = Depends(require_login),

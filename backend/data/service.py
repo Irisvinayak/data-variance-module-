@@ -44,6 +44,7 @@ def _distinct_dates_desc(
     limit: int,
     before: Optional[datetime] = None,
     extra_where: str = "",
+    binds: Optional[dict[str, Any]] = None,
 ) -> tuple[list, Optional[str]]:
     """Up to `limit` distinct `filter_col` values, newest first, as (rows, err).
 
@@ -57,15 +58,20 @@ def _distinct_dates_desc(
         raise ValueError("Unsafe filter column name")   # M-06: identifiers cannot be bound
     conditions = []
     if before is not None:
-        conditions.append(f"{filter_col} < TO_DATE('{format_oracle_date(before)}', 'DD-MON-YYYY')")
+        if binds is None:
+            conditions.append(f"{filter_col} < TO_DATE('{format_oracle_date(before)}', 'DD-MON-YYYY')")
+        else:
+            binds["before"] = format_oracle_date(before)
+            conditions.append(f"{filter_col} < TO_DATE(:before, 'DD-MON-YYYY')")
     if extra_where:
         conditions.append(extra_where)       # built by _return_filter_sql from vetted names/literals
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
     inner = f"SELECT DISTINCT {filter_col} FROM {table_name}{where} ORDER BY {filter_col} DESC"
-    _, rows, err = execute_query_fn(f"{inner} FETCH FIRST {int(limit)} ROWS ONLY")
+    args = (binds,) if binds else ()
+    _, rows, err = execute_query_fn(f"{inner} FETCH FIRST {int(limit)} ROWS ONLY", *args)
     if err:
         _, rows, err = execute_query_fn(
-            f"SELECT {filter_col} FROM ({inner}) WHERE ROWNUM <= {int(limit)}"
+            f"SELECT {filter_col} FROM ({inner}) WHERE ROWNUM <= {int(limit)}", *args
         )
     return rows, err
 
@@ -579,6 +585,7 @@ def _actual_previous_dates(
     execute_query_fn: Callable,
     report_freq: str = "",
     extra_where: str = "",
+    binds: Optional[dict[str, Any]] = None,
 ) -> list[str]:
     """The `periods` reporting dates immediately before `reporting_date`.
 
@@ -607,7 +614,7 @@ def _actual_previous_dates(
     # Over-fetch when filtering by frequency: non-canonical dates are discarded below.
     rows, err = _distinct_dates_desc(
         execute_query_fn, resolved_table_name, filter_col,
-        want * 8 if freq else want, before=anchor, extra_where=extra_where,
+        want * 8 if freq else want, before=anchor, extra_where=extra_where, binds=binds,
     )
     if err:
         logger.warning(
@@ -626,7 +633,7 @@ def _actual_previous_dates(
     return [_as_date_string(v) for v in values[:want]]
 
 
-def _return_filter_sql(metadata: dict) -> str:
+def _return_filter_sql(metadata: dict, binds: Optional[dict[str, Any]] = None) -> str:
     """The predicate that limits a SHARED table to one return's rows ('' when not needed).
 
     Mirrors build_query(): the return-code column for single-return tables and the
@@ -636,11 +643,19 @@ def _return_filter_sql(metadata: dict) -> str:
     if metadata.get("is_single") and metadata.get("return_code_col") and metadata.get("return_code") is not None:
         if not is_safe_sql_ref(metadata["return_code_col"]):
             raise ValueError("Unsafe return-code column name")
-        parts.append(f"{metadata['return_code_col']} = {sql_literal(metadata['return_code'])}")
+        if binds is None:
+            parts.append(f"{metadata['return_code_col']} = {sql_literal(metadata['return_code'])}")
+        else:
+            binds["rc"] = str(metadata["return_code"])
+            parts.append(f"{metadata['return_code_col']} = :rc")
     if metadata.get("freq_col") and metadata.get("freq_val"):
         if not is_safe_sql_ref(metadata["freq_col"]):
             raise ValueError("Unsafe frequency column name")
-        parts.append(f"{metadata['freq_col']} = {sql_literal(metadata['freq_val'])}")
+        if binds is None:
+            parts.append(f"{metadata['freq_col']} = {sql_literal(metadata['freq_val'])}")
+        else:
+            binds["fv"] = str(metadata["freq_val"])
+            parts.append(f"{metadata['freq_col']} = :fv")
     return " AND ".join(parts)
 
 
@@ -799,9 +814,9 @@ def compute_variance(
     def get_table_metadata_fn(_return_code, _table_name, _is_non_xbrl):
         return metadata
 
-    def execute_query_adapter(query, _conn_str=None):
+    def execute_query_adapter(query, _conn_str=None, binds=None):
         logger.debug("[service] Executing Oracle query:\n%s", query)
-        cols, rows, err = execute_query_fn(query)
+        cols, rows, err = execute_query_fn(query, binds) if binds else execute_query_fn(query)
 
         if err:
             logger.error(
@@ -852,11 +867,13 @@ def compute_variance(
     # though they file monthly, so every comparison lands on an empty date.
     effective_comparison_dates = comparison_dates
     if not effective_comparison_dates:
+        prev_binds: Optional[dict[str, Any]] = {} if cfg_settings.USE_BIND_VARIABLES else None
         previous = _actual_previous_dates(
             resolved_table_name, metadata["filter_col"], reporting_date,
             reporting_period, execute_query_fn,
             report_freq=report_freq,
-            extra_where=_return_filter_sql({**metadata, "return_code": return_id}),
+            extra_where=_return_filter_sql({**metadata, "return_code": return_id}, prev_binds),
+            binds=prev_binds,
         )
         if previous:
             effective_comparison_dates = [reporting_date] + previous

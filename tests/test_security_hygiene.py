@@ -354,3 +354,86 @@ def test_context_values_reach_the_helper_unchanged(monkeypatch):
     monkeypatch.setattr("backend.auth.service.get_allowed_form_ids", lambda ctx: set())
     c.get("/auth/my-returns", params={"loginId": "dev", "tenantId": "1001"})
     assert seen and seen[0].tenant_id == "1001"
+
+
+# ── M-09: secrets are always redacted, whatever the identity setting ─────────
+
+@pytest.mark.parametrize("line,gone", [
+    ("Authorization: Bearer abcdefghijklmnop.qrstuv.wxyz1234", "abcdefghijklmnop"),
+    ("auth failed for Bearer eyJhbGciOiJIUzUxMiJ9.eyJMb2dpbklkIjoieCJ9.sig123456", "eyJhbGci"),
+    ("GET /x?loginId=a&password=hunter2&tenantId=1001", "hunter2"),
+    ('cfg {"password": "p@ss w0rd", "user": "crilc"}', "p@ss w0rd"),
+    ("pwd='abc def' next", "abc def"),
+    ("connect crilc/Secr3t!@3.6.209.141:1521/XE failed", "Secr3t"),
+    ("token=eyJhbGciOiJIUzUxMiJ9.eyJMb2dpbklkIjoieCJ9.sig123456 ok", "eyJhbGci"),
+    ("DV_JWT_SECRET=supersecretvalue1234 loaded", "supersecretvalue1234"),
+    ("redirect aspSession=ABCDEF123456&uid=7", "ABCDEF123456"),
+    ("legacy url ?_at=abc123def", "abc123def"),
+    ("api_key: sk-live-12345", "sk-live-12345"),
+])
+def test_secret_values_are_removed_from_log_text(line, gone):
+    out = lc.redact_secrets(line)
+    assert gone not in out and "***" in out
+
+
+@pytest.mark.parametrize("line", [
+    "[service] compute started | table=T | rows=120 | token_count=5 | 31-MAR-2025",
+    "SELECT * FROM T WHERE RC = 'x' AND AMOUNT > 5",
+    "[db] Acquired connection from pool",
+    "GET /variance/find?loginId=iris810&tenantId=1001 200 OK",
+    "[nlp.retriever] top table=cims_raq_q_sec1 confidence=0.82",
+    "path D:/Repo6/1001/Database/User.xml loaded",
+])
+def test_ordinary_log_lines_are_left_alone(line):
+    assert lc.redact_secrets(line) == line
+
+
+def test_the_secret_filter_keeps_the_line_and_the_record():
+    rec = logging.LogRecord("t", logging.INFO, "f", 1, "login %s with password=%s", ("bob", "hunter2"), None)
+    assert lc._RedactSecretsFilter().filter(rec) is True
+    assert rec.getMessage() == "login bob with password=***"
+
+
+def test_a_clean_record_is_not_rewritten():
+    rec = logging.LogRecord("t", logging.INFO, "f", 1, "rows=%d", (5,), None)
+    lc._RedactSecretsFilter().filter(rec)
+    assert rec.args == (5,) and rec.msg == "rows=%d"
+
+
+def test_the_secret_filter_never_loses_a_line_over_a_bad_format():
+    rec = logging.LogRecord("t", logging.INFO, "f", 1, "needs %s %s", ("one",), None)
+    assert lc._RedactSecretsFilter().filter(rec) is True
+
+
+def test_both_handlers_get_the_secret_filter_without_any_setting(tmp_path, monkeypatch):
+    root = logging.getLogger()
+    saved = root.handlers[:]
+    root.handlers.clear()
+    monkeypatch.setattr(lc, "LOG_DIR", str(tmp_path))
+    monkeypatch.setattr(lc, "_REDACT_IDENTITY", False)
+    try:
+        lc.configure_logging()
+        added = [h for h in root.handlers if h not in saved]
+        assert len(added) == 2
+        for handler in added:
+            assert any(isinstance(f, lc._RedactSecretsFilter) for f in handler.filters)
+            assert not any(isinstance(f, lc._RedactIdentityFilter) for f in handler.filters)
+    finally:
+        for h in root.handlers[:]:
+            h.close()
+        root.handlers[:] = saved
+
+
+def test_a_real_log_call_is_redacted_end_to_end(tmp_path, monkeypatch, capsys):
+    handler = logging.StreamHandler()
+    handler.addFilter(lc._RedactSecretsFilter())
+    stream = __import__("io").StringIO()
+    handler.setStream(stream)
+    log = logging.getLogger("m09-e2e")
+    log.addHandler(handler)
+    log.propagate = False
+    log.setLevel(logging.INFO)
+    log.info("db user=%s password=%s dsn=%s", "crilc", "Sup3rSecret", "host/XE")
+    log.removeHandler(handler)
+    out = stream.getvalue()
+    assert "Sup3rSecret" not in out and "user=crilc" in out and "dsn=host/XE" in out

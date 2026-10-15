@@ -130,6 +130,10 @@ class _Picker:
         what = ref.text.strip()
         if ref.granularity == "day" and self.freq in _FREQ_PERIOD:
             unit, fy = _FREQ_PERIOD[self.freq]
+            if fy == 4:                      # a financial-year frequency: follow the host's fiscal year (M-14)
+                from ..data.calculate_variance import _fiscal_year_start_month
+
+                fy = _fiscal_year_start_month()
             _start, end = period_containing(ref.start, unit, fy)
             if end in self.cands:
                 self.notes.append(

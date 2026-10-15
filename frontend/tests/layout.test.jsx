@@ -295,16 +295,16 @@ describe('L-27 microphone button', () => {
 })
 
 describe('H-13 / M-15 data-quality notices', () => {
-  it('shows the duplicate-key and removed-row notes while the result is on screen', async () => {
+  it('does not show the duplicate-key and removed-row notes', async () => {
     api.resolveNlQuery.mockResolvedValue(nlResult({
       duplicate_notice: '2 row key(s) appear more than once in the same period',
       removed_notice: '3 row(s) present in a comparison period are missing from the current period.',
     }))
     await mount()
     askNl('loans')
-    await waitFor(() => expect(shown('appear more than once')).toBe(true))
-    expect(shown('3 row(s) present')).toBe(true)
-    expect(screen.queryByRole('alert')).toBeNull()          // not the truncation alert
+    await waitFor(() => expect(screen.getByTestId('table').textContent).toContain('T_NL'))
+    expect(shown('appear more than once')).toBe(false)
+    expect(shown('3 row(s) present')).toBe(false)
   })
 
   it('shows nothing when the backend sent no notes', async () => {

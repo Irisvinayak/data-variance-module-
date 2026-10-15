@@ -3,6 +3,7 @@
  * Only mounted when a result exists (LayoutContainer conditionally renders the bottom section).
  */
 import PanelHeader from './PanelHeader.jsx'
+import { PropTypes, resultShape, panelState } from '../propTypes.js'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu.jsx'
 import { DataVarianceBlock, VarianceHeaderMeta } from '../DataVarianceTable.jsx'
 
@@ -83,4 +84,18 @@ export default function TablePanel({
       )}
     </div>
   )
+}
+
+TablePanel.propTypes = {
+  result: resultShape,
+  tableState: panelState,
+  onExpand: PropTypes.func,
+  onMinimize: PropTypes.func,
+  onReset: PropTypes.func,
+  loading: PropTypes.bool,
+  hiddenCols: PropTypes.arrayOf(PropTypes.string),
+  onToggleCol: PropTypes.func,
+  onHideCol: PropTypes.func,
+  onShowAllCols: PropTypes.func,
+  onHideAllCols: PropTypes.func,
 }

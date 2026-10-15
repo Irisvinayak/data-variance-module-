@@ -14,6 +14,7 @@ from typing import Any, Optional
 import oracledb
 
 from ..config import DB_HOST, DB_PORT, DB_SERVICE, DB_USER, DB_PASSWORD, DB_MAX_ROWS
+from .. import metrics
 from ..logging_config import request_id_var
 
 logger = logging.getLogger(__name__)
@@ -220,7 +221,38 @@ def get_connection():
     return conn
 
 
-def execute_query(sql: str) -> tuple[list[str], list[Any], Optional[str]]:
+def execute_query(sql: str, params: Optional[dict[str, Any]] = None) -> tuple[list[str], list[Any], Optional[str]]:
+    """Execute a SELECT against Oracle; see _execute_query_impl for the contract.
+
+    `params` (optional) are named bind variables for the placeholders in `sql`; values are
+    never part of the statement text. Omitted = exactly the previous behaviour.
+
+    A thin wrapper that records outcome and latency (backend/metrics.py, code review L-17).
+    The metric labels are fixed outcome names; no SQL, table or error text is recorded."""
+    started = time.perf_counter()
+    already_truncated = was_truncated()          # the flag is sticky for the rest of the request
+    result = _execute_query_impl(sql, params)
+    error = result[2]
+    if error is None:
+        outcome = "ok"
+    elif error == _client_error(MSG_BUSY):
+        outcome = "busy"
+    elif error == _client_error(MSG_UNAVAILABLE):
+        outcome = "unavailable"
+    elif error == _client_error(MSG_NOT_CONFIGURED):
+        outcome = "not_configured"
+    else:
+        outcome = "error"
+    metrics.inc("dv_db_queries_total", outcome=outcome)
+    metrics.observe("dv_db_query_seconds", time.perf_counter() - started)
+    if outcome == "ok" and was_truncated() and not already_truncated:
+        metrics.inc("dv_db_result_truncated_total")           # once per request, at the query that hit the cap
+    return result
+
+
+def _execute_query_impl(
+    sql: str, params: Optional[dict[str, Any]] = None,
+) -> tuple[list[str], list[Any], Optional[str]]:
     """Execute a SELECT query against Oracle DB.
 
     Returns
@@ -259,7 +291,10 @@ def execute_query(sql: str) -> tuple[list[str], list[Any], Optional[str]]:
         cursor.arraysize = min(DB_MAX_ROWS, 1000)
         clean_sql = sql.rstrip().rstrip(";")
         logger.debug("[db] Executing SQL:\n%s", clean_sql)
-        cursor.execute(clean_sql)
+        if params:
+            cursor.execute(clean_sql, params)
+        else:
+            cursor.execute(clean_sql)
         columns = [col[0] for col in cursor.description]
         # One row past the cap is fetched ONLY to learn whether the cap cut the
         # result; it is never returned. Rows 1..DB_MAX_ROWS are exactly what the

@@ -81,12 +81,35 @@ async function request(path, label, options = {}) {
   }
 }
 
+/**
+ * An HTTP error from the API. `message` is exactly what it always was (the server's `detail`,
+ * or the status line), so code that only shows `err.message` is unaffected. The extra fields
+ * come from the additive error contract (backend/api/error_contract.py, code review M-24):
+ *   status    HTTP status
+ *   code      stable machine code: "no_data", "forbidden", "rate_limited", ... (null if the
+ *             body was not ours, e.g. an IIS error page)
+ *   requestId the server's correlation id, quotable in a support request
+ */
+export class ApiError extends Error {
+  constructor(message, { status = null, code = null, requestId = null } = {}) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.requestId = requestId
+  }
+}
+
 async function parseResponse(res, label) {
   if (!res.ok) {
     // Error bodies are not always JSON (proxy/IIS error pages), and a JSON
     // body can be null — fall back to the status line either way.
     const body = await res.json().catch(() => null)
-    throw new Error(errorDetail(body?.detail) ?? `${label} error (${res.status})`)
+    throw new ApiError(errorDetail(body?.detail) ?? `${label} error (${res.status})`, {
+      status: res.status,
+      code: typeof body?.code === 'string' ? body.code : null,
+      requestId: body?.request_id ?? res.headers?.get?.('X-Request-ID') ?? null,
+    })
   }
   try {
     return await res.json()

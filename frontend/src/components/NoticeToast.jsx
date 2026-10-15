@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { PropTypes } from '../propTypes.js'
 
 /**
  * NoticeToast — small dismissible popup, bottom-right corner.
@@ -36,4 +37,10 @@ export default function NoticeToast({ message, onDismiss, autoDismissMs = 8000 }
       </button>
     </div>
   )
+}
+
+NoticeToast.propTypes = {
+  message: PropTypes.string,
+  onDismiss: PropTypes.func.isRequired,
+  autoDismissMs: PropTypes.number,
 }

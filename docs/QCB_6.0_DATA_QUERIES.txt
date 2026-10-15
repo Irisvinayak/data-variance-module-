@@ -1,0 +1,244 @@
+QCB 6.0 DATA-RELATED TEST QUERIES (ask for real values)
+========================================================================
+Source: the generated QA pairs (artifacts/nlp-index/ideal-60/qa_pairs.json). Row labels,
+countries and currencies are read from the QCB Excel templates, so they exist in the schema.
+'Expects' is the table and columns the verified SQL reads. Whether the Oracle tables hold
+rows for these labels and dates has NOT been checked (no database access in this run).
+Unless a query says otherwise, the answer is for the latest reporting date.
+Test user: vaibhav@irisindia.net, 6.0, tenant 1001.
+
+------------------------------------------------------------------------
+F010 Maturity Ladder - inside Qatar: one row, total across buckets
+------------------------------------------------------------------------
+  Query   : What is the total Certificate of Deposit in the maturity ladder inside Qatar?
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the total provisions held for FVOCI investments in the maturity ladder inside Qatar?
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the total Unutilized limits RECEIVED by the bank in the maturity ladder inside Qatar?
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the total Securities Issued in the maturity ladder inside Qatar in F010?
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F010 inside Qatar: one row, one maturity bucket, one currency
+------------------------------------------------------------------------
+  Query   : What is the Placements maturing no contractual maturity in local currency (QAR) inside Qatar? (row 10)
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, NO_CONTRA_MAT_LC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the Gross Loans/Finance to Banks maturing total across all buckets in local currency (QAR) inside Qatar?
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, TOTAL_LC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : In QCB_F010 Maturity Ladder of Assets & Liabilities, show Overdrafts due overnight inside Qatar in LC, USD and other FC
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, OVERNIGHT_LC, OVERNIGHT_USD, OVERNIGHT_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Show Gross FVOCI Investments due overnight inside Qatar in LC, USD and other FC
+  Expects : table qcb_f010_rcm_in_qtr | columns DESCRIPTION, OVERNIGHT_LC, OVERNIGHT_USD, OVERNIGHT_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F010 outside Qatar: same shapes
+------------------------------------------------------------------------
+  Query   : What is the total Other Liabilities in the maturity ladder outside Qatar?
+  Expects : table qcb_f010_rcm_out_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the total Overdrafts in the maturity ladder outside Qatar in F010?
+  Expects : table qcb_f010_rcm_out_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the total Investment securities in the maturity ladder outside Qatar?
+  Expects : table qcb_f010_rcm_out_qtr | columns DESCRIPTION, TOTAL_LC, TOTAL_USD, TOTAL_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Show Borrowings / Finance due overnight outside Qatar in LC, USD and other FC in QCB_F010 Maturity Ladder of Assets & Liabilities
+  Expects : table qcb_f010_rcm_out_qtr | columns DESCRIPTION, OVERNIGHT_LC, OVERNIGHT_USD, OVERNIGHT_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Show Repo due overnight outside Qatar in LC, USD and other FC for the Repo line
+  Expects : table qcb_f010_rcm_out_qtr | columns DESCRIPTION, OVERNIGHT_LC, OVERNIGHT_USD, OVERNIGHT_OTHER_FC
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F010 filing information (return metadata)
+------------------------------------------------------------------------
+  Query   : What is the F010 maturity ladder return code in the filing information?
+  Expects : table qcb_f010_filing_info | columns DESCRIPTION, VALUE
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the F010 maturity ladder return name in the filing information?
+  Expects : table qcb_f010_filing_info | columns DESCRIPTION, VALUE
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the F010 maturity ladder reporting frequency in the filing information in F010?
+  Expects : table qcb_f010_filing_info | columns DESCRIPTION, VALUE
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F013 Exposures by geography: one country
+------------------------------------------------------------------------
+  Query   : What is the exposure to India in QCB_F013 Breakdown of exposures by geography?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, TOTAL
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the exposure to France?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, TOTAL
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : How much exposure to Non-Bank Financial Institutions does Korea (the Republic of) account for?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, NBF_INSTITUTIONS
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F013: total across all countries for one category
+------------------------------------------------------------------------
+  Query   : What is the total exposure to Public Sector Entities across all countries?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, PUBLIC_SECTOR_ENT
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the total exposure to Non-Bank Financial Institutions across all countries in F013?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, NBF_INSTITUTIONS
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F013: ranking and listing
+------------------------------------------------------------------------
+  Query   : In F013, which country has the highest exposure to For-Profit Government-Related Entities?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, FOR_PROFIT_GOV_RLTD_ENT
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Which country has the highest exposure to Multilateral Development Banks?
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, MULTI_DEV_BANKS
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Give me the latest the geographic exposure return figures
+  Expects : table qcb_f013_break_exposure | columns COUNTRY, TOTAL
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F014 Funding by geography: one country
+------------------------------------------------------------------------
+  Query   : How much funding to Private Sector - SMEs does France account for?
+  Expects : table qcb_f014_funding_geo | columns COUNTRY, PVT_SEC_SMES
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : How much funding to Multilateral Development Banks does Kenya account for?
+  Expects : table qcb_f014_funding_geo | columns COUNTRY, MULTI_DEV_BANKS
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : In the funding by geography return, how much funding to For-Profit Government-Related Entities does Latvia account for?
+  Expects : table qcb_f014_funding_geo | columns COUNTRY, FOR_PROFIT_GOV_RLTD_ENT
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : In QCB_F014 Breakdown of Funding by geography, what is the funding to Latvia?
+  Expects : table qcb_f014_funding_geo | columns COUNTRY, TOTAL
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F014: ranking
+------------------------------------------------------------------------
+  Query   : Which country has the highest funding to Retail in F014?
+  Expects : table qcb_f014_funding_geo | columns COUNTRY, RETAIL
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Which country has the highest funding to Multilateral Development Banks?
+  Expects : table qcb_f014_funding_geo | columns COUNTRY, MULTI_DEV_BANKS
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F015 Net open position: one currency
+------------------------------------------------------------------------
+  Query   : What is the net open position in Colombian Peso in F015?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_DEF, SURPLUS_CAP_BASE_RATIO
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the net open position in Comorian Franc in F015?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_DEF, SURPLUS_CAP_BASE_RATIO
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the net open position in Mexican Unidad de Inversion (UDI)?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_DEF, SURPLUS_CAP_BASE_RATIO
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the net open position in Bahamian Dollar?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_DEF, SURPLUS_CAP_BASE_RATIO
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F015: exchange rate and capital-base ratio
+------------------------------------------------------------------------
+  Query   : What is the exchange rate used for Falkland Islands Pound?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, EXCHANGE_RATE
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the exchange rate used for Azerbaijan Manat?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, EXCHANGE_RATE
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Show surplus or deficit as a ratio of the capital base for every foreign currency
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_CAP_BASE_RATIO
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Show surplus or deficit as a ratio of the capital base for every foreign currency in the foreign currency net open position return
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_CAP_BASE_RATIO
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+F015: whole-return and ranking
+------------------------------------------------------------------------
+  Query   : Which currencies have a net open position deficit?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, SURPLUS_DEF
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : Which currency has the highest intangible assets?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, INTANG_ASSETS_TOTAL
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : What is the exchange rate used for Gourde in the foreign currency net open position return?
+  Expects : table qcb_f015_foreign_cur_nop | columns CURRENCY, EXCHANGE_RATE
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+
+------------------------------------------------------------------------
+VARIANCE / DATE QUERIES (composed by me from real labels; not in the QA set)
+------------------------------------------------------------------------
+  Query   : Variance in total Cumulative gap - on balance sheet inside Qatar vs last quarter
+  Expects : table qcb_f010_rcm_in_qtr; date phrase parsed; variance computed against the earlier period
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : F010 overnight Total gap outside Qatar last 2 quarters
+  Expects : table qcb_f010_rcm_out_qtr; date phrase parsed; variance computed against the earlier period
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : F015 net open position in Egyptian Pound as of 31-Mar-2025
+  Expects : table qcb_f015_foreign_cur_nop; date phrase parsed; variance computed against the earlier period
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : change in funding to Oman compared to previous period
+  Expects : table qcb_f014_funding_geo; date phrase parsed; variance computed against the earlier period
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+
+  Query   : F013 exposure to China for Q4 2024
+  Expects : table qcb_f013_break_exposure; date phrase parsed; variance computed against the earlier period
+  Result  : [ ] PASS  [ ] FAIL   Notes: ______________________
+

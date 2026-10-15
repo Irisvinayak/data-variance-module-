@@ -18,6 +18,7 @@ from ..data.db import execute_query
 from ..data.models import VarianceComputeRequest
 from ..data.validation import InvalidInput, ensure_safe_return_id, ensure_safe_table_ref
 from ..auth.service import is_return_allowed
+from .error_contract import error_code_for_message
 from .errors import http_error
 from .schemas import ComputeResponse, DatesResponse, FindResponse
 
@@ -204,6 +205,11 @@ def variance_compute(
     except Exception as exc:
         raise http_error(exc, "/variance/compute", ctx) from exc
 
+    # The service reports a failure as {"error": "..."} with HTTP 200 (kept, the UI shows it).
+    # Add the machine code next to it so a client need not parse the sentence (M-24).
+    message = result_error(res)
+    if message and isinstance(res, dict):
+        res = {**res, "error_code": error_code_for_message(message)}
     return res
 
 

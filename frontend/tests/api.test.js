@@ -180,3 +180,63 @@ describe('request headers (H-09 client side)', () => {
     parentSpy.mockRestore()
   })
 })
+
+describe('M-24 error contract', () => {
+  const failing = (status, body, headers = {}) => vi.fn(async () => ({
+    ok: false, status, json: async () => body, headers: { get: (k) => headers[k] ?? null },
+  }))
+
+  it('carries status, code and request id and keeps the message unchanged', async () => {
+    const { api } = await load()
+    vi.stubGlobal('fetch', failing(403, { detail: 'Not allowed.', code: 'forbidden', request_id: 'abc-123' }))
+    const err = await api.getMyReturns().catch((e) => e)
+    expect(err.message).toBe('Not allowed.')
+    expect(err).toMatchObject({ name: 'ApiError', status: 403, code: 'forbidden', requestId: 'abc-123' })
+    expect(err).toBeInstanceOf(Error)
+  })
+
+  it('works with an old-style body that has only detail', async () => {
+    const { api } = await load()
+    vi.stubGlobal('fetch', failing(404, { detail: 'Not Found' }))
+    const err = await api.getMyReturns().catch((e) => e)
+    expect(err.message).toBe('Not Found')
+    expect(err.code).toBeNull()
+    expect(err.status).toBe(404)
+  })
+
+  it('falls back to the X-Request-ID header and to the status line for a non-JSON error page', async () => {
+    const { api } = await load()
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 502, json: async () => { throw new Error('html') },
+      headers: { get: (k) => (k === 'X-Request-ID' ? 'hdr-9' : null) },
+    })))
+    const err = await api.getMyReturns().catch((e) => e)
+    expect(err.message).toBe('Auth error (502)')
+    expect(err).toMatchObject({ status: 502, code: null, requestId: 'hdr-9' })
+  })
+
+  it('a validation (422) list body still yields the joined messages', async () => {
+    const { api } = await load()
+    vi.stubGlobal('fetch', failing(422, { detail: [{ msg: 'too long' }, { msg: 'bad' }], code: 'validation_error' }))
+    const err = await api.getMyReturns().catch((e) => e)
+    expect(err.message).toBe('too long; bad')
+    expect(err.code).toBe('validation_error')
+  })
+
+  it('a rate-limit response exposes its code', async () => {
+    const { api } = await load()
+    vi.stubGlobal('fetch', failing(429, { detail: 'Too many requests.', code: 'rate_limited' }))
+    expect((await api.getMyReturns().catch((e) => e)).code).toBe('rate_limited')
+  })
+
+  it('a timeout is still a plain Error with the same text (no code)', async () => {
+    const { api } = await load()
+    const f = hangingFetch()
+    vi.stubGlobal('fetch', f)
+    const p = api.findReturnTables('X').catch((e) => e)
+    await vi.advanceTimersByTimeAsync(120_000)
+    const err = await p
+    expect(err.message).toMatch(/timed out/i)
+    expect(err.code).toBeUndefined()
+  })
+})

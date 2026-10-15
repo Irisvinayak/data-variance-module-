@@ -131,7 +131,8 @@ def test_valid_token_alone_still_works(client60):
 def test_missing_token_is_401(client60):
     r = whoami(client60, loginId="user@bank.test", tenantId="1001")
     assert r.status_code == 401
-    assert r.json() == {"detail": "Authentication failed."}
+    body = r.json()
+    assert body["detail"] == "Authentication failed." and body["code"] == "unauthenticated"
 
 
 def test_invalid_token_is_401(client60):
@@ -319,3 +320,55 @@ def test_diagnostics_never_expose_the_secret(monkeypatch):
     client = TestClient(app)
     for path in ("/health", "/app-config"):
         assert SECRET not in client.get(path).text
+
+
+# ── H-01 / C-01: what "required" mode guarantees once it is switched on ──────
+
+def test_required_mode_answers_only_for_the_token_holder_whatever_the_url_says(client60, monkeypatch):
+    """The enumeration H-01 describes: asking /auth/my-returns about someone else's login."""
+    monkeypatch.setattr(deps, "get_allowed_form_ids", lambda ctx: {"4079"} if ctx.login_id == "user@bank.test" else {"SECRET-9"})
+    monkeypatch.setattr("backend.auth.service.get_allowed_form_ids", deps.get_allowed_form_ids)
+    r = whoami(client60, bearer(), loginId="victim@bank.test", tenantId="1001")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["login_id"] == "user@bank.test" and body["allowed_forms"] == ["4079"]
+    assert "SECRET-9" not in r.text and "victim" not in r.text
+
+
+def test_required_mode_refuses_every_url_only_request(client60):
+    for params in ({"loginId": "victim@bank.test", "tenantId": "1001"}, {"loginId": "victim@bank.test"}, {}):
+        assert whoami(client60, **params).status_code == 401
+
+
+def test_required_mode_rejects_a_token_for_another_tenant_even_with_a_matching_url(client60):
+    r = whoami(client60, {**bearer(), "X-Tenant-Id": "1002"}, tenantId="1002")
+    assert r.status_code == 403
+
+
+def test_required_mode_rejects_expired_wrong_issuer_wrong_audience_and_bad_signature(client60):
+    assert whoami(client60, bearer(exp=time.time() - 3600)).status_code == 401
+    assert whoami(client60, bearer(iss="someone-else")).status_code == 401
+    assert whoami(client60, bearer(aud="https://other.example")).status_code == 401
+    forged = {"Authorization": f"Bearer {make_token(claims(), secret='a-different-key-0123456789abcdefghij')}"}
+    assert whoami(client60, forged).status_code == 401
+
+
+def test_required_mode_on_an_untenanted_host_needs_no_tenant_claim(monkeypatch):
+    from backend.main import app
+
+    configure(monkeypatch, "required", PlainProfile())
+    c = TestClient(app)
+    token = make_token({"LoginId": "iris810", "iss": ISS, "aud": AUD, "exp": time.time() + 600})
+    r = c.get("/auth/my-returns", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200 and r.json()["login_id"] == "iris810" and r.json()["tenant_id"] == ""
+
+
+def test_the_identity_checks_are_the_same_before_and_after_auth_is_enabled(monkeypatch):
+    """DV_AUTH_ENABLED only adds the entitlement check; the token rules are identical."""
+    from backend.main import app
+
+    for auth_enabled in (False, True):
+        configure(monkeypatch, "required", TenantProfile(), auth_enabled=auth_enabled)
+        c = TestClient(app)
+        assert c.get("/auth/my-returns", params={"loginId": "x", "tenantId": "1001"}).status_code == 401
+        assert c.get("/auth/my-returns", headers=bearer()).status_code == 200

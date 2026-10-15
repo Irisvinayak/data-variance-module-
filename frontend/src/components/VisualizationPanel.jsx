@@ -3,6 +3,7 @@
  * Renders bar or line chart for the variance result using recharts.
  */
 import { useState, useMemo } from 'react'
+import { PropTypes, resultShape, panelState } from '../propTypes.js'
 import {
   ResponsiveContainer,
   BarChart, Bar,
@@ -11,8 +12,24 @@ import {
 } from 'recharts'
 import PanelHeader from './PanelHeader.jsx'
 
-const CURR_COLOR  = '#58a6ff'
-const PREV_COLORS = ['#8b949e', '#3fb950', '#e3b341', '#f85149']
+// Palette for the light theme (App.css tokens). These were GitHub-dark colors —
+// a pale #58a6ff for the current period against a flat #8b949e grey for the
+// previous one — which read as two unrelated hues on a white panel, and the same
+// grey doubled as the axis/legend text color so a data bar looked like chrome.
+// Now the current period is the app accent blue (--accent) and the nearest
+// previous period its complement, orange: blue/orange is the most legible pair
+// on a white panel (a light-blue "previous" next to a dark-blue "current" was
+// low contrast and looked dull) and stays distinct for color-blind viewers.
+// Further periods step out to teal, violet and slate, not the old red/green pair.
+const CURR_COLOR  = '#0066cc'
+const PREV_COLORS = ['#f59e42', '#2a9d8f', '#8b5cf6', '#64748b']
+
+// Chart chrome, matching --text / --text-muted / --border so the axes, legend
+// and grid belong to the page instead of looking like a separate dark widget.
+const TEXT_COLOR  = '#1a2b42'
+const MUTED_COLOR = '#5a7a99'
+const GRID_COLOR  = 'rgba(90, 122, 153, 0.25)'
+const HOVER_BAND  = 'rgba(0, 102, 204, 0.07)'
 
 // Stable fallbacks so chartData's memo isn't invalidated by a fresh [] each render.
 const EMPTY = []
@@ -54,7 +71,7 @@ const CHART_MARGIN = { top: 6, right: 16, bottom: 72, left: 10 }
 
 const X_AXIS_PROPS = {
   dataKey: 'name',
-  tick: { fill: '#8b949e', fontSize: 10 },
+  tick: { fill: MUTED_COLOR, fontSize: 10 },
   angle: -40,
   textAnchor: 'end',
   interval: 0,
@@ -63,9 +80,9 @@ const X_AXIS_PROPS = {
 }
 
 const Y_AXIS_PROPS = {
-  // Black, not the muted grey the X axis uses: the Y values are the numbers
-  // being read off the chart, so they need full contrast.
-  tick: { fill: '#000000', fontSize: 10 },
+  // The full-contrast text color, not the muted one the X axis uses: the Y
+  // values are the numbers being read off the chart.
+  tick: { fill: TEXT_COLOR, fontSize: 10 },
   width: 64,
 }
 
@@ -75,9 +92,24 @@ const Y_AXIS_PROPS = {
 const CHART_LEGEND = {
   verticalAlign: 'top',
   align: 'right',
-  height: 24,
-  wrapperStyle: { fontSize: '0.72rem', color: '#8b949e', paddingBottom: 6 },
+  height: 30,
+  wrapperStyle: { paddingBottom: 6 },
 }
+
+// One square-swatch legend for BOTH chart types. recharts' built-in legend draws
+// a line-and-dot icon for <Line> (and colors the label text with the series
+// color, so a light series gets a faint label); a square box reads the same on
+// bars and lines, and the label stays in the normal text color.
+const ChartLegend = ({ payload }) => (
+  <ul className="viz-legend">
+    {(payload ?? []).map((entry) => (
+      <li key={entry.value} className="viz-legend-item">
+        <span className="viz-legend-box" style={{ background: entry.color }} />
+        {entry.value}
+      </li>
+    ))}
+  </ul>
+)
 
 // `label` is the RAW row name — tickFormatter only shortens the axis, never
 // the data — so hovering still shows the full, untruncated label.
@@ -253,31 +285,31 @@ export default function VisualizationPanel({
                 <ResponsiveContainer width="100%" height="100%">
                   {chartType === 'bar' ? (
                     <BarChart data={chartData} margin={CHART_MARGIN}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(48,54,61,0.8)" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis {...X_AXIS_PROPS} />
                       <YAxis {...Y_AXIS_PROPS} tickFormatter={fmt} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                      <Legend {...CHART_LEGEND} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: HOVER_BAND }} />
+                      <Legend {...CHART_LEGEND} content={<ChartLegend />} />
                       {seriesKeys.map((key, i) => (
                         <Bar key={key} dataKey={key} fill={seriesColors[i]} radius={[3, 3, 0, 0]} maxBarSize={28} />
                       ))}
                     </BarChart>
                   ) : (
                     <LineChart data={chartData} margin={CHART_MARGIN}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(48,54,61,0.8)" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis {...X_AXIS_PROPS} />
                       <YAxis {...Y_AXIS_PROPS} tickFormatter={fmt} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend {...CHART_LEGEND} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ stroke: GRID_COLOR }} />
+                      <Legend {...CHART_LEGEND} content={<ChartLegend />} />
                       {seriesKeys.map((key, i) => (
                         <Line
                           key={key}
                           type="monotone"
                           dataKey={key}
                           stroke={seriesColors[i]}
-                          strokeWidth={2}
-                          dot={{ r: 3, fill: seriesColors[i] }}
-                          activeDot={{ r: 5 }}
+                          strokeWidth={2.5}
+                          dot={{ r: 4, fill: seriesColors[i], stroke: '#ffffff', strokeWidth: 2 }}
+                          activeDot={{ r: 6, stroke: '#ffffff', strokeWidth: 2 }}
                         />
                       ))}
                     </LineChart>
@@ -292,4 +324,13 @@ export default function VisualizationPanel({
       )}
     </div>
   )
+}
+
+VisualizationPanel.propTypes = {
+  result: resultShape,
+  vizState: panelState,
+  vizOpen: PropTypes.bool,
+  onExpand: PropTypes.func,
+  onMinimize: PropTypes.func,
+  hiddenCols: PropTypes.arrayOf(PropTypes.string),
 }

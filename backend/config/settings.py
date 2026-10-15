@@ -16,18 +16,38 @@ from __future__ import annotations
 from ..envutil import ConfigError, env_float, env_int
 import os
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
-# Load .env from the project root (two levels above this file: backend/config/ -> backend/ -> root).
+def load_environment(root_env, overlay, override: bool, environ=None, os_keys=None) -> None:
+    """Read the root .env and the optional per-instance overlay into `environ` (os.environ).
+
+    Precedence, lowest to highest:  built-in defaults  <  root .env  <  overlay  <  OS variables
+    ONLY WHEN `override` is false. With the default `override=True` a .env value also replaces
+    an operating-system variable of the same name: the behaviour every existing server relies
+    on. With `override=False` (set the real OS variable DV_DOTENV_OVERRIDE=false) a variable
+    that came from the operating system (`os_keys`, captured before any file was read) is never
+    replaced, so an orchestrator or service-level setting beats a stale .env (code review M-08).
+
+    The overlay carries what differs per instance (VERSION, port, API path), so it ALWAYS beats
+    the root .env, in both modes. A plain load_dotenv(override=False) for the overlay would not:
+    by then the root .env's values are already in the environment.
+    """
+    environ = os.environ if environ is None else environ
+    protected = frozenset(environ) if os_keys is None else frozenset(os_keys)
+    for path in (root_env, overlay):
+        if not path:
+            continue
+        for key, value in dotenv_values(path).items():
+            if value is None:
+                continue
+            if override or key not in protected:
+                environ[key] = value
+
+
 # By default override=True: .env values win over OS-level environment variables (the
 # behaviour every existing server relies on). Set the REAL OS variable
-# DV_DOTENV_OVERRIDE=false to flip that, so an orchestrator / service-level variable beats
-# a stale .env (code review M-08). It is read from the OS only: it cannot live in .env.
+# DV_DOTENV_OVERRIDE=false to flip that. It is read from the OS only: it cannot live in .env.
 DOTENV_OVERRIDE: bool = os.environ.get("DV_DOTENV_OVERRIDE", "true").strip().lower() not in {"0", "false", "no", "off"}
-load_dotenv(
-    dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
-    override=DOTENV_OVERRIDE,
-)
 
 # ── Per-instance overlay (running two host versions side by side) ─────────────
 # The app is one-process-per-version by design: VERSION is read once at import
@@ -40,13 +60,16 @@ load_dotenv(
 # at its own overlay .env file via a real OS environment variable named
 # DV_ENV_FILE (set on the process launch, not inside a .env — it must exist
 # before this module ever loads one). The overlay is loaded AFTER the base
-# .env with override=True, so it only needs to carry the handful of keys that
+# .env and beats it, so it only needs to carry the handful of keys that
 # must differ per instance (VERSION, DV_SERVER_PORT, DV_API_BASE_PATH); every
 # other setting (DB_*_55/_60, BASE_PATH_55/_60, ...) is already shared and
 # version-keyed in the base .env. See config/env/.env.55.example / config/env/.env.60.example.
 _ENV_OVERLAY = os.environ.get("DV_ENV_FILE", "").strip()
-if _ENV_OVERLAY:
-    load_dotenv(dotenv_path=_ENV_OVERLAY, override=DOTENV_OVERRIDE)
+load_environment(
+    os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+    _ENV_OVERLAY or None,
+    DOTENV_OVERRIDE,
+)
 
 
 def _truthy(value: str) -> bool:
@@ -217,6 +240,13 @@ JWT_SECRET: str = os.getenv("DV_JWT_SECRET", "")
 # true = refuse to start while DV_AUTH_ENABLED=false (code review M-04). Off by default so
 # existing servers keep starting; turn it on once each server runs with auth enabled.
 REQUIRE_AUTH: bool = _flag("DV_REQUIRE_AUTH", "false")
+# GET /metrics (Prometheus text, no external dependency). 404 while false (code review L-17).
+METRICS_ENABLED: bool = _flag("DV_METRICS_ENABLED", "false")
+# true = pass the dates and the return/frequency values to Oracle as bind variables instead of
+# writing them into the SQL text (code review M-06). Identifiers (table / column names) can
+# never be bound and are shape-checked either way. Off by default: the generated SQL text is
+# unchanged until this has been verified against a real Oracle (see docs/ISSUES_STATUS.md).
+USE_BIND_VARIABLES: bool = _flag("DV_USE_BIND_VARIABLES", "false")
 # true = refuse to start while DV_NLP_OLLAMA_URL is unset (the built-in default is a public IP
 # over plain http; code review H-07).
 REQUIRE_EXPLICIT_LLM_URL: bool = _flag("DV_REQUIRE_EXPLICIT_LLM_URL", "false")

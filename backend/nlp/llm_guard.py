@@ -13,6 +13,27 @@ import threading
 import time
 
 
+def note_if_cut_off(caller: str, body, model: str, attempt: int) -> bool:
+    """Log and count a reply that stopped because it hit the token cap (num_predict).
+
+    Ollama reports `done_reason: "length"` in that case. A SQL statement or JSON object cut off
+    mid-way then fails validation and costs a retry, but nothing used to say WHY - which is the
+    evidence needed before anyone raises the cap (code review M-19). Observation only: the
+    reply is returned unchanged and no limit is touched. Returns True when it was cut off."""
+    import logging
+
+    from .. import metrics
+
+    if isinstance(body, dict) and body.get("done_reason") == "length":
+        logging.getLogger(__name__).warning(
+            "[nlp.%s] reply stopped at the token cap (done_reason=length) | model=%s | attempt=%d | "
+            "see DV_SQL_NUM_PREDICT / DV_NLP_INTENT_NUM_PREDICT", caller, model, attempt,
+        )
+        metrics.inc("dv_llm_truncated_total", caller=caller)
+        return True
+    return False
+
+
 def make_session(pool_size: int | None = None):
     """A requests.Session whose connection pool matches the server's concurrency.
 

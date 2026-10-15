@@ -23,7 +23,7 @@ from ..config import AUTH_ENABLED, RequestContext
 from . import return_lookup
 from .embedder import embed_query
 from .index_store import meta_by_table, search
-from .lexical_search import search_bm25, search_qa_strong_match
+from .lexical_search import search_bm25, search_qa_match
 from .query_analyzer import QueryAnalysis, analyze_query
 from . import confidence as confidence_mod
 from . import ranking
@@ -210,8 +210,8 @@ def get_relevant_schema(
     # the one genuinely-matching pair out of the top-N before difflib ever
     # scored it. Only paid for when the analyzer actually stripped something.
     qa_vec = q_vec if analysis.metric_text == analysis.normalized else embed_query(analysis.normalized)
-    qa_table = (
-        search_qa_strong_match(
+    qa_match = (
+        search_qa_match(
             QA_PAIRS_PATH, query, QA_STRONG_MATCH_THRESHOLD,
             qa_index_path=QA_INDEX_PATH, qa_meta_path=QA_META_PATH,
             query_vector=qa_vec, prefilter_top_n=QA_PREFILTER_TOP_N,
@@ -219,6 +219,7 @@ def get_relevant_schema(
         if QA_STRONG_MATCH_THRESHOLD
         else None
     )
+    qa_table = qa_match["table"] if qa_match else None
     canonical_qa_table: str | None = None
     if qa_table:
         # qa_pairs.json's table names may differ in case from the FAISS/BM25
@@ -458,4 +459,7 @@ def get_relevant_schema(
         "matched_labels": matched_labels,
         "table_confidence": table_confidence,
         "table_ambiguous": table_ambiguous,
+        # The verified QA example, only when it pinned the table that actually won AND
+        # nothing about the pick is ambiguous — intent_resolver may then skip the LLM.
+        "qa_match": qa_match if qa_hit and not table_ambiguous else None,
     }

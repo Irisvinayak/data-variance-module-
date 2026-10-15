@@ -23,7 +23,10 @@ function backendTarget(mode) {
     (isLegacy ? root.DV_SERVER_PORT_55 : root.DV_SERVER_PORT_60) ||
     root.DV_SERVER_PORT ||
     (isLegacy ? '8004' : '8003')
-  return `http://localhost:${String(port).trim()}`
+  // 127.0.0.1, not "localhost": the backend binds IPv4 only, and Node 18+ can resolve
+  // "localhost" to ::1 first, which the proxy reports as a bare 500 with nothing in the
+  // backend log.
+  return `http://127.0.0.1:${String(port).trim()}`
 }
 
 // Ships exactly one web.config per build. public/ is copied verbatim, so both

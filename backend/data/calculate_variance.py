@@ -10,6 +10,8 @@ import re
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
+
+from ..config import settings as _settings
 from typing import Any, Optional
 from collections.abc import Callable
 
@@ -320,6 +322,34 @@ def get_previous_dates(
     return dates
 
 
+def _fiscal_year_start_month() -> int:
+    """First month of the host's fiscal year: 4 for 5.5 (Apr-Mar), 1 for 6.0 (calendar year),
+    or DV_FISCAL_YEAR_START_MONTH. Falls back to 4, the value the old hard-coded months assumed."""
+    try:
+        from ..hosts import get_profile
+
+        month = int(get_profile().fiscal_year_start_month)
+        return month if 1 <= month <= 12 else 4
+    except Exception:  # noqa: BLE001 - a profile problem must not break date validation
+        return 4
+
+
+def fiscal_period_end_months(start_month: int | None = None) -> tuple[int, frozenset[int]]:
+    """(annual period-end month, half-yearly period-end months) for a fiscal year that starts
+    in `start_month`. Apr start -> (3, {3, 9}); Jan start -> (12, {6, 12}).
+
+    The financial-year frequency codes (A/Y/FY annual, H/HY/FH half-yearly) used to accept
+    only March / September whatever the host, so a 6.0 yearly return filed on 31-Dec was
+    rejected as an invalid date (code review M-14). The months now follow the profile's
+    fiscal year; 5.5 keeps exactly its old values. The calendar-year codes (B/CY, C/CH)
+    are unaffected.
+    """
+    start = start_month if start_month is not None else _fiscal_year_start_month()
+    annual = 12 if start == 1 else start - 1
+    half = (annual + 6 - 1) % 12 + 1
+    return annual, frozenset({annual, half})
+
+
 def validate_reporting_date(report_date: datetime, report_freq: str) -> bool:
     freq     = report_freq.strip().upper()
     day      = report_date.day
@@ -340,11 +370,11 @@ def validate_reporting_date(report_date: datetime, report_freq: str) -> bool:
     if freq in _QUARTERLY:
         return month in (3, 6, 9, 12)
     if freq in _HY_FIN:
-        return month in (3, 9)
+        return month in fiscal_period_end_months()[1]
     if freq in _HY_CAL:
         return month in (6, 12)
     if freq in _ANNUAL_FIN:
-        return month == 3
+        return month == fiscal_period_end_months()[0]
     if freq in _ANNUAL_CAL:
         return month == 12
     return True
@@ -491,7 +521,16 @@ def build_query(
     prev_dates: list[datetime],
     return_code: Any,
     selected_columns: Optional[list[str]] = None,
+    binds: Optional[dict[str, Any]] = None,
 ) -> str:
+    """The SELECT for one table and its comparison dates.
+
+    With `binds=None` (the default) values are written into the text: dates through
+    format_oracle_date(), the return code and frequency value through sql_literal(). With a
+    dict, the same statement is built with named bind placeholders (:d0, :d1, ..., :rc, :fv)
+    and the dict is filled with their values for the driver. The two forms differ only in how
+    those values are carried; identifiers are validated and spliced identically in both.
+    """
 
     fc         = metadata["filter_col"]
     # Identifiers cannot be bound as variables, so every name that is spliced into
@@ -509,20 +548,31 @@ def build_query(
     # A half-open day range instead of `= TO_DATE(...)`: an Oracle DATE that carries a
     # time part (10:30:00) never equals midnight, so those rows were silently missed
     # (code review M-17). For midnight-only data the two forms select the same rows.
-    conditions = [
-        f"({fc} >= TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY') "
-        f"AND {fc} < TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY') + 1)"
-        for d in all_dates
-    ]
+    def date_expr(index: int, d: datetime) -> str:
+        if binds is None:
+            return f"TO_DATE('{format_oracle_date(d)}', 'DD-MON-YYYY')"
+        binds[f"d{index}"] = format_oracle_date(d)
+        return f"TO_DATE(:d{index}, 'DD-MON-YYYY')"
+
+    def value_expr(name: str, value: Any) -> str:
+        if binds is None:
+            return sql_literal(value)
+        binds[name] = str(value)
+        return f":{name}"
+
+    conditions = []
+    for index, d in enumerate(all_dates):
+        expr = date_expr(index, d)
+        conditions.append(f"({fc} >= {expr} AND {fc} < {expr} + 1)")
     date_sql = " OR ".join(conditions)
 
     rc_filter = (
-        f" AND {metadata.get('return_code_col')} = {sql_literal(return_code)}"
+        f" AND {metadata.get('return_code_col')} = {value_expr('rc', return_code)}"
         if metadata.get("is_single")
         else ""
     )
     freq_filter = (
-        f" AND {metadata.get('freq_col')} = {sql_literal(metadata.get('freq_val'))}"
+        f" AND {metadata.get('freq_col')} = {value_expr('fv', metadata.get('freq_val'))}"
         if metadata.get("freq_col") and metadata.get("freq_val")
         else ""
     )
@@ -675,12 +725,15 @@ def calculate_variance(
 
         prev_dates = get_previous_dates(rdate, report_freq, reporting_period)
 
+    binds: Optional[dict[str, Any]] = {} if _settings.USE_BIND_VARIABLES else None
     query = build_query(
-        table_name, metadata, rdate, prev_dates, return_code, selected_columns
+        table_name, metadata, rdate, prev_dates, return_code, selected_columns, binds=binds
     )
 
     try:
-        if connection_string is not None:
+        if binds:
+            all_rows = execute_query_fn(query, connection_string, binds)
+        elif connection_string is not None:
             all_rows = execute_query_fn(query, connection_string)
         else:
             all_rows = execute_query_fn(query)

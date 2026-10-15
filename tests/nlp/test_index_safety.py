@@ -180,7 +180,7 @@ def retrieval(monkeypatch):
 
     monkeypatch.setattr(retriever, "search", fake_search)
     monkeypatch.setattr(retriever, "search_bm25", lambda *a, **k: [])
-    monkeypatch.setattr(retriever, "search_qa_strong_match", lambda *a, **k: None)
+    monkeypatch.setattr(retriever, "search_qa_match", lambda *a, **k: None)
     monkeypatch.setattr(retriever.return_lookup, "get_return_for_table",
                         lambda tbl, hint_text=None, ctx=None: {"return_id": owners[tbl], "return_name": f"R{owners[tbl]}"})
     monkeypatch.setattr(retriever, "meta_by_table", lambda *a, **k: {})

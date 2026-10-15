@@ -1,3 +1,4 @@
+import { PropTypes } from '../propTypes.js'
 /**
  * PanelHeader — sticky header for bottom panels.
  * Shows Expand / Minimize when in normal state.
@@ -57,4 +58,14 @@ export default function PanelHeader({
       </div>
     </div>
   )
+}
+
+PanelHeader.propTypes = {
+  title: PropTypes.string,
+  titleContent: PropTypes.node,
+  icon: PropTypes.node,
+  onExpand: PropTypes.func,
+  onMinimize: PropTypes.func,
+  isExpanded: PropTypes.bool,
+  isMinimized: PropTypes.bool,
 }

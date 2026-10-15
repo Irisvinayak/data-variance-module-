@@ -74,3 +74,45 @@ describe('M-02 URL token switch', () => {
     expect(window.location.search).not.toContain('_at=')
   })
 })
+
+describe('M-02 URL token switch (explicit values)', () => {
+  const b64 = (o) => btoa(JSON.stringify(o)).replace(/=+$/, '')
+  const tok = `h.${b64({ LoginId: 'a', TenantId: '1', exp: Math.floor(Date.now() / 1000) + 600 })}.s`
+
+  async function run(flag) {
+    vi.resetModules()
+    vi.stubEnv('VITE_ALLOW_URL_TOKEN', flag)
+    window.history.replaceState({}, '', `/?_at=${tok}&_lid=a&_tid=1&lang=en`)
+    const token = await import('../src/auth/token.js')
+    const s60 = await import('../src/auth/strategy60.js')
+    s60.bootstrap()
+    return { token, s60 }
+  }
+  afterEach(() => { vi.unstubAllEnvs(); window.history.replaceState({}, '', '/') })
+
+  it('explicit true keeps the legacy path', async () => {
+    const { token } = await run('true')
+    expect(token.getToken()).toBe(tok)
+  })
+
+  it('false is case- and space-insensitive and never stores the token anywhere', async () => {
+    for (const flag of ['false', 'FALSE', ' False ']) {
+      sessionStorage.clear()
+      const { token } = await run(flag)
+      expect(token.getToken()).toBeNull()
+      expect(JSON.stringify({ ...sessionStorage })).not.toContain(tok)
+      expect(window.location.search).not.toContain('_at=')
+    }
+  })
+
+  it('the other parameters survive when the token is dropped', async () => {
+    await run('false')
+    expect(window.location.search).toContain('_lid=a')
+    expect(window.location.search).toContain('lang=en')
+  })
+
+  it('identity still resolves from the identity parameters when the URL token is ignored', async () => {
+    const { s60 } = await run('false')
+    expect(s60.resolve()).toMatchObject({ loginId: 'a', tenantId: '1' })
+  })
+})

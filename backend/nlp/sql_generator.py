@@ -22,8 +22,8 @@ from typing import Any, Optional
 
 import requests
 
-from .. import ai_audit
-from .llm_guard import CircuitBreaker, LLM_SLOT_WAIT_SEC, llm_slots, make_session
+from .. import ai_audit, metrics
+from .llm_guard import CircuitBreaker, LLM_SLOT_WAIT_SEC, llm_slots, make_session, note_if_cut_off
 from .prompt_safety import DATA_NOTICE, sanitize_question
 from .nlp_config import (
     DESCRIPTION_SAMPLES_PATH,
@@ -561,7 +561,22 @@ def _strip_sql_fences(raw: str) -> str:
     return raw.rstrip().rstrip(';')
 
 
-def _call_ollama(
+def _call_ollama(*args, **kwargs):
+    """The model call, with outcome and latency recorded (backend/metrics.py, L-17)."""
+    started = time.perf_counter()
+    try:
+        result = _call_ollama_impl(*args, **kwargs)
+    except Exception:
+        metrics.inc("dv_llm_calls_total", caller="sql", outcome="failed")
+        raise
+    else:
+        metrics.inc("dv_llm_calls_total", caller="sql", outcome="ok")
+        return result
+    finally:
+        metrics.observe("dv_llm_call_seconds", time.perf_counter() - started, caller="sql")
+
+
+def _call_ollama_impl(
     prompt_text: str, model_name: str, model_profile: dict, attempt: int = 1
 ) -> tuple:
     """Returns (response_text, latency_ms).
@@ -616,11 +631,13 @@ def _call_ollama(
     # unguarded, that raised ValueError past the handlers above as a 500 with no
     # fallback and no cooldown (code review LLM-05).
     try:
-        text = response.json().get("response", "")
+        body = response.json()
+        text = body.get("response", "")
     except ValueError as exc:
         logger.error("[nlp.sql_generator] Ollama returned a non-JSON body | model=%s | attempt=%d", model_name, attempt)
         _breaker.trip()
         raise RuntimeError("The language model returned an unreadable response.") from exc
+    note_if_cut_off("sql_generator", body, model_name, attempt)
     logger.info(
         "[nlp.sql_generator] Ollama responded | model=%s | attempt=%d | ms=%d | response_chars=%d",
         model_name, attempt, latency_ms, len(text),

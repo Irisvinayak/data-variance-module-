@@ -1,6 +1,6 @@
 {
-  "published_at": "2026-09-15T05:46:10+00:00",
-  "label": "QCB 6.0 corrected table names + row labels",
+  "published_at": "2026-10-14T07:39:28+00:00",
+  "label": "QCB 6.0 + return-name QA pairs (2597)",
   "src": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging",
   "dest": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\current",
   "returns": [
@@ -10,7 +10,7 @@
     "QCB_F015_Foreign Currency Net Open Positions"
   ],
   "tables": 10,
-  "qa_pairs": 0,
+  "qa_pairs": 2597,
   "files": [
     "concept_map.json",
     "taxonomies.json",
@@ -26,6 +26,8 @@
     "row_label_meta.pkl",
     "concept_index.faiss",
     "concept_meta.pkl",
+    "qa_index.faiss",
+    "qa_meta.pkl",
     "qa_pairs.json",
     "schema.json",
     "build_report.json"
@@ -46,9 +48,11 @@
     "row_label_meta.pkl": "10263898f9d5442ae902ba939d5c60b4031ff2ad135785ad1a47c33510f18ae2",
     "concept_index.faiss": "6190481130059c702768ed08f1cd9a41ffcc9ae4f4fd2ae810fe0440379d4d1e",
     "concept_meta.pkl": "542f0193dd8db213f44584b37cf9dc34d256bfa4fbab320aff657b9140555ad0",
-    "qa_pairs.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "qa_index.faiss": "2af6e713113f5348c7a4ab68b61889f6eab941465546649510de2c6cf6c49b00",
+    "qa_meta.pkl": "67254c8934db01542170e91b9e65dfd46544941d08cd3db8b135f9f48af5257a",
+    "qa_pairs.json": "4fd00980b63052c2c19102079607b823a525d880e8bf883898c84202a875f47b",
     "schema.json": "9cf54ca8d1d3e3abf615dbd5b024c86e213625f0d2080d645267833465799228",
-    "build_report.json": "845f97050c1601fbfe8f284d20d560564edc44d66e6e42b42ded6ec218446ac6"
+    "build_report.json": "934bf8ca703242ef898f2885c6b148d5472892f7071603131b0f4fd5bc604e2a"
   },
   "verification": {
     "ok": true,
@@ -69,6 +73,8 @@
       "row_label_meta.pkl",
       "concept_index.faiss",
       "concept_meta.pkl",
+      "qa_index.faiss",
+      "qa_meta.pkl",
       "qa_pairs.json",
       "schema.json",
       "build_report.json"
@@ -80,13 +86,8 @@
       "QCB_F015_Foreign Currency Net Open Positions"
     ],
     "tables": 10,
-    "qa_pairs": 0,
-    "returns_without_qa": [
-      "QCB_F010_Maturity Ladder of Assets & Liabilities",
-      "QCB_F013_Breakdown of exposures by geography",
-      "QCB_F014_Breakdown of Funding by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
-    ]
+    "qa_pairs": 2597,
+    "returns_without_qa": []
   },
   "rollback_available": true
 }

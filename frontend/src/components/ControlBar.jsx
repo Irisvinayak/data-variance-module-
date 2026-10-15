@@ -9,8 +9,10 @@
  * guaranteed to have data rather than guessing one on a calendar.
  */
 import { useRef, useState } from 'react'
+import { PropTypes, candidateShape, clarificationShape, interpretationShape, returnInfoShape } from '../propTypes.js'
 import { VARIANCE_STEPS, COMPARISON_MODES, freqLabel } from '../types.js'
 import useClickOutside from '../hooks/useClickOutside.js'
+import useListboxNav from '../hooks/useListboxNav.js'
 
 const SCORE_BADGE = (score) => {
   if (score >= 100) return { label: 'Exact', cls: 'score-exact' }
@@ -41,6 +43,9 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
     setOpen(false)
     onSelect(c)
   }
+
+  // Arrow keys / Home / End / Enter over the filtered list; focus stays in the filter input.
+  const nav = useListboxNav(filtered, handleSelect)
 
   return (
     <div
@@ -75,6 +80,7 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               autoFocus
+              {...nav.inputProps}
             />
             <button
               className="disambig-cancel-btn"
@@ -88,20 +94,19 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
           </div>
 
           {/* Candidate list */}
-          <div className="disambig-list" role="listbox" aria-label="Matching returns">
+          <div className="disambig-list" aria-label="Matching returns" {...nav.listProps}>
             {filtered.length === 0 ? (
               <div className="disambig-empty">No matches for &ldquo;{filter}&rdquo;</div>
             ) : (
-              filtered.map((c) => {
+              filtered.map((c, i) => {
                 const badge = SCORE_BADGE(c.score)
                 return (
                   <button
                     key={c.return_id}
-                    className="disambig-item"
+                    className={'disambig-item' + (i === nav.active ? ' disambig-item-active' : '')}
                     onClick={() => handleSelect(c)}
                     type="button"
-                    role="option"
-                    aria-selected="false"
+                    {...nav.optionProps(i)}
                   >
                     <span className={`ctrl-score-badge ${badge.cls}`}>
                       {badge.label}
@@ -314,11 +319,23 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
     onOthers(othersText)
   }
 
+  const nav = useListboxNav(filtered, handleSelect)
+
   return (
     <div className="nlp-clarify-panel">
       <div className="nlp-clarify-question">{question}</div>
-      <div className="disambig-dropdown-wrap" ref={dropRef}>
-        <button className="disambig-trigger" onClick={() => setOpen((o) => !o)} type="button">
+      <div
+        className="disambig-dropdown-wrap"
+        ref={dropRef}
+        onKeyDown={(e) => { if (e.key === 'Escape' && open) { setOpen(false); onCancel() } }}
+      >
+        <button
+          className="disambig-trigger"
+          onClick={() => setOpen((o) => !o)}
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+        >
           <span className="disambig-trigger-icon">⚡</span>
           <span className="disambig-trigger-label">
             {options.length} return{options.length !== 1 ? 's' : ''} available
@@ -332,9 +349,11 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
               <input
                 className="disambig-search-input"
                 placeholder="Filter returns…"
+                aria-label="Filter returns"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 autoFocus
+                {...nav.inputProps}
               />
               {skippable && (
                 <button
@@ -349,22 +368,24 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
                 className="disambig-cancel-btn"
                 onClick={() => { setOpen(false); onCancel() }}
                 title="Cancel"
+                aria-label="Cancel"
                 type="button"
               >
                 ✕
               </button>
             </div>
 
-            <div className="disambig-list">
+            <div className="disambig-list" aria-label="Available returns" {...nav.listProps}>
               {filtered.length === 0 ? (
                 <div className="disambig-empty">No matches for &ldquo;{filter}&rdquo;</div>
               ) : (
-                filtered.map((opt) => (
+                filtered.map((opt, i) => (
                   <button
                     key={opt.id}
-                    className="disambig-item"
+                    className={'disambig-item' + (i === nav.active ? ' disambig-item-active' : '')}
                     onClick={() => handleSelect(opt)}
                     type="button"
+                    {...nav.optionProps(i)}
                   >
                     <span className="disambig-item-name">{opt.label}</span>
                   </button>
@@ -858,4 +879,76 @@ export default function ControlBar({
       )}
     </div>
   )
+}
+
+DisambigDropdown.propTypes = {
+  candidates: PropTypes.arrayOf(candidateShape).isRequired,
+  returnName: PropTypes.string,
+  onSelect: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+}
+
+NlpReturnPicker.propTypes = {
+  clarification: clarificationShape.isRequired,
+  onSelect: PropTypes.func.isRequired,
+  onSkip: PropTypes.func,
+  onCancel: PropTypes.func.isRequired,
+  onOthers: PropTypes.func,
+}
+
+NlpClarificationPanel.propTypes = {
+  clarification: clarificationShape.isRequired,
+  onSkip: PropTypes.func,
+  onCancel: PropTypes.func.isRequired,
+  onOthers: PropTypes.func,
+}
+
+NlpInterpretation.propTypes = {
+  interpretation: interpretationShape,
+}
+
+DateField.propTypes = {
+  selectedDates: PropTypes.arrayOf(PropTypes.string).isRequired,
+  setSelectedDates: PropTypes.func.isRequired,
+  availableDates: PropTypes.arrayOf(PropTypes.string),
+  datesLoading: PropTypes.bool,
+  datesError: PropTypes.bool,
+  onRetryDates: PropTypes.func,
+}
+
+ControlBar.propTypes = {
+  step: PropTypes.string,
+  returnName: PropTypes.string,
+  setReturnName: PropTypes.func.isRequired,
+  returnInfo: returnInfoShape,
+  tables: PropTypes.array,
+  tableName: PropTypes.string,
+  setTableName: PropTypes.func.isRequired,
+  selectedDates: PropTypes.arrayOf(PropTypes.string).isRequired,
+  setSelectedDates: PropTypes.func.isRequired,
+  availableDates: PropTypes.arrayOf(PropTypes.string),
+  datesLoading: PropTypes.bool,
+  datesError: PropTypes.bool,
+  onRetryDates: PropTypes.func,
+  periods: PropTypes.number,
+  setPeriods: PropTypes.func.isRequired,
+  comparisonMode: PropTypes.string,
+  setComparisonMode: PropTypes.func.isRequired,
+  loading: PropTypes.bool,
+  error: PropTypes.string,
+  candidates: PropTypes.arrayOf(candidateShape),
+  handleFindReturn: PropTypes.func.isRequired,
+  handleCompute: PropTypes.func.isRequired,
+  handleReset: PropTypes.func.isRequired,
+  handleSelectCandidate: PropTypes.func.isRequired,
+  nlpQuery: PropTypes.string,
+  setNlpQuery: PropTypes.func.isRequired,
+  handleNlpSearch: PropTypes.func.isRequired,
+  handleVoiceInput: PropTypes.func,
+  nlpClarification: clarificationShape,
+  nlpInterpretation: interpretationShape,
+  onClarificationSelect: PropTypes.func,
+  onClarificationSkip: PropTypes.func,
+  onClarificationCancel: PropTypes.func,
+  onClarificationOthers: PropTypes.func,
 }

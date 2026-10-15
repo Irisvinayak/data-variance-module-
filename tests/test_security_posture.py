@@ -248,3 +248,63 @@ def test_posture_warnings_include_the_llm_endpoint():
     out = sp.posture_warnings(**SAFE, llm_url="http://3.109.51.228/x", llm_url_is_default=False)
     assert any("clear text" in w for w in out)
     assert sp.posture_warnings(**SAFE) == []                   # omitted -> not judged
+
+
+# ── C-01: start-up refuses configurations that would be open or unusable ─────
+
+STRONG = "test-only-secret-" + "x" * 32          # a placeholder for the tests, not a real secret
+
+
+def _identity(monkeypatch, mode, secret="", invalid=False, auth=True):
+    _settings(monkeypatch, AUTH_ENABLED=auth, IDENTITY_MODE=mode, IDENTITY_MODE_INVALID=invalid,
+              JWT_SECRET=secret, REQUIRE_AUTH=False)
+
+
+def test_required_mode_without_a_secret_refuses_to_start(monkeypatch):
+    _identity(monkeypatch, "required", secret="")
+    with pytest.raises(RuntimeError, match="DV_IDENTITY_MODE=required but DV_JWT_SECRET is not set"):
+        sp.log_security_posture()
+
+
+def test_the_application_itself_refuses_to_start_in_that_case(monkeypatch):
+    _identity(monkeypatch, "required", secret="")
+    monkeypatch.setattr(cfg, "NLP_WARMUP", False)
+    with pytest.raises(RuntimeError, match="DV_JWT_SECRET"):
+        with TestClient(app):
+            pass
+
+
+def test_required_mode_with_a_secret_starts(monkeypatch):
+    _identity(monkeypatch, "required", secret=STRONG)
+    assert sp.log_security_posture() == []
+
+
+def test_a_mistyped_identity_mode_refuses_to_start_instead_of_running_open(monkeypatch):
+    _identity(monkeypatch, "off", invalid=True)
+    with pytest.raises(RuntimeError, match="unrecognised value"):
+        sp.log_security_posture()
+
+
+def test_optional_mode_without_a_secret_only_warns(monkeypatch, caplog):
+    _identity(monkeypatch, "optional", secret="")
+    with caplog.at_level(logging.WARNING, logger="backend.security"):
+        warnings = sp.log_security_posture()
+    assert any("DV_JWT_SECRET is empty" in w for w in warnings)
+
+
+def test_off_mode_needs_no_secret_and_still_starts(monkeypatch):
+    _identity(monkeypatch, "off", secret="")
+    sp.log_security_posture()
+
+
+def test_the_mode_parser_marks_unknown_values_invalid():
+    import os
+    import subprocess
+    import sys
+
+    code = "import backend.config.settings as s; print(s.IDENTITY_MODE, s.IDENTITY_MODE_INVALID)"
+    for value, expected in (("requird", "off True"), ("REQUIRED", "required False"), ("optional", "optional False")):
+        env = {**os.environ, "DV_IDENTITY_MODE": value, "PYTHONUTF8": "1"}
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env,
+                             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))), check=False)
+        assert out.stdout.strip() == expected, (value, out.stderr[-300:])

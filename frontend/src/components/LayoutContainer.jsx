@@ -16,6 +16,7 @@
  *   BOTTOM : Analysis area — hidden until first compute succeeds.
  */
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
+import { PropTypes } from '../propTypes.js'
 import { Panel, Group, Separator } from 'react-resizable-panels'
 
 import { findReturnTables, computeVariance, getMyReturns, resolveNlQuery, getAvailableDates, SKIP_ANSWER } from '../api.js'
@@ -804,14 +805,9 @@ export default function LayoutContainer({ loginId = '' }) {
         </div>
       )}
 
-      {/* Data-quality notes from the backend: a key that is not unique, and rows that
-          existed in an earlier period but are gone (code review H-13, M-15). */}
-      {result?.duplicate_notice && (
-        <div className="lc-truncation-banner" role="status">{result.duplicate_notice}</div>
-      )}
-      {result?.removed_notice && (
-        <div className="lc-truncation-banner" role="status">{result.removed_notice}</div>
-      )}
+      {/* duplicate_notice / removed_notice (H-13, M-15) still arrive from the backend but
+          are deliberately not shown: they are mapping-configuration warnings, not
+          something the end user can act on. */}
 
       {/* ── Analysis area ────────────────────────────────────────────── */}
       {/* react-resizable-panels treats a bare number on minSize/maxSize/
@@ -938,4 +934,8 @@ export default function LayoutContainer({ loginId = '' }) {
 
     </div>
   )
+}
+
+LayoutContainer.propTypes = {
+  loginId: PropTypes.string,
 }
