@@ -28,6 +28,7 @@ import TablePanel         from './TablePanel.jsx'
 // exists (code review L-20).
 const VisualizationPanel = lazy(() => import('./VisualizationPanel.jsx'))
 import NoticeToast        from './NoticeToast.jsx'
+import NlpInsights        from './NlpInsights.jsx'
 
 // Stable identity, so the "no hidden columns" case hands the same array down
 // on every render instead of a fresh literal.
@@ -144,6 +145,9 @@ export default function LayoutContainer({ loginId = '' }) {
   // Only one answer is ever on screen, and it must be attributable to the
   // section that produced it: 'manual' | 'nlp' | null.
   const resultSourceRef = useRef(null)
+  // The last NL answer's conversation_state (backend/nlp/conversation.py), sent
+  // with the next question so a follow-up refines that answer.
+  const conversationRef = useRef(null)
   // The query text the current NLP result/clarification belongs to.
   const lastNlpQueryRef = useRef('')
   const [tableState,    setTableState]    = useState('normal')
@@ -532,6 +536,13 @@ export default function LayoutContainer({ loginId = '' }) {
     clearPage()
     setNlpQuery('')
     lastNlpQueryRef.current = ''
+    conversationRef.current = null
+  }
+
+  // "New question": the next query starts over instead of refining the last answer.
+  const handleNewConversation = () => {
+    conversationRef.current = null
+    setResult((r) => (r ? { ...r, conversation_state: null, interpretation: { ...(r.interpretation || {}), followup_of: null } } : r))
   }
 
   // Typing a NEW question clears the previous one's content straight away,
@@ -554,6 +565,7 @@ export default function LayoutContainer({ loginId = '' }) {
       setNlpClarification(null)
       setNlpInterpretation(null)
     }
+    conversationRef.current = null
     if (resultSourceRef.current === 'nlp') {
       setResult(null)
       resultSourceRef.current = null
@@ -619,6 +631,7 @@ export default function LayoutContainer({ loginId = '' }) {
         dimension:            activeClarification?.dimension,
         clarificationAnswer:  selectedOption?.id,
         resolvedContext:      activeClarification?.resolvedContext,
+        conversationState:    conversationRef.current,
       })
       if (seq !== requestSeqRef.current) return
 
@@ -640,6 +653,8 @@ export default function LayoutContainer({ loginId = '' }) {
       }
 
       setNlpClarification(null)
+      // The next question may be a follow-up of this answer.
+      conversationRef.current = res.conversation_state ?? null
       setResult(res)
       resultSourceRef.current = 'nlp'
       applyMissingPeriodsNotice(res)
@@ -670,10 +685,22 @@ export default function LayoutContainer({ loginId = '' }) {
   const handleClarificationOthers = (extraInfo) => {
     const extra = extraInfo.trim()
     if (!extra) return
+    // A typed threshold ("15%", "5 lakh") answers the pending question itself.
+    if (nlpClarification?.dimension === 'threshold') {
+      handleNlpSearch(nlpQuery, { id: extra })
+      return
+    }
     const combined = `${nlpQuery} ${extra}`.trim()
+    // A return already picked (or named) stays pinned: the extra detail only
+    // narrows the search inside that return, never widens it to all returns.
+    const pinnedReturnId = nlpClarification?.resolvedContext?.return_id
     setNlpQuery(combined)
     setNlpClarification(null)
-    handleNlpSearch(combined, undefined, null)
+    if (pinnedReturnId) {
+      handleNlpSearch(combined, { id: pinnedReturnId }, { dimension: 'return', resolvedContext: { query: combined } })
+    } else {
+      handleNlpSearch(combined, undefined, null)
+    }
   }
 
   const handleVoiceInput = () => {}
@@ -803,6 +830,10 @@ export default function LayoutContainer({ loginId = '' }) {
           {result.truncation_notice ||
             'The result was cut off at the maximum number of rows, so some rows and variances may be incomplete.'}
         </div>
+      )}
+
+      {result && resultSourceRef.current === 'nlp' && (
+        <NlpInsights result={result} onNewConversation={handleNewConversation} />
       )}
 
       {/* duplicate_notice / removed_notice (H-13, M-15) still arrive from the backend but

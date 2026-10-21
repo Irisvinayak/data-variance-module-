@@ -1247,3 +1247,73 @@
   outline: 2px solid var(--accent, #2f6fdb);
   outline-offset: -2px;
 }
+
+/* ── NLP written answer (NlpInsights.jsx) ─────────────────────────────────── */
+.nlp-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  max-height: 32vh;
+  overflow: auto;
+}
+.nlp-insights-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.nlp-insights-summary { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.nlp-insights-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.nlp-insights-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.nlp-insights-btn:hover { border-color: var(--text); }
+.nlp-insights-line { display: flex; flex-wrap: wrap; gap: 6px; }
+.nlp-insights-note::before { content: "ⓘ "; opacity: 0.7; }
+.nlp-insights-muted { opacity: 0.75; }
+.nlp-insights-block { border-top: 1px solid var(--border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.nlp-insights-subhead { font-weight: 600; }
+.nlp-insights-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.nlp-insights-scroll { overflow-x: auto; }
+.nlp-insights-table { border-collapse: collapse; font-size: 0.75rem; }
+.nlp-insights-table th, .nlp-insights-table td { padding: 2px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.nlp-insights-table th:first-child, .nlp-insights-table td:first-child { text-align: left; }
+.nlp-insights-flag { font-weight: 700; text-decoration: underline wavy; }
+
+/* Choice questions: absolute or %? what threshold? which period? */
+.nlp-choice-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* "Matched" chip with many columns: first few shown, full list on hover / focus. */
+.nlp-chip-hover { position: relative; cursor: help; }
+.nlp-chip-more { opacity: 0.75; font-weight: 500; white-space: nowrap; }
+.nlp-chip-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  max-width: min(420px, 90vw);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  font-size: 0.75rem;
+}
+.nlp-chip-hover:hover .nlp-chip-popover,
+.nlp-chip-hover:focus .nlp-chip-popover,
+.nlp-chip-hover:focus-within .nlp-chip-popover { display: flex; }
+.nlp-chip-popover-title { font-weight: 700; margin-bottom: 2px; }
+.nlp-chip-popover-item { overflow-wrap: anywhere; }

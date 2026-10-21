@@ -126,6 +126,64 @@ periods" into a concrete `reporting_date` + `reporting_period`. With no date in
 the question it defaults to the **latest date that actually has data**, not
 today — so a question asked between submissions still returns something.
 
+### Variation analysis (what to do with the numbers)
+
+After the variance is computed, `backend/nlp/operation_parser.py` reads what the
+question asks for (rules, not an LLM) and `backend/nlp/analysis.py` /
+`backend/nlp/series.py` apply it. Every number comes from `compute_variance`;
+the analysis only filters, ranks, sorts and counts. English prompts only.
+
+| Asked | Done |
+|---|---|
+| increases / decreases, `> 10%`, `between 10% and 30%`, `above ₹10 lakh`, either direction | filter cells |
+| top / bottom N, highest / lowest (plural "elements" = 10) | rank cells, or columns for "which column…" (direction respected) |
+| no change, new from zero, became zero | status filters; "columns with zero variation" = whole column unchanged |
+| "significant / major changes" (no number) | asks the threshold; skip = `DV_NLP_SIGNIFICANT_PCT` (10%) |
+| "highest variation" (absolute or %?) | asks the measure |
+| "Compare March" (no year, nothing to compare with) | asks: previous period or same period last year |
+| sort by %, absolute, current, previous, name | orders rows, keeps them all |
+| "where current value is above ₹1 crore", "records where amount > X" | limit on the record's value, not its change |
+| "for Mumbai branch", "only retail loans", "Asset-related elements" | keeps rows whose text columns (or label) hold that word |
+| trend, MoM / QoQ / YoY, last N periods, continuously increasing | series over up to `DV_NLP_TREND_MAX_PERIODS` real dates |
+| unusual / outliers / "need my attention" | % change outside Tukey's fences (Q1/Q3 ± 1.5 × IQR); over a series, \|z\| > 2. The rule is stated in the answer |
+| summary / executive / increases and decreases separately | `summary_detail`: counts and the largest movers each way |
+| how is it calculated / formula | `formula` |
+
+The response adds `summary`, `applied_filters`, `analysis_notes` (every
+assumption, e.g. what "significant" meant), `column_summary`, `series`,
+`provenance` (dates, row counts, duplicates, formula) — shown by
+`frontend/src/components/NlpInsights.jsx`, which also exports the rows as CSV.
+
+**Refuse, don't substitute.** A period the user names that has no data answers
+404 "Data is not available for … Data is available from … to …" instead of the
+nearest date; a column name matching nothing answers 404 with the available
+columns; an unknown element says "not found". Rows with duplicate keys are left
+out of rankings.
+
+### Follow-up questions
+
+Every answer carries `conversation_state` (turns, return, table, dates, the
+identifiers shown). Sent back with the next question, a follow-up — "only
+decreases", "more than 20%", "show top 10", "absolute instead of percentage",
+"show details of the first one", "compare the same element for the last 6
+months", "same analysis for liabilities" — refines that answer on the same
+return, table and dates (`backend/nlp/conversation.py`). "Details of the first
+one" returns `drill_down`: current, previous, absolute and % change per column
+and the element's stored row. Omitting the state (UI: **New question**) starts
+over.
+
+Refinement answers (`dimension` = `measure`, `threshold`, `period`) travel in
+`resolved_context["refine"]`, like the other clarification rounds.
+
+**Switches** (`backend/nlp/nlp_config.py`, all default `true`; `false` restores
+the earlier behaviour): `DV_NLP_STRICT_PERIODS`, `DV_NLP_STRICT_NAMES`,
+`DV_NLP_ASK_MEASURE`, `DV_NLP_ASK_THRESHOLD`, `DV_NLP_CONVERSATION`,
+`DV_NLP_TREND`. Tuning: `DV_NLP_SIGNIFICANT_PCT`, `DV_NLP_DEFAULT_RANK_N`,
+`DV_NLP_TREND_MAX_PERIODS`, `DV_NLP_ANOMALY_IQR_K`, `DV_NLP_ANOMALY_Z`.
+
+Not covered: Hinglish/Hindi prompts, comparing two different returns
+(scenario group 21), server-side Excel generation (the UI exports CSV).
+
 ### What limits it
 
 Only returns covered by the embedding index can be resolved. A return that

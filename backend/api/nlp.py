@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -95,11 +96,67 @@ def _restrict_result_columns(computed: dict, requested_columns: list) -> dict:
     return {**computed, "columns": keep, "display_columns": display_columns, "rows": filtered_rows}
 
 
+def _target_columns(computed: dict, spec, fallback: list, table_name: str) -> list:
+    """The computed columns matching the names in spec.target_columns (by identifier
+    or schema description). Unmatched names become notes on `spec`; when nothing
+    matches at all, `fallback` (the resolver's choice) is kept."""
+    from ..nlp import schema_info
+    from ..nlp.analysis import resolve_target_columns
+
+    available = computed.get("columns") or []
+    keep, missing = resolve_target_columns(
+        spec.target_columns, available, lambda c: schema_info.column_description(table_name, c))
+    if missing:
+        shown = ", ".join(schema_info.column_description(table_name, c) or c for c in available)
+        for name in missing:
+            spec.notes.append(f"Column '{name}' was not found in this table. Available columns: {shown}.")
+    return keep or fallback
+
+
 # Sentinel `clarification_answer` value meaning "don't ask me, just proceed
 # with your best guess" — both dimensions below treat it identically: skip
 # the pin/ambiguity-gate and hand the (possibly still-ambiguous) shortlist
 # straight to resolve_intent, letting the LLM pick on its own.
 _SKIP_ANSWER = "__skip__"
+
+# `clarification_answer` for the "date" dimension meaning "latest date, compared
+# with the previous available one" — the same as skipping the question.
+_LATEST_DATE_ANSWER = "latest"
+_DATE_ANSWER_RE = re.compile(r"^\d{2}-[A-Za-z]{3}-\d{4}$")
+
+
+def _build_date_clarification(
+    query: str, cands: list, return_id: str, table_name: str, limit: int,
+) -> dict:
+    """Ask which reporting date to analyse when the query names none.
+
+    `cands` are the table's real dates, newest first. Each option is compared
+    with the previous available date; the first option is the default the
+    pipeline would otherwise have used silently. resolved_context pins the
+    return and table so the answer re-enters with no ambiguity left to resolve."""
+    from ..nlp.date_resolver import _fmt
+
+    options = []
+    for i, d in enumerate(cands[:limit]):
+        prev = cands[i + 1] if i + 1 < len(cands) else None
+        vs = f" vs {_fmt(prev)}" if prev else " (no earlier date)"
+        options.append({
+            "id": _LATEST_DATE_ANSWER if i == 0 else _fmt(d),
+            "label": (f"Latest: {_fmt(d)}" if i == 0 else _fmt(d)) + vs,
+        })
+    return {
+        "needs_clarification": True,
+        "dimension": "date",
+        "question": (
+            "You didn't mention a date. Which reporting date do you want? "
+            "Skip to use the latest date compared with the previous available date."
+        ),
+        "options": options,
+        "skippable": True,
+        "allow_other": False,
+        "confidence": 1.0,
+        "resolved_context": {"query": query, "return_id": return_id, "table": table_name},
+    }
 
 def _build_return_clarification(query: str, ctx: RequestContext, restrict_to: list | None = None) -> dict:
     """Build a needs_clarification response for the "no table/return signal
@@ -225,6 +282,34 @@ def _build_table_clarification(
         "confidence": round(table_confidence, 3),
         "resolved_context": resolved_context,
     }
+
+
+def _twin_return_ids(shortlist: dict) -> list:
+    """Return ids whose shortlisted table has exactly the same columns as the
+    top table — the same form section shipped in several returns (every QCB
+    return has an identical FILING_INFO table). Scores cannot separate such
+    twins, so a query that names no return must be asked which one it means.
+    Empty unless at least two different returns hold a twin."""
+    from ..nlp.index_store import meta_by_table
+    from ..nlp.nlp_config import COLUMN_INDEX_PATH, COLUMN_META_PATH
+
+    tables = shortlist.get("tables") or []
+    if len(tables) < 2:
+        return []
+    grouped = meta_by_table(COLUMN_INDEX_PATH, COLUMN_META_PATH)
+
+    def cols(t: dict) -> frozenset:
+        return frozenset(str(c.get("column", "")).upper() for c in grouped.get(t["table"].upper(), []))
+
+    top_cols = cols(tables[0])
+    if not top_cols:
+        return []
+    ids: list = []
+    for t in tables:
+        rid = t.get("return_id")
+        if rid and rid not in ids and cols(t) == top_cols:
+            ids.append(rid)
+    return ids if len(ids) > 1 else []
 
 
 def _shortlist_for_return(
@@ -391,13 +476,13 @@ def _nlp_stage(stage: str, ctx: RequestContext, query: str, fn, *args, **kwargs)
 
 
 # ── POST /variance/nlresolve ───────────────────────────────────────────────────
-@router.post(
-    "/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"],
-    response_model=NlResolveResponse, response_model_exclude_unset=True,
-)
-def variance_nlresolve(
+def _nlresolve_core(
     payload: NLResolveRequest,
-    ctx: RequestContext = Depends(require_login),
+    ctx: RequestContext,
+    *,
+    spec_override=None,
+    date_query: str | None = None,
+    dates_override: list | None = None,
 ) -> dict:
     """Resolve a natural-language query AND compute the result in one shot.
 
@@ -509,6 +594,10 @@ def variance_nlresolve(
                 ensure_safe_return_id(answer)
             elif payload.dimension == "table":
                 ensure_safe_table_ref(answer)
+            elif payload.dimension == "date" and answer != _LATEST_DATE_ANSWER and not _DATE_ANSWER_RE.match(answer):
+                raise InvalidInput("Invalid reporting date.")
+        if resolved_context.get("table"):
+            ensure_safe_table_ref(resolved_context["table"])
     except InvalidInput as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -583,6 +672,26 @@ def variance_nlresolve(
                 ctx, query, answer,
             )
 
+    elif payload.dimension == "date" and answer:
+        # Answering "which date?": the return and table were settled on the
+        # previous round and echoed back in resolved_context — re-pin them so
+        # nothing is re-guessed. Only the date changes.
+        pinned_table = resolved_context.get("table")
+        shortlist = (
+            _nlp_stage("scoped_retrieval", ctx, query, _shortlist_for_table, pinned_table, query, ctx, analysis=analysis)
+            if pinned_table else None
+        )
+        if shortlist is None and pinned_return_id:
+            shortlist = _nlp_stage(
+                "scoped_retrieval", ctx, query,
+                _shortlist_for_return, pinned_return_id, query, ctx, analysis=analysis,
+            )
+        if shortlist is None or not shortlist["tables"]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The selected data is no longer available — please ask again.",
+            )
+
     else:
         # First pass for this query — no clarification answer yet.
         # The query names a return, but the mention fits more than one — most
@@ -606,76 +715,116 @@ def variance_nlresolve(
                 "interpretation": interpretation,
             }
 
-        shortlist = _nlp_stage("retrieval", ctx, query, get_relevant_schema, query, ctx, analysis)
-        table_confidence = shortlist.get("table_confidence", 0.0)
-        table_ambiguous = shortlist.get("table_ambiguous", False)
-
-        weak_retrieval = not shortlist["tables"] or table_confidence < CONFIDENCE_ASK_FLOOR
-        if weak_retrieval:
-            # Retrieval alone isn't confident there's a real match — before
-            # asking a broad "which return?" question, check whether the
-            # query TEXT already names a known return explicitly. A literal
-            # name mention is stronger evidence than a coincidental (or
-            # coincidentally absent) embedding score.
-            named_return_ids = analysis.return_ids
-
-            if len(named_return_ids) == 1:
-                named_shortlist = _nlp_stage(
-                    "scoped_retrieval", ctx, query,
-                    _shortlist_for_return, named_return_ids[0], query, ctx,
-                    analysis=analysis,
-                )
-                if named_shortlist is not None:
-                    logger.info(
-                        "[api.nlp] /variance/nlresolve | %s | query=%r | "
-                        "query names return_id=%s directly -> using it instead of asking",
-                        ctx, query, named_return_ids[0],
-                    )
-                    shortlist = named_shortlist
-                    table_confidence = shortlist["table_confidence"]
-                    table_ambiguous = shortlist["table_ambiguous"]
-                    weak_retrieval = False
-
-            if weak_retrieval:
-                # Narrow the options to returns the query actually gave SOME
-                # signal for — a literal name mention first, else whichever
-                # return_ids the query's own (too-low-confidence-to-auto-
-                # proceed) embedding shortlist already surfaced. Only when
-                # neither found anything at all does this fall through to
-                # None, i.e. the full authorized-return list, as a last
-                # resort — see _build_return_clarification's docstring.
-                query_related_return_ids = list(named_return_ids)
-                if not query_related_return_ids:
-                    seen: set = set()
-                    for t in shortlist["tables"]:
-                        rid = t.get("return_id")
-                        if rid and rid not in seen:
-                            seen.add(rid)
-                            query_related_return_ids.append(rid)
-
+        # The query names exactly one return: search ONLY that return's
+        # embeddings. Free-form retrieval would rank every return's tables and
+        # can still answer from another return when the named one scores low.
+        # Ambiguity left inside the return is asked about below, scoped to it.
+        scoped_return_id = analysis.return_ids[0] if len(analysis.return_ids) == 1 else None
+        shortlist = None
+        if scoped_return_id:
+            shortlist = _nlp_stage(
+                "scoped_retrieval", ctx, query,
+                _shortlist_for_return, scoped_return_id, query, ctx, analysis=analysis,
+            )
+            if shortlist is not None and shortlist["tables"]:
                 logger.info(
-                    "[api.nlp] /variance/nlresolve | %s | query=%r | no usable table/return signal "
-                    "(table_confidence=%.3f, query_related_return_ids=%s) -> asking for return",
-                    ctx, query, table_confidence, query_related_return_ids,
+                    "[api.nlp] /variance/nlresolve | %s | query=%r | names return_id=%s "
+                    "-> searching only its %d table(s)",
+                    ctx, query, scoped_return_id, len(shortlist["tables"]),
+                )
+                if shortlist["table_ambiguous"]:
+                    return {
+                        **_build_table_clarification(
+                            query, shortlist, shortlist["table_confidence"], return_id=scoped_return_id,
+                        ),
+                        "interpretation": interpretation,
+                    }
+            else:
+                shortlist = None
+
+        if shortlist is None:
+            shortlist = _nlp_stage("retrieval", ctx, query, get_relevant_schema, query, ctx, analysis)
+            table_confidence = shortlist.get("table_confidence", 0.0)
+            table_ambiguous = shortlist.get("table_ambiguous", False)
+
+            weak_retrieval = not shortlist["tables"] or table_confidence < CONFIDENCE_ASK_FLOOR
+            if weak_retrieval:
+                # Retrieval alone isn't confident there's a real match — before
+                # asking a broad "which return?" question, check whether the
+                # query TEXT already names a known return explicitly. A literal
+                # name mention is stronger evidence than a coincidental (or
+                # coincidentally absent) embedding score.
+                named_return_ids = analysis.return_ids
+
+                if len(named_return_ids) == 1:
+                    named_shortlist = _nlp_stage(
+                        "scoped_retrieval", ctx, query,
+                        _shortlist_for_return, named_return_ids[0], query, ctx,
+                        analysis=analysis,
+                    )
+                    if named_shortlist is not None:
+                        logger.info(
+                            "[api.nlp] /variance/nlresolve | %s | query=%r | "
+                            "query names return_id=%s directly -> using it instead of asking",
+                            ctx, query, named_return_ids[0],
+                        )
+                        shortlist = named_shortlist
+                        table_confidence = shortlist["table_confidence"]
+                        table_ambiguous = shortlist["table_ambiguous"]
+                        weak_retrieval = False
+
+                if weak_retrieval:
+                    # Narrow the options to returns the query actually gave SOME
+                    # signal for — a literal name mention first, else whichever
+                    # return_ids the query's own (too-low-confidence-to-auto-
+                    # proceed) embedding shortlist already surfaced. Only when
+                    # neither found anything at all does this fall through to
+                    # None, i.e. the full authorized-return list, as a last
+                    # resort — see _build_return_clarification's docstring.
+                    query_related_return_ids = list(named_return_ids)
+                    if not query_related_return_ids:
+                        seen: set = set()
+                        for t in shortlist["tables"]:
+                            rid = t.get("return_id")
+                            if rid and rid not in seen:
+                                seen.add(rid)
+                                query_related_return_ids.append(rid)
+
+                    logger.info(
+                        "[api.nlp] /variance/nlresolve | %s | query=%r | no usable table/return signal "
+                        "(table_confidence=%.3f, query_related_return_ids=%s) -> asking for return",
+                        ctx, query, table_confidence, query_related_return_ids,
+                    )
+                    return {
+                        **_build_return_clarification(
+                            query, ctx,
+                            restrict_to=query_related_return_ids or None,
+                        ),
+                        "interpretation": interpretation,
+                    }
+
+            twins = _twin_return_ids(shortlist)
+            if twins:
+                logger.info(
+                    "[api.nlp] /variance/nlresolve | %s | query=%r | top table has identical twins "
+                    "in returns %s -> asking which return",
+                    ctx, query, twins,
                 )
                 return {
-                    **_build_return_clarification(
-                        query, ctx,
-                        restrict_to=query_related_return_ids or None,
-                    ),
+                    **_build_return_clarification(query, ctx, restrict_to=twins),
                     "interpretation": interpretation,
                 }
 
-        if table_ambiguous or table_confidence < CONFIDENCE_AUTO_PROCEED:
-            logger.info(
-                "[api.nlp] /variance/nlresolve | %s | query=%r | table ambiguous "
-                "(confidence=%.3f, tied=%s) -> asking clarification",
-                ctx, query, table_confidence, table_ambiguous,
-            )
-            return {
-                **_build_table_clarification(query, shortlist, table_confidence),
-                "interpretation": interpretation,
-            }
+            if table_ambiguous or table_confidence < CONFIDENCE_AUTO_PROCEED:
+                logger.info(
+                    "[api.nlp] /variance/nlresolve | %s | query=%r | table ambiguous "
+                    "(confidence=%.3f, tied=%s) -> asking clarification",
+                    ctx, query, table_confidence, table_ambiguous,
+                )
+                return {
+                    **_build_table_clarification(query, shortlist, table_confidence),
+                    "interpretation": interpretation,
+                }
 
     # Default to 1.0 for shortlists this route itself pinned down to exactly
     # one table (_shortlist_for_return/_shortlist_for_table, or the "return"
@@ -758,14 +907,78 @@ def variance_nlresolve(
     filter_col = shortlist_table_meta.get("filter_col") or "RDATE"
     report_freq = shortlist_table_meta.get("report_freq") or found.get("report_freq") or "M"
 
-    try:
-        reporting_date, reporting_period, comparison_dates, date_notes = resolve_reporting_date(
-            query, found["return_id"], resolved_table["table_name"], filter_col, report_freq,
-            ctx=ctx,
+    # No date in the query: ask which one, before showing anything. Skipping
+    # (or picking "latest") gives the latest date vs the previous available one.
+    from ..nlp.nlp_config import ASK_DATE_WHEN_MISSING, DATE_OPTIONS_LIMIT
+
+    from ..nlp.nlp_config import STRICT_PERIODS
+
+    date_answer = answer if payload.dimension == "date" else None
+    from ..nlp.date_resolver import _candidate_dates, query_mentions_date
+
+    # A follow-up turn reads its dates from its own text (or keeps the previous
+    # turn's dates), not from the whole conversation.
+    dq = date_query if date_query is not None else query
+    date_stated = (query_mentions_date(dq) if date_query is not None
+                   else (analysis.has_date_intent or query_mentions_date(query)))
+
+    if (ASK_DATE_WHEN_MISSING and date_answer is None and dates_override is None
+            and not date_stated):
+
+        cands = _nlp_stage(
+            "date_candidates", ctx, query,
+            _candidate_dates, found["return_id"], resolved_table["table_name"], filter_col, ctx,
         )
+        if len(cands) > 1:
+            logger.info(
+                "[api.nlp] /variance/nlresolve | %s | query=%r | no date in query -> asking which (%d available)",
+                ctx, query, len(cands),
+            )
+            return {
+                **_build_date_clarification(
+                    query, cands, found["return_id"], resolved_table["table_name"], DATE_OPTIONS_LIMIT,
+                ),
+                "interpretation": interpretation,
+            }
+    anchor_override = (
+        date_answer if date_answer and date_answer not in (_SKIP_ANSWER, _LATEST_DATE_ANSWER) else None
+    )
+
+    try:
+        if dates_override and not date_stated:
+            # Follow-up with no date of its own: the previous turn's periods.
+            reporting_date, reporting_period = dates_override[0], max(len(dates_override) - 1, 1)
+            comparison_dates, date_notes = list(dates_override), []
+        else:
+            reporting_date, reporting_period, comparison_dates, date_notes = resolve_reporting_date(
+                dq, found["return_id"], resolved_table["table_name"], filter_col, report_freq,
+                ctx=ctx, anchor_override=anchor_override,
+                **({"strict": True} if STRICT_PERIODS and date_stated and not anchor_override else {}),
+            )
     except ValueError as exc:
         logger.warning("[api.nlp] 404 /variance/nlresolve | %s | date resolution failed: %s", ctx, exc)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    # A trend needs the whole window of dates, not the usual current + previous.
+    from ..nlp.nlp_config import TREND_ENABLED, TREND_MAX_PERIODS
+    try:
+        pre_spec = spec_override if spec_override is not None else parse_operation(query)
+    except Exception:
+        pre_spec = None
+    if TREND_ENABLED and pre_spec is not None and pre_spec.operation == "trend" and not anchor_override:
+        from ..nlp.date_resolver import resolve_series_dates
+        try:
+            series_dates, series_notes = resolve_series_dates(
+                dq, found["return_id"], resolved_table["table_name"], filter_col, report_freq,
+                ctx=ctx, max_periods=TREND_MAX_PERIODS,
+                strict=bool(STRICT_PERIODS and date_stated),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        if len(series_dates) > 1:
+            comparison_dates, reporting_date = series_dates, series_dates[0]
+            reporting_period = len(series_dates) - 1
+            date_notes = list(series_notes)
 
     logger.info(
         "[api.nlp] POST /variance/nlresolve | %s | query=%r | return_id=%s | table=%s | "
@@ -801,6 +1014,14 @@ def variance_nlresolve(
         # The anchor exists in the date list but its rows can still come back
         # empty (e.g. a filter on the physical table). One retry on the next
         # real date keeps the query answering instead of dead-ending.
+        # A period the user named is never swapped for another (strict periods):
+        # "no data for what you asked" is the honest answer.
+        if (is_no_data_error(result_error(computed)) and STRICT_PERIODS and date_stated
+                and not anchor_override):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Data is not available for {comparison_dates[0]} in this table.",
+            )
         if is_no_data_error(result_error(computed)) and len(comparison_dates) > 1:
             retry_dates = comparison_dates[1:]
             logger.info(
@@ -820,13 +1041,57 @@ def variance_nlresolve(
         logger.warning("[api.nlp] 500 /variance/nlresolve | %s | compute_variance error: %s", ctx, result_error(computed))
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result_error(computed))
 
+    try:
+        spec = spec_override if spec_override is not None else parse_operation(query)
+    except Exception:
+        logger.exception("[api.nlp] /variance/nlresolve | %s | operation parse failed; returning plain variance", ctx)
+        spec = None
+
+    from ..nlp.nlp_config import STRICT_NAMES, TREND_ENABLED
+
+    # "The trend of Assets": a column when one matches, otherwise an element.
+    if spec is not None and spec.target_any:
+        from ..nlp.analysis import resolve_target_columns
+        hit, _missing = resolve_target_columns(
+            spec.target_any, computed.get("columns") or [],
+            lambda c: schema_info.column_description(resolved_table["table_name"], c))
+        if hit:
+            spec.target_columns = list(spec.target_any)
+        else:
+            spec.target_elements = list(spec.target_any)
+        spec.target_any = []
+
+    # Columns the user NAMED ("the Asset column", "Assets, Liabilities and Capital")
+    # win over the resolver's pick; a name matching nothing is said, not dropped.
+    if spec is not None and spec.target_columns:
+        try:
+            before = len(spec.notes)
+            picked = _target_columns(
+                computed, spec, [], resolved_table["table_name"])
+        except Exception:
+            logger.exception("[api.nlp] /variance/nlresolve | %s | column targeting failed; keeping resolver columns", ctx)
+            picked, before = [], len(spec.notes)
+        if picked:
+            resolution["selected_columns"] = picked
+        elif STRICT_NAMES and len(spec.notes) > before:
+            # Every column the user named is unknown: refuse rather than answer
+            # about columns they did not ask for.
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=" ".join(spec.notes[before:]))
+
+    # "All monetary / numeric columns": every numeric column, not the resolver's pick.
+    if spec is not None and spec.all_columns and not spec.target_columns:
+        resolution["selected_columns"] = list(computed.get("columns") or resolution["selected_columns"])
+
     computed = _restrict_result_columns(computed, resolution["selected_columns"])
 
     # What the user wants DONE with the numbers (filter, rank, unchanged, new/removed…).
     # Additive and fail-safe: an analysis problem must never cost the user their table.
     try:
-        spec = parse_operation(query)
-        if spec.operation not in ("trend", "anomaly"):
+        if spec is not None and spec.operation == "trend":
+            if TREND_ENABLED:
+                from ..nlp.series import analyze_series
+                computed = analyze_series(computed, spec, comparison_dates)
+        elif spec is not None:
             computed = analyze_result(computed, spec)
     except Exception:
         logger.exception("[api.nlp] /variance/nlresolve | %s | analysis stage failed; returning plain variance", ctx)
@@ -874,6 +1139,166 @@ def variance_nlresolve(
             "comparison_dates":   comparison_dates,
             "date_notes":         date_notes,
         },
+        # Where every number came from, so a result can be checked by hand.
+        "provenance": _provenance(computed, found, resolved_table["table_name"], comparison_dates),
+    }
+
+
+def _refinement_question(spec, query: str) -> dict | None:
+    """Ask instead of guessing (scenario group 26): what 'highest variation' is
+    measured by, what 'significant' means, which period 'Compare March' is against.
+    None when nothing needs asking. Asked before any DB work."""
+    from datetime import date as _date
+
+    from ..hosts import get_profile
+    from ..nlp import conversation as conv
+    from ..nlp.nlp_config import ASK_MEASURE, ASK_THRESHOLD, SIGNIFICANT_PCT_DEFAULT
+
+    if spec is None:
+        return None
+    if ASK_MEASURE and spec.operation == "rank" and spec.measure == "ambiguous":
+        return {
+            "dimension": "measure",
+            "question": "Should the highest/lowest variation be measured by percentage change or by absolute change (amount)?",
+            "options": conv.MEASURE_OPTIONS, "allow_other": False,
+            "skip_label": "percentage change",
+        }
+    if ASK_THRESHOLD and spec.significant and spec.threshold is None:
+        return {
+            "dimension": "threshold",
+            "question": (f"What threshold should count as a significant variation? Pick one, or type a "
+                         f"percentage or an amount (e.g. 15% or 5 lakh). Skip to use more than "
+                         f"{SIGNIFICANT_PCT_DEFAULT:g}%."),
+            "options": conv.THRESHOLD_OPTIONS, "allow_other": True,
+        }
+    month = conv.needs_period_question(query, get_profile().fiscal_year_start_month, _date.today())
+    if month:
+        return {
+            "dimension": "period",
+            "question": f"Which period would you like to compare {month} against?",
+            "options": conv.PERIOD_OPTIONS, "allow_other": False,
+        }
+    return None
+
+
+@router.post(
+    "/variance/nlresolve", status_code=status.HTTP_200_OK, tags=["Variance"],
+    response_model=NlResolveResponse, response_model_exclude_unset=True,
+)
+def variance_nlresolve(
+    payload: NLResolveRequest,
+    ctx: RequestContext = Depends(require_login),
+) -> dict:
+    """The natural-language route: _nlresolve_core plus the conversation layer.
+
+    Around the one-shot resolution this adds (all additive; switches in nlp_config):
+      * refinement questions — measure / threshold / period — whose answers are
+        appended to the query and carried in resolved_context["refine"];
+      * follow-ups — with conversation_state from the previous answer, a turn like
+        "only decreases" or "details of the first one" refines that answer on the
+        same return, table and dates;
+      * conversation_state on every answer, and drill_down for a drilled element.
+    """
+    from ..nlp import conversation as conv
+    from ..nlp.nlp_config import CONVERSATION_ENABLED, SIGNIFICANT_PCT_DEFAULT
+
+    typed = (payload.query or "").strip()
+    rc = dict(payload.resolved_context or {})
+    refine = conv.clean_refine(rc.get("refine"))
+    dimension, answer = payload.dimension, payload.clarification_answer
+
+    if dimension in ("measure", "threshold", "period"):
+        try:
+            refine.append(conv.refinement_text(dimension, answer, _SKIP_ANSWER, SIGNIFICANT_PCT_DEFAULT))
+        except conv.InvalidAnswer as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        payload = NLResolveRequest(query=typed, conversation_state=payload.conversation_state)
+        dimension = None
+
+    state = conv.clean_state(payload.conversation_state) if CONVERSATION_ENABLED else None
+    plan = None
+    if state and typed and conv.is_followup(typed):
+        plan = conv.plan_followup(typed, state)
+        if plan["error"]:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=plan["error"])
+    if plan is not None and state.get("table") and state.get("return_id") and not dimension:
+        try:
+            ensure_safe_return_id(state["return_id"])
+            ensure_safe_table_ref(state["table"])
+        except InvalidInput as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    query = conv.effective_query(plan["query"] if plan else typed, refine)
+    spec = plan["spec"] if plan else (parse_operation(query) if typed else None)
+    if refine and spec is not None and plan is not None:
+        # A refinement answered inside a follow-up applies to the merged spec too.
+        spec = conv._merge(spec, parse_operation(". ".join(refine)), ". ".join(refine))
+
+    def _with_context(res: dict) -> dict:
+        """Clarifications carry the refinements and the conversation forward."""
+        if res.get("needs_clarification"):
+            ctx_out = dict(res.get("resolved_context") or {})
+            if refine:
+                ctx_out["refine"] = refine
+            res = {**res, "resolved_context": ctx_out}
+            if state:
+                res["conversation_state"] = payload.conversation_state
+        return res
+
+    if not dimension and typed:
+        q = _refinement_question(spec, conv.effective_query(plan["date_query"] if plan else typed, refine))
+        if q:
+            return _with_context({
+                "needs_clarification": True, "skippable": True, "confidence": 1.0,
+                "resolved_context": {"query": typed}, **{k: v for k, v in q.items() if k != "skip_label"},
+            })
+
+    kwargs: dict = {"spec_override": spec}
+    core_payload = payload.model_copy(update={"query": query})
+    if plan is not None:
+        kwargs["date_query"] = conv.effective_query(plan["date_query"], refine)
+        kwargs["dates_override"] = state.get("dates") or None
+        if plan["pin_table"] and state.get("table") and not dimension:
+            core_payload = NLResolveRequest(
+                query=query, dimension="table", clarification_answer=state["table"],
+                resolved_context={"query": query, "return_id": state.get("return_id")},
+            )
+
+    res = _nlresolve_core(core_payload, ctx, **kwargs)
+    if res.get("needs_clarification"):
+        return _with_context(res)
+
+    turns = plan["turns"] if plan else [conv.effective_query(typed, refine)]
+    focus = plan["focus"] if plan else None
+    out = {**res, "conversation_state": conv.new_state(
+        turns, res, res.get("return_id"), res.get("table_name") or (res.get("provenance") or {}).get("table"), focus)}
+    if plan is not None:
+        out["interpretation"] = {**(out.get("interpretation") or {}), "followup_of": state["turns"][-1]}
+    if plan is not None and plan["drill"] and focus is not None:
+        detail = conv.drill_down(res, focus)
+        if detail:
+            out["drill_down"] = detail
+    return out
+
+
+def _provenance(computed: dict, found: dict, table_name: str, comparison_dates: list) -> dict:
+    from ..nlp.analysis import FORMULA_TEXT
+
+    counts = (computed.get("analysis") or {}).get("counts") or {}
+    return {
+        "return_id": found.get("return_id"),
+        "return_name": found.get("return_name"),
+        "table": table_name,
+        "current_date": comparison_dates[0] if comparison_dates else None,
+        "previous_dates": list(comparison_dates[1:]),
+        "rows_in_result": len(computed.get("rows") or []),
+        "rows_compared": (computed.get("analysis") or {}).get("total_rows", len(computed.get("rows") or [])),
+        "new_from_zero": counts.get("new"),
+        "became_zero": counts.get("became_zero"),
+        "removed_rows": len(computed.get("removed_rows") or []),
+        "duplicate_keys": len(computed.get("duplicate_identifiers") or []),
+        "truncated": bool(computed.get("truncated")),
+        "formula": FORMULA_TEXT,
     }
 
 

@@ -55,7 +55,7 @@ GROUP2 = [
     ("Compare all elements between current and previous periods.", NOOP),
     ("Show elements where the value has increased.", {"operation": "filter", "direction": "increase"}),
     ("Show elements where the value has decreased.", {"operation": "filter", "direction": "decrease"}),
-    ("Identify elements with the highest variation.", {"operation": "rank", "top_n": 1, "measure": "ambiguous"}),
+    ("Identify elements with the highest variation.", {"operation": "rank", "top_n": 10, "measure": "ambiguous"}),
     ("Which elements have no variation?", {"operation": "unchanged"}),
     ("Give me element-wise percentage variation.", {"measure": "pct", "group_by": "element"}),
     ("Show absolute variation for each element.", {"measure": "abs"}),
@@ -166,7 +166,7 @@ GROUP7 = [
     ("Show top 10 increases.", {"top_n": 10}),
     ("Show top 10 decreases.", {"top_n": 10, "direction": "decrease"}),
     ("Which are the five most significant changes?", {"top_n": 5, "operation": "rank"}),
-    ("Give me the elements with the lowest variation.", {"bottom_n": 1, "operation": "rank"}),
+    ("Give me the elements with the lowest variation.", {"bottom_n": 10, "operation": "rank"}),
     ("Rank elements based on percentage variation.", {"operation": "rank", "measure": "pct"}),
     ("Rank columns based on absolute variation.", {"operation": "rank", "measure": "abs", "group_by": "column"}),
 ]
@@ -254,15 +254,20 @@ GAPS = [
     ("10% se zyada variation wale elements dikhao.", {"threshold.min_value": Dz(10)}),
     ("20 lakh se zyada change kaha hua hai?", {"threshold.min_value": Dz(2_000_000)}),
     ("Jaha decrease 15% se zyada hai wo dikhao.", {"direction": "decrease", "threshold.min_value": Dz(15)}),
-    # specific element / column targets (Phase 2)
-    ("Show variation for element X.", {"target_elements": ["X"]}),
-    ("Compare element X between current and previous period.", {"target_elements": ["X"]}),
-    # multi-column list (Phase 2)
-    ("Compare Assets, Liabilities and Capital columns.", {"target_columns": ["Assets", "Liabilities", "Capital"]}),
 ]
 
 
 @pytest.mark.parametrize("prompt,expected", GAPS)
-@pytest.mark.xfail(strict=True, reason="not implemented yet — see the plan, Phases 2 and 6")
+@pytest.mark.xfail(strict=True, reason="Hinglish is deferred; English only for now")
 def test_known_gaps(prompt, expected):
+    check(prompt, expected)
+
+
+# ── Named element / column targets (formerly gaps) ────────────────────────────
+@pytest.mark.parametrize("prompt,expected", [
+    ("Show variation for element X.", {"target_elements": ["X"]}),
+    ("Compare element X between current and previous period.", {"target_elements": ["X"]}),
+    ("Compare Assets, Liabilities and Capital columns.", {"target_columns": ["Assets", "Liabilities", "Capital"]}),
+])
+def test_named_targets(prompt, expected):
     check(prompt, expected)

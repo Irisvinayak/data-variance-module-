@@ -24,7 +24,7 @@ from backend.data.models import NLResolveRequest  # noqa: E402
 from backend.hosts.ideal_55 import Ideal55Profile  # noqa: E402
 from backend.hosts.ideal_60 import Ideal60Profile  # noqa: E402
 from backend.nlp import (  # noqa: E402
-    date_resolver, intent_resolver, query_analyzer, retriever, schema_info,
+    date_resolver, intent_resolver, nlp_config, query_analyzer, retriever, schema_info,
 )
 
 DATES = [datetime(2025, 3, 31), datetime(2024, 12, 31), datetime(2024, 9, 30),
@@ -56,6 +56,9 @@ def route(request, monkeypatch):
     assert profile.default_fiscal_year_start_month == fy_start
     monkeypatch.setattr(hosts, "get_profile", lambda *a, **k: profile)
 
+    # These tests are about the analysis; the "which date?" question has its own
+    # tests in test_nlresolve_clarification.py.
+    monkeypatch.setattr(nlp_config, "ASK_DATE_WHEN_MISSING", False)
     monkeypatch.setattr(nlp_api, "_allowed_return_ids", lambda ctx: None)
     monkeypatch.setattr(nlp_api, "require_tables_access", lambda *a, **k: None)
     monkeypatch.setattr(nlp_api, "require_return_access", lambda *a, **k: None)
@@ -145,10 +148,18 @@ def test_ranking(route, prompt, expected):
     assert ids(route(prompt)) == expected
 
 
-def test_ambiguous_measure_is_disclosed_not_guessed_silently(route):
+def test_ambiguous_measure_is_disclosed_not_guessed_silently(route, monkeypatch):
+    # With the question switched off, the old behaviour: % is assumed, and said.
+    monkeypatch.setattr(nlp_config, "ASK_MEASURE", False)
     res = route("Show top 3 elements with highest variation.")
     assert any("read as percentage" in n for n in res["analysis_notes"])
     assert res["analysis"]["effective_measure"] == "pct"
+
+
+def test_ambiguous_measure_is_asked(route):
+    res = route("Show top 3 elements with highest variation.")
+    assert res["needs_clarification"] and res["dimension"] == "measure"
+    assert {o["id"] for o in res["options"]} == {"pct", "abs"}
 
 
 def test_applied_filters_and_summary_describe_what_was_done(route):
@@ -197,10 +208,10 @@ def test_yoy_and_previous_quarter(route):
 
 # ── safety: the new stage can never cost the user their table ─────────────────
 
-def test_trend_and_anomaly_queries_return_the_plain_variance_for_now(route):
-    for q in ("Show the trend of Assets for the last 12 months.", "Find unusual variations."):
-        res = route(q)
-        assert sorted(ids(res)) == list("ABCDEF") and "analysis" not in res
+def test_trend_query_returns_the_plain_variance_when_switched_off(route, monkeypatch):
+    monkeypatch.setattr(nlp_config, "TREND_ENABLED", False)
+    res = route("Show the trend of Assets for the last 12 months.")
+    assert sorted(ids(res)) == list("ABCDEF") and "analysis" not in res
 
 
 def test_hinglish_query_still_answers_with_the_plain_table(route):

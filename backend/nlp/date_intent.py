@@ -256,13 +256,28 @@ _PATTERNS = [
     (re.compile(r"\b(\d{1,2})[/\-](\d{4})\b"),                              # 03/2025
      lambda m, fy: _month_ref(_year4(m[2]), int(m[1]), m[0])),
     # ── bare year (calendar) — last, so richer forms claim the year first ─
-    (re.compile(rf"(?<![\d\-/.]){_YEAR}(?![\d\-/.])"),
+    # A full stop after the year ends the sentence ("compare with 2020.").
+    (re.compile(rf"(?<![\d\-/.]){_YEAR}(?![\d\-/]|\.\d)"),
      lambda m, fy: _fy_ref(_year4(m[1]), 1, m[0])),
 ]
 
 # Quarter / half with no year ("Q3", "H1"): read against the fiscal year of
 # `today` — the most recent such period that has already started.
 _BARE_Q_RE = re.compile(r"\b(?:q([1-4])|h([12]))(?![\d\w])", re.I)
+
+# A month named with no year ("Compare March", "June and March"): the most recent
+# such month on or before `today`. Full names only, and "May" only capitalised —
+# "may" is far more often the verb.
+_BARE_MONTH_RE = re.compile(
+    r"\b(january|february|march|april|june|july|august|september|october|november|december)\b"
+    r"|\b(May)\b", re.I)
+
+
+def _bare_month_ref(name: str, today: date) -> PeriodRef:
+    m = _MONTHS[name.lower()[:3]]
+    y = today.year if m <= today.month else today.year - 1
+    s, e = _span(y, m, 1)
+    return PeriodRef(s, e, "month", name)
 
 _UNIT_WORDS = (
     r"(days?|weeks?|months?|mos?|quarters?|qtrs?|half[\s-]?years?|halves|"
@@ -352,6 +367,10 @@ def parse_date_intent(query: str, fiscal_start_month: int = 4,
             ref = _fy_part_ref(label - 1, part, months, fy, m[0])
         if ref:
             found.append((m.start(), m.end(), ref))
+    for m in _BARE_MONTH_RE.finditer(rest):
+        if m.group(2) and m.group(2) != "May":
+            continue
+        found.append((m.start(), m.end(), _bare_month_ref(m.group(0), today)))
     found.sort(key=lambda t: t[0])
 
     # Relative / XoX / "this" / latest are read from the text left over after
@@ -406,6 +425,17 @@ def parse_date_intent(query: str, fiscal_start_month: int = 4,
             intent.range = (lo, hi)
             refs = [r for r in refs if r[2] not in (r1, r2)]
             break
+
+    # "Compare current data with 2020", "the latest month vs December 2025": the
+    # one named period is what the latest is compared WITH, not the current period.
+    if intent.latest and len(refs) == 1 and not intent.range and not intent.since:
+        start, _end, ref = refs[0]
+        if re.search(r"\b(?:with|vs\.?|versus|against|to)\s+(?:the\s+)?(?:data\s+(?:of|for|from)\s+)?$",
+                     text[:start].lower()) and re.search(r"\b(?:latest|current|most\s+recent|newest)\b",
+                                                         text[:start], re.I):
+            intent.targets.append(ref)
+            intent.spans[:0] = [r[2].text for r in found]
+            return intent
 
     ordered = sorted((r[2] for r in refs), key=lambda r: r.end, reverse=True)
     if ordered:

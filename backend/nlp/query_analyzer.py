@@ -126,6 +126,16 @@ _DATE_PHRASE_RES = [
     re.compile(r"\b(?:this|current)\s+(?:month|quarter|half[\s-]?year|year|financial\s+year|fy|week)\b", re.IGNORECASE),
     re.compile(r"\b\d{1,2}\s+(?:months?|quarters?|years?|periods?)\s+(?:ago|back)\b", re.IGNORECASE),
     re.compile(r"\byesterday\b|\blatest\b|\bmost\s+recent\b", re.IGNORECASE),
+    # bare quarter/half with no year ("for Q3", "H1") — date_intent reads it
+    # against the data's newest year; left in, it pollutes the metric text.
+    re.compile(r"\b(?:for|in|of|during)?\s*[QH][1-4](?!\d)\b", re.IGNORECASE),
+    # "current vs previous", then a lone "previous"/"prior". A lone "current"
+    # is NOT a date: it names columns ("current accounts", "current exposure").
+    re.compile(
+        r"\bcurrent\s+(?:vs\.?|versus|and|with|against|to)\s+(?:the\s+)?(?:previous|prior|last)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:previous|prior)\b", re.IGNORECASE),
     # bare year, checked last so the richer patterns above claim it first
     re.compile(r"\b(?:19|20)\d{2}\b"),
 ]
@@ -223,6 +233,21 @@ class QueryAnalysis:
         }
 
 
+# Filler words inside return names ("Breakdown of Funding BY geography").
+# Over a small corpus (27 returns under 6.0) the document-frequency cutoff
+# cannot drop them, so "show sovereigns by country" named QCB_F013 via "by".
+_NAME_STOPWORDS = frozenset({
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or",
+    "the", "to", "with", "excel", "test",
+})
+
+# A return-code-like token ("f020", "bsr1"... must carry 2+ digits) that names
+# no known return. Answering such a query from another return is the failure
+# the unindexed-return refusal exists to prevent.
+_RETURN_CODE_RE = re.compile(r"^[a-z]{1,6}\d{2,}[a-z0-9]*$")
+_NOT_RETURN_CODE_RE = re.compile(r"^(?:fy|cy|q|h)\d+$")
+
+
 def _distinctive_tokens_by_return(
     returns: list[dict[str, Any]], corpus: list[dict[str, Any]]
 ) -> dict[str, set[str]]:
@@ -257,6 +282,7 @@ def _distinctive_tokens_by_return(
             # CIMS_DPSS07_Usage_Credit_Debit_Cards. A word the corpus uses to
             # describe its own measures cannot identify a return.
             # See schema_info.looks_like_return_identifier.
+            and tok not in _NAME_STOPWORDS
             and schema_info.looks_like_return_identifier(tok)
         }
         for r in returns if r.get("Id")
@@ -305,7 +331,23 @@ def _match_named_returns(
     winners = [s for s in scored if s[0] >= best]
     # Among equal coverage, more absolute matched tokens is the better match.
     best_count = max(s[1] for s in winners)
-    return [s[2] for s in winners if s[1] >= best_count]
+    winners = [s[2] for s in winners if s[1] >= best_count]
+
+    # Coverage favours shorter names: "breakdown by geography" covers more of
+    # "Breakdown of exposures by geography" than "Breakdown of Funding by
+    # geography", yet the query says nothing that tells them apart. Any return
+    # whose name contains every token the winners matched is an equal claimant.
+    # Compared on every non-filler word of the name, so typing a return's
+    # full name ("breakdown of EXPOSURES by geography") still singles it out.
+    def _name_words(r: dict[str, Any]) -> set[str]:
+        return set(_tokens(r.get("Name", ""))) - _NAME_STOPWORDS
+
+    win_said = set().union(*(_name_words(r) & query_tokens for r in winners))
+    out = list(winners)
+    for _cov, _n, r in scored:
+        if r not in out and win_said <= _name_words(r):
+            out.append(r)
+    return out
 
 
 # Prefixes that mark a return NAME as scoped, mapped to the same scope codes
@@ -460,6 +502,15 @@ def analyze_query(
         unindexed = _match_named_returns(normalized, not_indexed, corpus)
 
     without_dates, date_text = _extract_date_text(normalized)
+
+    if not matched and not unindexed:
+        known = {t for r in corpus for t in _tokens(r.get("Name", ""))}
+        unknown_codes = [
+            t for t in _tokens(without_dates)
+            if _RETURN_CODE_RE.match(t) and not _NOT_RETURN_CODE_RE.match(t) and t not in known
+        ]
+        if unknown_codes:
+            unindexed = [{"Name": unknown_codes[0].upper()}]
 
     # Read the frequency word from the DATE-FREE text: "last 3 quarters" is a
     # comparison span, not a statement that the return is the quarterly

@@ -184,13 +184,17 @@ export async function computeVariance(payload) {
 // result. No server-side session is kept between the two calls.
 export const SKIP_ANSWER = '__skip__'
 
-export async function resolveNlQuery(query, { dimension, clarificationAnswer, resolvedContext, signal } = {}) {
+// `conversationState` is the previous answer's `conversation_state`, echoed back
+// so a follow-up ("only decreases", "details of the first one") refines it.
+// Omit it for a brand-new question.
+export async function resolveNlQuery(query, { dimension, clarificationAnswer, resolvedContext, conversationState, signal } = {}) {
   return request(`/variance/nlresolve?${authQuery()}`, 'NL resolve', {
     ...postJson({
       query,
       ...(dimension ? { dimension } : {}),
       ...(clarificationAnswer ? { clarification_answer: clarificationAnswer } : {}),
       ...(resolvedContext ? { resolved_context: resolvedContext } : {}),
+      ...(conversationState ? { conversation_state: conversationState } : {}),
     }),
     timeoutMs: NL_TIMEOUT_MS,
     ...(signal ? { signal } : {}),

@@ -117,3 +117,19 @@ Start with the overview, then follow it into whichever reference you need.
 | [docs/integration-plan.md](docs/integration-plan.md) | Historical record of the 5.5/6.0 integration: verified differences, bugs found, open questions |
 | [docs/ISSUES_STATUS.md](docs/ISSUES_STATUS.md) | Code-review issues: what is solved, what remains, and what still needs testing — the single issue record |
 | [docs/samples/](docs/samples/) | Example NL and user queries |
+
+
+cd frontend
+npm ci              # first time only
+
+# 5.5 → IIS /DataVar/, backend 8004 (uses .env.production55)
+npm run build:55 -- --outDir dist-55
+
+# 6.0 → IIS /DataVar6.0/, backend 8003 (uses .env.production)
+npm run build:60 -- --outDir dist-60
+
+for creating and activate the .venv file 
+> py -3.12 -m venv .venv
+>> .\.venv\Scripts\Activate.ps1
+>> python -m pip install --upgrade pip
+>> pip install -r requirements.txt

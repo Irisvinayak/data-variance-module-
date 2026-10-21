@@ -65,11 +65,19 @@ class NLResolveRequest(BaseModel):
     # and `resolved_context` is echoed straight back from whatever the prior
     # needs_clarification response sent, so no server-side session store is
     # needed between requests.
-    dimension:            Optional[Literal["return", "table"]] = None
+    # "measure" (absolute or %?), "threshold" (what is "significant"?) and
+    # "period" ("Compare March" — against which period?) refine the query
+    # itself; their answers travel back in resolved_context["refine"].
+    dimension:            Optional[Literal["return", "table", "date", "measure", "threshold", "period"]] = None
     clarification_answer: Optional[str] = Field(default=None, max_length=256)
     resolved_context:     Optional[dict[str, Any]] = None
+    # The previous answer, as the server described it (turns, return, table,
+    # dates, result identifiers). Sent back so a follow-up ("only decreases",
+    # "show details of the first one") refines that answer instead of starting
+    # over. Omit it to ask a brand-new question.
+    conversation_state:   Optional[dict[str, Any]] = None
 
-    @field_validator("resolved_context")
+    @field_validator("resolved_context", "conversation_state")
     @classmethod
     def _bounded_context(cls, v):
         # Echoed back verbatim, so it is client-controlled input of any size.

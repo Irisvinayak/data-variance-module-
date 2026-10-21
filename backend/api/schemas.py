@@ -80,7 +80,7 @@ class ClarificationFields(_Loose):
     """A "needs more detail" answer (200) instead of a result: the NL layer could not decide."""
 
     needs_clarification: Optional[bool] = None
-    dimension: Optional[str] = None                 # "return" | "table"
+    dimension: Optional[str] = None                 # "return" | "table" | "date"
     question: Optional[str] = None
     options: Optional[list[dict[str, Any]]] = None  # [{"id", "label"}]
     skippable: Optional[bool] = None

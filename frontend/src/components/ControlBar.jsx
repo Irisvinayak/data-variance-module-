@@ -144,6 +144,9 @@ function DisambigDropdown({ candidates, returnName, onSelect, onCancel }) {
 // quarters" read as a single period, renders as a perfectly normal-looking
 // table. Showing the interpretation makes a wrong resolution visible
 // immediately, at the moment the user can still correct it by rephrasing.
+// How many column names the "Matched" chip shows before "+N more".
+const CHIP_ITEMS_SHOWN = 3
+
 function NlpInterpretation({ interpretation }) {
   if (!interpretation) return null
 
@@ -171,7 +174,9 @@ function NlpInterpretation({ interpretation }) {
     (resolvedColumnLabels?.length || resolvedColumns?.length) && {
       key: 'columns',
       label: 'Matched',
-      value: (resolvedColumnLabels?.length ? resolvedColumnLabels : resolvedColumns).join(', '),
+      // A long list ("all monetary columns") shows its first few names; the
+      // whole list appears on hover / focus.
+      items: resolvedColumnLabels?.length ? resolvedColumnLabels : resolvedColumns,
     },
     scope && { key: 'scope', label: 'Scope', value: SCOPE_LABELS[scope] || scope },
     // Prefer the RESOLVED date over the raw phrase: "last 2 quarters" is what
@@ -199,12 +204,38 @@ function NlpInterpretation({ interpretation }) {
   return (
     <div className="nlp-interpretation" title="How your question was understood">
       <span className="nlp-interpretation-lead">Understood as</span>
-      {chips.map((c) => (
-        <span key={c.key} className="nlp-interpretation-chip">
-          <span className="nlp-interpretation-chip-label">{c.label}</span>
-          <span className="nlp-interpretation-chip-value">{c.value}</span>
-        </span>
-      ))}
+      {chips.map((c) => {
+        if (!c.items) {
+          return (
+            <span key={c.key} className="nlp-interpretation-chip">
+              <span className="nlp-interpretation-chip-label">{c.label}</span>
+              <span className="nlp-interpretation-chip-value">{c.value}</span>
+            </span>
+          )
+        }
+        const long = c.items.length > CHIP_ITEMS_SHOWN
+        const shown = long ? c.items.slice(0, CHIP_ITEMS_SHOWN).join(', ') : c.items.join(', ')
+        return (
+          <span
+            key={c.key}
+            className={'nlp-interpretation-chip' + (long ? ' nlp-chip-hover' : '')}
+            tabIndex={long ? 0 : undefined}
+            aria-label={long ? `${c.label}: ${c.items.join(', ')}` : undefined}
+          >
+            <span className="nlp-interpretation-chip-label">{c.label}</span>
+            <span className="nlp-interpretation-chip-value">
+              {shown}
+              {long && <span className="nlp-chip-more"> +{c.items.length - CHIP_ITEMS_SHOWN} more</span>}
+            </span>
+            {long && (
+              <span className="nlp-chip-popover" role="tooltip">
+                <span className="nlp-chip-popover-title">{c.label} ({c.items.length})</span>
+                {c.items.map((it) => <span key={it} className="nlp-chip-popover-item">{it}</span>)}
+              </span>
+            )}
+          </span>
+        )
+      })}
       {/* Every place the dates used differ from the dates asked for. */}
       {dateNotes?.map((note, i) => (
         <span key={`${i}:${note}`} className="nlp-interpretation-chip nlp-interpretation-note">
@@ -275,6 +306,61 @@ function NlpClarificationPanel({ clarification, onSkip, onCancel, onOthers }) {
   )
 }
 
+// ── NLP short-choice questions ───────────────────────────────────────────────
+// "Absolute or percentage?", "What counts as significant?", "March against which
+// period?" (backend/api/nlp.py _refinement_question). A handful of buttons; the
+// threshold question also takes a typed value ("15%", "5 lakh"), sent as the answer.
+const CHOICE_DIMENSIONS = ['measure', 'threshold', 'period']
+
+function NlpChoicePanel({ clarification, onSelect, onSkip, onCancel, onOthers }) {
+  const [text, setText] = useState('')
+  const { question, options, skippable, allowOther } = clarification
+
+  function handleSubmit() {
+    if (!text.trim()) return
+    onOthers(text)
+  }
+
+  return (
+    <div className="nlp-clarify-panel">
+      <div className="nlp-clarify-question">{question}</div>
+      <div className="nlp-clarify-options nlp-choice-row">
+        {options.map((opt) => (
+          <button key={opt.id} type="button" className="disambig-item" onClick={() => onSelect(opt)}>
+            <span className="disambig-item-name">{opt.label}</span>
+          </button>
+        ))}
+        {allowOther && (
+          <>
+            <input
+              className="disambig-search-input"
+              placeholder="e.g. 15% or 5 lakh"
+              aria-label="Type a threshold"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            />
+            <button type="button" className="disambig-others-submit-btn" onClick={handleSubmit}
+              disabled={!text.trim()} title="Submit">&#8594;</button>
+          </>
+        )}
+        {skippable && (
+          <button type="button" className="nlp-clarify-skip-btn" onClick={onSkip}>Skip — use default</button>
+        )}
+        <button type="button" className="nlp-clarify-cancel-btn" onClick={onCancel} title="Cancel">✕</button>
+      </div>
+    </div>
+  )
+}
+
+NlpChoicePanel.propTypes = {
+  clarification: PropTypes.object.isRequired,
+  onSelect: PropTypes.func.isRequired,
+  onSkip: PropTypes.func,
+  onCancel: PropTypes.func,
+  onOthers: PropTypes.func,
+}
+
 // ── NLP "which return" clarification panel ──────────────────────────────────
 // Rendered below the NLP mini-bar when the query gave no usable table/return
 // signal at all (dimension === "return"). Options are pre-narrowed by the
@@ -298,6 +384,8 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
   const [othersText, setOthersText] = useState('')
   const dropRef = useRef(null)
   const { question, options, skippable, allowOther } = clarification
+  // The same picker answers "which return?" and "which reporting date?".
+  const noun = clarification.dimension === 'date' ? 'date' : 'return'
 
   useClickOutside(dropRef, open, () => {
     setOpen(false)
@@ -338,7 +426,7 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
         >
           <span className="disambig-trigger-icon">⚡</span>
           <span className="disambig-trigger-label">
-            {options.length} return{options.length !== 1 ? 's' : ''} available
+            {options.length} {noun}{options.length !== 1 ? 's' : ''} available
           </span>
           <span className="disambig-trigger-arrow">{open ? '▲' : '▼'}</span>
         </button>
@@ -348,8 +436,8 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
             <div className="disambig-search-row">
               <input
                 className="disambig-search-input"
-                placeholder="Filter returns…"
-                aria-label="Filter returns"
+                placeholder={`Filter ${noun}s…`}
+                aria-label={`Filter ${noun}s`}
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 autoFocus
@@ -375,7 +463,7 @@ function NlpReturnPicker({ clarification, onSelect, onSkip, onCancel, onOthers }
               </button>
             </div>
 
-            <div className="disambig-list" aria-label="Available returns" {...nav.listProps}>
+            <div className="disambig-list" aria-label={`Available ${noun}s`} {...nav.listProps}>
               {filtered.length === 0 ? (
                 <div className="disambig-empty">No matches for &ldquo;{filter}&rdquo;</div>
               ) : (
@@ -685,7 +773,7 @@ export default function ControlBar({
 
       <NlpInterpretation interpretation={nlpInterpretation} />
 
-      {nlpClarification && nlpClarification.dimension === 'return' && (
+      {nlpClarification && ['return', 'date'].includes(nlpClarification.dimension) && (
         <NlpReturnPicker
           clarification={nlpClarification}
           onSelect={onClarificationSelect}
@@ -694,7 +782,16 @@ export default function ControlBar({
           onOthers={onClarificationOthers}
         />
       )}
-      {nlpClarification && nlpClarification.dimension !== 'return' && (
+      {nlpClarification && CHOICE_DIMENSIONS.includes(nlpClarification.dimension) && (
+        <NlpChoicePanel
+          clarification={nlpClarification}
+          onSelect={onClarificationSelect}
+          onSkip={onClarificationSkip}
+          onCancel={onClarificationCancel}
+          onOthers={onClarificationOthers}
+        />
+      )}
+      {nlpClarification && !['return', 'date', ...CHOICE_DIMENSIONS].includes(nlpClarification.dimension) && (
         <NlpClarificationPanel
           clarification={nlpClarification}
           onSkip={onClarificationSkip}

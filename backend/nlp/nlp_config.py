@@ -231,6 +231,46 @@ SCOPED_RETRIEVAL_ENABLED: bool = (
     os.getenv("DV_NLP_SCOPED_RETRIEVAL", "true").strip().lower() == "true"
 )
 
+# When the query states no date at all, ask which reporting date to analyse
+# (dimension "date") instead of silently using the latest. Skipping the question
+# keeps the old behaviour: latest date compared with the previous available one.
+ASK_DATE_WHEN_MISSING: bool = (
+    os.getenv("DV_NLP_ASK_DATE", "true").strip().lower() == "true"
+)
+# How many recent reporting dates the "which date?" question offers.
+DATE_OPTIONS_LIMIT: int = env_int("DV_NLP_DATE_OPTIONS", "12")
+
+
+def _flag(name: str, default: str) -> bool:
+    return os.getenv(name, default).strip().lower() == "true"
+
+
+# ── Variation-analysis behaviour (scenario groups 1–27). Each switch can be
+# turned off to restore the earlier behaviour without a deploy. ───────────────
+# A period the user NAMED that has no data is refused ("Data is not available
+# for …") instead of silently replaced by the nearest date.
+STRICT_PERIODS: bool = _flag("DV_NLP_STRICT_PERIODS", "true")
+# Columns the user named that match nothing are refused instead of silently
+# replaced by the resolver's default columns.
+STRICT_NAMES: bool = _flag("DV_NLP_STRICT_NAMES", "true")
+# "Highest variation" (absolute or percentage?) is asked, not assumed to be %.
+ASK_MEASURE: bool = _flag("DV_NLP_ASK_MEASURE", "true")
+# "Significant changes" with no number: ask for the threshold (else use the default).
+ASK_THRESHOLD: bool = _flag("DV_NLP_ASK_THRESHOLD", "true")
+SIGNIFICANT_PCT_DEFAULT: float = env_float("DV_NLP_SIGNIFICANT_PCT", "10")
+# How many rows "the elements with the lowest/highest variation" (no number) returns.
+DEFAULT_RANK_N: int = env_int("DV_NLP_DEFAULT_RANK_N", "10")
+# Follow-up questions refine the previous answer (conversation_state round-trip).
+CONVERSATION_ENABLED: bool = _flag("DV_NLP_CONVERSATION", "true")
+# Trend / multi-period / anomaly analysis.
+TREND_ENABLED: bool = _flag("DV_NLP_TREND", "true")
+TREND_MAX_PERIODS: int = env_int("DV_NLP_TREND_MAX_PERIODS", "12")
+# Anomaly rule: a cell is unusual when its % change lies outside
+# Q1 - k*IQR .. Q3 + k*IQR of all % changes in the comparison (Tukey's fences).
+ANOMALY_IQR_K: float = env_float("DV_NLP_ANOMALY_IQR_K", "1.5")
+# Over a series, a step is unusual when |z| of its change exceeds this.
+ANOMALY_Z: float = env_float("DV_NLP_ANOMALY_Z", "2")
+
 # ── Ollama (LLM-assisted intent resolution + SQL generation) ──────────────────
 # Reuses the same self-hosted Ollama endpoint sql_agent already talks to.
 # The built-in default is a public IP over plain http (code review H-07). It is kept so

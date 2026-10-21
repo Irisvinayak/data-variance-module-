@@ -113,14 +113,26 @@ def _candidate_dates(
     )
 
 
+class PeriodUnavailable(ValueError):
+    """A period the user NAMED has no data (strict mode). The message is for the user."""
+
+
+def _available_range(cands: list[date]) -> str:
+    return f"Data is available from {_fmt(cands[-1])} to {_fmt(cands[0])}."
+
+
 class _Picker:
     """Maps PeriodRefs and calendar steps onto dates that exist, recording a
     note every time it had to substitute, so the answer is never silently
-    about a different date than the one asked for."""
+    about a different date than the one asked for.
 
-    def __init__(self, cands: list[date], freq: str):
+    `strict`: a named period with no data is refused (PeriodUnavailable)
+    instead of replaced by the nearest date."""
+
+    def __init__(self, cands: list[date], freq: str, strict: bool = False):
         self.cands = cands
         self.freq = freq
+        self.strict = strict
         self.notes: list[str] = []
 
     def ref(self, ref: PeriodRef) -> date:
@@ -140,6 +152,10 @@ class _Picker:
                     f"{_fmt(ref.start)} is not a reporting date; used the period end {_fmt(end)}."
                 )
                 return end
+        if self.strict:
+            raise PeriodUnavailable(
+                f"Data is not available for {what} ({ref.start:%d-%b-%Y} to {ref.end:%d-%b-%Y}). "
+                + _available_range(self.cands))
         if ref.start > self.cands[0]:
             pick = self.cands[0]
             self.notes.append(f"No data yet for {what}; used the latest available date {_fmt(pick)}.")
@@ -178,9 +194,22 @@ class _Picker:
         return out
 
 
+def query_mentions_date(query: str) -> bool:
+    """True when the date parser finds any date/period phrase in `query` — a
+    wider net than query_analyzer's date_text (it also reads "Q3", "FY24")."""
+    from ..hosts import get_profile
+
+    try:
+        return bool(parse_date_intent(query, get_profile().fiscal_year_start_month, today=date.today()).spans)
+    except Exception:
+        return False
+
+
 def resolve_reporting_date(
     query: str, return_id: str, table_name: str, filter_col: str, report_freq: str,
     ctx: RequestContext = ANONYMOUS,
+    anchor_override: Optional[str] = None,
+    strict: bool = False,
 ) -> tuple[str, int, list[str], list[str]]:
     """(reporting_date, reporting_period, comparison_dates, notes).
 
@@ -193,6 +222,13 @@ def resolve_reporting_date(
     Never fails on a date phrase: anything unmatched falls back to a real date
     with a note. The only error is a table with no data at all (ValueError).
     comparison_dates always holds at least the anchor.
+
+    `strict`: a period the query names that has no data raises
+    PeriodUnavailable (a ValueError) rather than being substituted.
+
+    `anchor_override` is a date the user picked from the "which date?"
+    clarification (DD-MON-YYYY). It must be one of the table's real dates;
+    it replaces the anchor and is compared with the previous available date.
     """
     from ..hosts import get_profile
 
@@ -207,7 +243,21 @@ def resolve_reporting_date(
     # Phrases with no year ("Q3", "this quarter") read against the data's
     # newest date, not the wall clock — the data can lag the calendar by months.
     intent = parse_date_intent(query, fy_start, today=latest)
-    pick = _Picker(cands, freq)
+    pick = _Picker(cands, freq, strict=strict)
+
+    if anchor_override:
+        try:
+            chosen = datetime.strptime(anchor_override.strip(), _DATE_FMT).date()
+        except ValueError:
+            chosen = None
+        if chosen not in cands:
+            raise ValueError(f"{anchor_override} is not an available reporting date for {table_name}.")
+        older = [c for c in cands if c < chosen][:1]
+        if not older:
+            pick.notes.append(
+                f"{_fmt(chosen)} is the earliest date in the table; there is no earlier period to compare with."
+            )
+        return _fmt(chosen), 1, [_fmt(chosen)] + [_fmt(c) for c in older], pick.notes
 
     # ── the anchor (the "current" period) ────────────────────────────────
     if intent.range:
@@ -267,3 +317,37 @@ def resolve_reporting_date(
         query, fy_start, freq, intent.spans, anchor_str, comparison[1:], pick.notes,
     )
     return anchor_str, max(requested, 1), comparison, pick.notes
+
+
+def resolve_series_dates(
+    query: str, return_id: str, table_name: str, filter_col: str, report_freq: str,
+    ctx: RequestContext = ANONYMOUS, max_periods: int = 12, default_periods: int = 6,
+    strict: bool = False,
+) -> tuple[list[str], list[str]]:
+    """Real dates for a trend ("last 6 months", "quarter-on-quarter"), newest first,
+    anchor included: (dates, notes). Unlike resolve_reporting_date this is not
+    capped at three dates — a trend needs the whole window. Each step is one unit
+    of what the query says (months, quarters …), or one submission when it names
+    none."""
+    from ..hosts import get_profile
+
+    freq = (report_freq or "M").strip().upper() or "M"
+    cands = _candidate_dates(return_id, table_name, filter_col, ctx)
+    if not cands:
+        raise ValueError(f"No data found in {table_name} to determine a reporting date.")
+    intent = parse_date_intent(query, get_profile().fiscal_year_start_month, today=cands[0])
+    pick = _Picker(cands, freq, strict=strict)
+    anchor = pick.ref(intent.anchor) if intent.anchor else cands[0]
+
+    if intent.relative:
+        n, unit = intent.relative
+    else:
+        n, unit = default_periods, (intent.xox or "period")
+    n = max(1, min(n, max_periods))
+    if n == max_periods and intent.relative and intent.relative[0] > max_periods:
+        pick.notes.append(f"Showing the last {max_periods} periods (the limit).")
+    older = pick.steps(anchor, n, unit)
+    dates = [anchor] + sorted({d for d in older if d != anchor}, reverse=True)
+    if len(dates) < 2:
+        pick.notes.append("Only one reporting date is available, so there is no trend to show.")
+    return [_fmt(d) for d in dates], pick.notes
