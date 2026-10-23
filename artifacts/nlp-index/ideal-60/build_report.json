@@ -1,11 +1,19 @@
 {
-  "built_at": "2026-10-14T07:39:18+00:00",
+  "built_at": "2026-10-22T09:16:05+00:00",
   "out_dir": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging",
   "returns": [
     "QCB_F010_Maturity Ladder of Assets & Liabilities",
     "QCB_F013_Breakdown of exposures by geography",
     "QCB_F014_Breakdown of Funding by geography",
-    "QCB_F015_Foreign Currency Net Open Positions"
+    "QCB_F015_Foreign Currency Net Open Positions",
+    "QCB_F019_FX_Swap_Reporting",
+    "QCB_F024_Credit_Risk_Management",
+    "QCB_F026_Credit_Card_FX_Sellers",
+    "QCB_F027_Foreign Exchange Transaction",
+    "QCB_F028_Exchange_Transaction_Report",
+    "QCB_F029_Exchange_House_Bank_Account",
+    "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+    "QCB_F038_Funding_Risk_Management"
   ],
   "force": false,
   "sample_labels": false,
@@ -15,9 +23,17 @@
       "QCB_F010_Maturity Ladder of Assets & Liabilities",
       "QCB_F013_Breakdown of exposures by geography",
       "QCB_F014_Breakdown of Funding by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
+      "QCB_F015_Foreign Currency Net Open Positions",
+      "QCB_F019_FX_Swap_Reporting",
+      "QCB_F024_Credit_Risk_Management",
+      "QCB_F026_Credit_Card_FX_Sellers",
+      "QCB_F027_Foreign Exchange Transaction",
+      "QCB_F028_Exchange_Transaction_Report",
+      "QCB_F029_Exchange_House_Bank_Account",
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+      "QCB_F038_Funding_Risk_Management"
     ],
-    "total_tables": 10,
+    "total_tables": 92,
     "shared_tables": [],
     "duplicate_tables": [],
     "stale_text_tables": []
@@ -27,14 +43,30 @@
       "QCB_F010_Maturity Ladder of Assets & Liabilities",
       "QCB_F013_Breakdown of exposures by geography",
       "QCB_F014_Breakdown of Funding by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
+      "QCB_F015_Foreign Currency Net Open Positions",
+      "QCB_F019_FX_Swap_Reporting",
+      "QCB_F024_Credit_Risk_Management",
+      "QCB_F026_Credit_Card_FX_Sellers",
+      "QCB_F027_Foreign Exchange Transaction",
+      "QCB_F028_Exchange_Transaction_Report",
+      "QCB_F029_Exchange_House_Bank_Account",
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+      "QCB_F038_Funding_Risk_Management"
     ],
-    "total_pairs": 2597,
+    "total_pairs": 4776,
     "by_return": {
       "QCB_F010_Maturity Ladder of Assets & Liabilities": 1432,
       "QCB_F013_Breakdown of exposures by geography": 111,
       "QCB_F014_Breakdown of Funding by geography": 271,
-      "QCB_F015_Foreign Currency Net Open Positions": 783
+      "QCB_F015_Foreign Currency Net Open Positions": 783,
+      "QCB_F019_FX_Swap_Reporting": 253,
+      "QCB_F024_Credit_Risk_Management": 1135,
+      "QCB_F026_Credit_Card_FX_Sellers": 41,
+      "QCB_F027_Foreign Exchange Transaction": 115,
+      "QCB_F028_Exchange_Transaction_Report": 49,
+      "QCB_F029_Exchange_House_Bank_Account": 24,
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary": 393,
+      "QCB_F038_Funding_Risk_Management": 169
     },
     "duplicates_dropped": []
   },
@@ -43,9 +75,17 @@
       "QCB_F010_Maturity Ladder of Assets & Liabilities",
       "QCB_F013_Breakdown of exposures by geography",
       "QCB_F014_Breakdown of Funding by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
+      "QCB_F015_Foreign Currency Net Open Positions",
+      "QCB_F019_FX_Swap_Reporting",
+      "QCB_F024_Credit_Risk_Management",
+      "QCB_F026_Credit_Card_FX_Sellers",
+      "QCB_F027_Foreign Exchange Transaction",
+      "QCB_F028_Exchange_Transaction_Report",
+      "QCB_F029_Exchange_House_Bank_Account",
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+      "QCB_F038_Funding_Risk_Management"
     ],
-    "resolved": 3,
+    "resolved": 11,
     "without_taxonomy": [
       "QCB_F014_Breakdown of Funding by geography"
     ],
@@ -56,13 +96,21 @@
     "returns": [
       "QCB_F010_Maturity Ladder of Assets & Liabilities",
       "QCB_F013_Breakdown of exposures by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
+      "QCB_F015_Foreign Currency Net Open Positions",
+      "QCB_F019_FX_Swap_Reporting",
+      "QCB_F024_Credit_Risk_Management",
+      "QCB_F026_Credit_Card_FX_Sellers",
+      "QCB_F027_Foreign Exchange Transaction",
+      "QCB_F028_Exchange_Transaction_Report",
+      "QCB_F029_Exchange_House_Bank_Account",
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+      "QCB_F038_Funding_Risk_Management"
     ],
-    "metrics": 78,
+    "metrics": 172,
     "metrics_dropped_as_orphans": 0,
-    "axes": 18,
-    "formulas": 214,
-    "table_profiles": 5,
+    "axes": 47,
+    "formulas": 490,
+    "table_profiles": 15,
     "profiles_dropped_as_orphans": 0,
     "orphan_profile_tables": [],
     "orphan_metric_tables": [],
@@ -77,21 +125,21 @@
   },
   "embeddings": {
     "enriched": true,
-    "tables": 10,
-    "columns": 199,
+    "tables": 92,
+    "columns": 1656,
     "row_labels": 0,
     "label_sampling": "skipped"
   },
   "concept_index": {
-    "concepts": 78,
+    "concepts": 172,
     "members": 0
   },
   "bm25": {
-    "documents": 10,
+    "documents": 92,
     "written": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging\\bm25_table_index.pkl"
   },
   "qa_index": {
-    "pairs": 2597,
+    "pairs": 4776,
     "written": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging\\qa_index.faiss"
   },
   "superset_guard": {
@@ -101,13 +149,29 @@
       "QCB_F010_Maturity Ladder of Assets & Liabilities",
       "QCB_F013_Breakdown of exposures by geography",
       "QCB_F014_Breakdown of Funding by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
+      "QCB_F015_Foreign Currency Net Open Positions",
+      "QCB_F019_FX_Swap_Reporting",
+      "QCB_F024_Credit_Risk_Management",
+      "QCB_F026_Credit_Card_FX_Sellers",
+      "QCB_F027_Foreign Exchange Transaction",
+      "QCB_F028_Exchange_Transaction_Report",
+      "QCB_F029_Exchange_House_Bank_Account",
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+      "QCB_F038_Funding_Risk_Management"
     ],
     "in_schema_json": [
       "QCB_F010_Maturity Ladder of Assets & Liabilities",
       "QCB_F013_Breakdown of exposures by geography",
       "QCB_F014_Breakdown of Funding by geography",
-      "QCB_F015_Foreign Currency Net Open Positions"
+      "QCB_F015_Foreign Currency Net Open Positions",
+      "QCB_F019_FX_Swap_Reporting",
+      "QCB_F024_Credit_Risk_Management",
+      "QCB_F026_Credit_Card_FX_Sellers",
+      "QCB_F027_Foreign Exchange Transaction",
+      "QCB_F028_Exchange_Transaction_Report",
+      "QCB_F029_Exchange_House_Bank_Account",
+      "QCB_F030_Borrowing_Lending_and_Funding_position_summary",
+      "QCB_F038_Funding_Risk_Management"
     ],
     "missing_from_schema_json": [],
     "not_yet_registered": [],

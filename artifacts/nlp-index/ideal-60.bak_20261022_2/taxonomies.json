@@ -1,0 +1,13 @@
+{
+  "QCB_F010_Maturity Ladder of Assets & Liabilities": "D:/Tools/Embeding maker/data6.0/4091.json",
+  "QCB_F013_Breakdown of exposures by geography": "D:/Tools/Embeding maker/data6.0/4079.json",
+  "QCB_F015_Foreign Currency Net Open Positions": "D:/Tools/Embeding maker/data6.0/4092.json",
+  "QCB_F019_FX_Swap_Reporting": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4107.json",
+  "QCB_F024_Credit_Risk_Management": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4113.json",
+  "QCB_F026_Credit_Card_FX_Sellers": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4108.json",
+  "QCB_F027_Foreign Exchange Transaction": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4106.json",
+  "QCB_F028_Exchange_Transaction_Report": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4109.json",
+  "QCB_F029_Exchange_House_Bank_Account": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4110.json",
+  "QCB_F030_Borrowing_Lending_and_Funding_position_summary": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4111.json",
+  "QCB_F038_Funding_Risk_Management": "D:/Tools/Embeding maker/output/inputs/6.0/concepts/4112.json"
+}

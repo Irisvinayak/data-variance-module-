@@ -1,0 +1,117 @@
+{
+  "built_at": "2026-10-14T07:39:18+00:00",
+  "out_dir": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging",
+  "returns": [
+    "QCB_F010_Maturity Ladder of Assets & Liabilities",
+    "QCB_F013_Breakdown of exposures by geography",
+    "QCB_F014_Breakdown of Funding by geography",
+    "QCB_F015_Foreign Currency Net Open Positions"
+  ],
+  "force": false,
+  "sample_labels": false,
+  "with_member_index": false,
+  "schema": {
+    "shards": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "total_tables": 10,
+    "shared_tables": [],
+    "duplicate_tables": [],
+    "stale_text_tables": []
+  },
+  "qa": {
+    "shards": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "total_pairs": 2597,
+    "by_return": {
+      "QCB_F010_Maturity Ladder of Assets & Liabilities": 1432,
+      "QCB_F013_Breakdown of exposures by geography": 111,
+      "QCB_F014_Breakdown of Funding by geography": 271,
+      "QCB_F015_Foreign Currency Net Open Positions": 783
+    },
+    "duplicates_dropped": []
+  },
+  "taxonomies": {
+    "shards": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "resolved": 3,
+    "without_taxonomy": [
+      "QCB_F014_Breakdown of Funding by geography"
+    ],
+    "shared_taxonomies": {}
+  },
+  "concept_map": {
+    "written": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging\\concept_map.json",
+    "returns": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "metrics": 78,
+    "metrics_dropped_as_orphans": 0,
+    "axes": 18,
+    "formulas": 214,
+    "table_profiles": 5,
+    "profiles_dropped_as_orphans": 0,
+    "orphan_profile_tables": [],
+    "orphan_metric_tables": [],
+    "schema_validated": true,
+    "without_taxonomy": [
+      "QCB_F014_Breakdown of Funding by geography"
+    ],
+    "unreadable": [],
+    "tables_remapped_to_physical": {},
+    "tables_unresolvable": {},
+    "shared_tables_in_profiles": {}
+  },
+  "embeddings": {
+    "enriched": true,
+    "tables": 10,
+    "columns": 199,
+    "row_labels": 0,
+    "label_sampling": "skipped"
+  },
+  "concept_index": {
+    "concepts": 78,
+    "members": 0
+  },
+  "bm25": {
+    "documents": 10,
+    "written": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging\\bm25_table_index.pkl"
+  },
+  "qa_index": {
+    "pairs": 2597,
+    "written": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging\\qa_index.faiss"
+  },
+  "superset_guard": {
+    "schema_json": "D:\\Tools\\Embeding maker\\output\\vectorDb6.0\\index\\staging\\schema.json",
+    "schema_json_exists": true,
+    "onboarded": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "in_schema_json": [
+      "QCB_F010_Maturity Ladder of Assets & Liabilities",
+      "QCB_F013_Breakdown of exposures by geography",
+      "QCB_F014_Breakdown of Funding by geography",
+      "QCB_F015_Foreign Currency Net Open Positions"
+    ],
+    "missing_from_schema_json": [],
+    "not_yet_registered": [],
+    "ok": true,
+    "reason": ""
+  }
+}
