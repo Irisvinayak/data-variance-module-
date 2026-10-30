@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from ..config import ANONYMOUS, RequestContext
 from ..data import query_xml_lookup
+from ..data.calculate_variance import mapping_key_columns
 from ..data.report_lookup import parse_all_returns
 from ..data.service import _load_table_mapping
 
@@ -88,7 +89,6 @@ def _build_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, A
                 if not table_name:
                     continue
                 key = _strip_dp_suffix(table_name).upper()
-                comp_raw = el.attrib.get("CompFilterColName", "")
                 # A mapping-file row is an explicit ownership declaration, so
                 # it always counts as primary (unlike an XML_Query FROM/JOIN
                 # reference, which may just be a lookup join).
@@ -97,7 +97,7 @@ def _build_lookup(ctx: RequestContext = ANONYMOUS) -> dict[str, list[dict[str, A
                     "return_name": return_name,
                     "report_freq": report_freq,
                     "filter_col": el.attrib.get("FilterColumn", ""),
-                    "comp_filter_col_names": [c.strip() for c in comp_raw.split("|") if c.strip()],
+                    "comp_filter_col_names": mapping_key_columns(el.attrib),
                     "source": "mapping",
                     "is_primary": True,
                 })

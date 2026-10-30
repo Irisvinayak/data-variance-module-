@@ -173,12 +173,19 @@ def dimension_rows(rows: list[dict[str, Any]], filters: list[tuple[str, str]]) -
     return keep or set(), notes
 
 
+def _rose(cell: Cell) -> bool:
+    """Direction from the sign of the change: 0 -> -500 is NEW but a fall, -5 -> 0 is BECAME_ZERO but a rise."""
+    return cell.status != UNCHANGED and cell.change > 0
+
+
+def _fell(cell: Cell) -> bool:
+    return cell.status != UNCHANGED and cell.change < 0
+
+
 def _direction_ok(cell: Cell, direction: str) -> bool:
     if direction == "either":
         return True
-    if direction == "increase":
-        return cell.status in (INCREASED, NEW)
-    return cell.status in (DECREASED, BECAME_ZERO)
+    return _rose(cell) if direction == "increase" else _fell(cell)
 
 
 def _threshold_ok(cell: Cell, spec: AnalysisSpec, which: str) -> bool:
@@ -272,8 +279,8 @@ def _column_summary(cells: list[Cell], columns: list[str]) -> list[dict[str, Any
             "column": col,
             "total_previous": str(_q(prev)), "total_current": str(_q(curr)),
             "change": str(_q(curr - prev)), "pct_change": None if pct is None else str(_q(pct)),
-            "increased": sum(c.status in (INCREASED, NEW) for c in mine),
-            "decreased": sum(c.status in (DECREASED, BECAME_ZERO) for c in mine),
+            "increased": sum(_rose(c) for c in mine),
+            "decreased": sum(_fell(c) for c in mine),
             "unchanged": sum(c.status == UNCHANGED for c in mine),
             "new": sum(c.status == NEW for c in mine),
             "became_zero": sum(c.status == BECAME_ZERO for c in mine),
@@ -555,7 +562,7 @@ def analyze(result: dict[str, Any], spec: AnalysisSpec) -> dict[str, Any]:
         moved = counts[INCREASED] + counts[DECREASED] + counts[NEW] + counts[BECAME_ZERO]
         out["summary_detail"] = {
             "headline": (f"{moved} of {len(cells)} values changed: "
-                         f"{counts[INCREASED] + counts[NEW]} increased, {counts[DECREASED] + counts[BECAME_ZERO]} decreased "
+                         f"{sum(_rose(c) for c in cells)} increased, {sum(_fell(c) for c in cells)} decreased "
                          f"({counts[NEW]} new from zero, {counts[BECAME_ZERO]} became zero), {counts[UNCHANGED]} unchanged."),
             "top_increases": _top_movers(cells, rows, "increase", which),
             "top_decreases": _top_movers(cells, rows, "decrease", which),

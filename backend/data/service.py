@@ -30,7 +30,7 @@ from ..config import settings as cfg_settings
 from .db import reset_truncation, was_truncated
 from .validation import ensure_safe_return_id, ensure_safe_table_ref
 from .calculate_variance import (
-    calculate_variance, format_oracle_date, is_safe_sql_ref, result_error, sql_literal,
+    calculate_variance, format_oracle_date, is_safe_sql_ref, mapping_key_columns, result_error, sql_literal,
     validate_reporting_date,
 )
 
@@ -494,8 +494,7 @@ def _get_table_metadata(
         for el in root.findall("Row"):
             xml_name = (el.attrib.get("TableName") or "").strip().upper()
             if xml_name == tname_up:
-                comp       = el.attrib.get("CompFilterColName", "")
-                comp_cols  = [c.strip().upper() for c in comp.split("|") if c.strip()]
+                comp_cols  = mapping_key_columns(el.attrib)
                 filter_col = (el.attrib.get("FilterColumn") or "").strip().upper()
                 return {
                     "filter_col":            filter_col,

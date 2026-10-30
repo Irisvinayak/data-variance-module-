@@ -46,24 +46,36 @@ if exist "%ROOT%\backend\.venv\Scripts\python.exe" if not exist "%ROOT%\.venv\Sc
 
 REM Console output (startup errors included) goes to a per-instance file, so a
 REM task that dies at launch leaves evidence instead of a vanished window.
-REM Restart loop (code review M-27): Task Scheduler's own restart-on-failure only covers a
-REM task that fails to LAUNCH, not a server that crashes later. A clean exit (code 0, e.g.
-REM an operator stop) ends the loop; a crash is retried after a pause, up to MAXRESTARTS
-REM times in a row, then the task ends with the last error so it is visible in Task Scheduler.
-set /a MAXRESTARTS=20
+REM
+REM Restart loop. It NEVER gives up on its own: a slow boot (database, network or disk
+REM not ready yet) used to outlast the old 20-try limit and leave the backend down until
+REM the next reboot. The pause grows 10 s -> 60 s so a long outage does not spin.
+REM Any exit - crash or clean - is restarted; the only deliberate stop is the STOP file:
+REM     create  logs\55\STOP  (or logs\60\STOP)  then End the task
+REM and delete it again to allow starts. watchdog.ps1 honours the same file.
+REM Before every start a stale copy of this backend holding the port is cleared
+REM (free_port.ps1), so "address already in use" (WinError 10048) cannot block a start.
+set "LOG=%DV_LOG_DIR%\service-console.log"
+set "STOPFILE=%DV_LOG_DIR%\STOP"
 set /a ATTEMPT=0
+set /a PAUSE=10
 
 :run
-echo [%DATE% %TIME%] starting VERSION=%VER% with %PY% (attempt %ATTEMPT%) >> "%DV_LOG_DIR%\service-console.log"
-"%PY%" dev_server.py >> "%DV_LOG_DIR%\service-console.log" 2>&1
-set "RC=%ERRORLEVEL%"
-echo [%DATE% %TIME%] exited with code %RC% >> "%DV_LOG_DIR%\service-console.log"
-if "%RC%"=="0" exit /b 0
-set /a ATTEMPT+=1
-if %ATTEMPT% GTR %MAXRESTARTS% (
-    echo [%DATE% %TIME%] giving up after %MAXRESTARTS% restarts >> "%DV_LOG_DIR%\service-console.log"
-    exit /b %RC%
+if exist "%STOPFILE%" (
+    echo [%DATE% %TIME%] STOP file present - not starting >> "%LOG%"
+    exit /b 0
 )
+REM Roll the console log at ~20 MB so it can never fill the disk.
+for %%F in ("%LOG%") do if %%~zF GTR 20000000 move /Y "%LOG%" "%LOG%.old" >nul
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0free_port.ps1" -Version %VER% -LogFile "%LOG%"
+echo [%DATE% %TIME%] starting VERSION=%VER% with %PY% (attempt %ATTEMPT%) >> "%LOG%"
+"%PY%" dev_server.py >> "%LOG%" 2>&1
+set "RC=%ERRORLEVEL%"
+echo [%DATE% %TIME%] exited with code %RC% - restarting in %PAUSE% s >> "%LOG%"
+set /a ATTEMPT+=1
 REM ping is the pause: timeout.exe refuses to run without a console (Task Scheduler)
-ping -n 11 127.0.0.1 >nul
+set /a PINGS=PAUSE+1
+ping -n %PINGS% 127.0.0.1 >nul
+set /a PAUSE=PAUSE*2
+if %PAUSE% GTR 60 set /a PAUSE=60
 goto run

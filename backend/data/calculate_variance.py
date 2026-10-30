@@ -159,6 +159,17 @@ def _label_score(col: str, rows: list[dict]) -> float:
     return max(score, 0.0)
 
 
+def mapping_key_columns(attrib: dict[str, Any]) -> list[str]:
+    """Row-identity columns of a table-mapping <Row>: CompFilterColName, or when that
+    is absent, PrimaryColumn minus the FilterColumn. Many mapping files only declare
+    PrimaryColumn="SR_NO|REPORT_DATE"; ignoring it left SR_NO out of the key, so rows
+    were matched by a repeated label (PARTICULARS) and compared with the wrong row.
+    The reporting-date column is dropped: it differs between periods by definition."""
+    raw = attrib.get("CompFilterColName") or attrib.get("PrimaryColumn") or ""
+    fc = (attrib.get("FilterColumn") or "").strip().upper()
+    return [c.strip().upper() for c in raw.split("|") if c.strip() and c.strip().upper() != fc]
+
+
 def _is_datetime_col(col: str, rows: list[dict]) -> bool:
     """True if this column holds date/datetime values."""
     for row in rows:
@@ -205,11 +216,15 @@ def _pick_label_columns(
     upper_fc = (filter_col or "").upper()
 
     # ── Pass 1: name-hint match ───────────────────────────────────────────────
+    # Hints match as substrings ("CAT" in ALLOCATED_AMT, "HEAD" in HEADCOUNT), and a
+    # picked label column is removed from the value columns. A numeric or date
+    # column is never a description, so it must not be claimed here.
     hinted = [
         c for c in all_cols
         if c.upper() not in upper_comp
         and c.upper() != upper_fc
         and any(h in c.upper() for h in _LABEL_HINT_WORDS)
+        and not (rows and (_is_numeric_col(c, rows) or _is_datetime_col(c, rows)))
     ]
     if hinted:
         return hinted
@@ -809,6 +824,9 @@ def calculate_variance(
             if k.upper() != fc
             and k.upper() not in numeric_set
             and not _is_numeric_col(k, all_rows)
+            # A date column (UPDATED_ON, SUBMITTED_AT) differs between periods by
+            # nature, so in the key it would stop every row matching its previous one.
+            and not _is_datetime_col(k, all_rows)
         ]
         # Last resort: any non-date column
         if not auto_id:

@@ -304,3 +304,43 @@ def test_the_nlp_lookup_registers_tables_of_excel_returns(monkeypatch):
     monkeypatch.setattr(return_lookup.query_xml_lookup, "query_xml_label", lambda ctx: "x", raising=False)
     lookup = return_lookup._build_lookup(return_lookup.ANONYMOUS)
     assert lookup["EXCEL_T"][0]["return_id"] == "9"
+
+
+# ── Label / identifier auto-detection must not cost value columns or matches ──
+
+
+def test_a_numeric_column_named_like_a_label_stays_a_value_column():
+    # "CAT" is a hint word and sits inside ALLOCATED_AMT; "HEAD" inside HEADCOUNT.
+    rows = [{"PARTICULARS": "Loans", "ALLOCATED_AMT": 100, "HEADCOUNT": 5}]
+    assert cv._pick_label_columns(list(rows[0]), [], rows) == ["PARTICULARS"]
+
+
+def test_a_date_column_is_not_part_of_an_auto_detected_row_key():
+    data = [
+        {"RDATE": datetime(2025, 3, 31), "ROW_ID": "R1", "UPDATED_ON": datetime(2025, 4, 2), "AMT": 110},
+        {"RDATE": datetime(2025, 2, 28), "ROW_ID": "R1", "UPDATED_ON": datetime(2025, 3, 3), "AMT": 100},
+    ]
+    res = cv.calculate_variance(
+        "X", "T", "31-MAR-2025",
+        lambda *a: {"filter_col": "RDATE", "report_freq": "M"}, lambda q, *a: data,
+    )
+    assert res["rows"][0]["previous"]["previous_1"]["AMT"]["change"]["value"] == "10.00"
+    assert "removed_rows" not in res
+
+
+def test_primary_column_is_the_row_key_when_comp_filter_col_name_is_absent():
+    attrib = {"PrimaryColumn": "SR_NO|REPORT_DATE", "FilterColumn": "REPORT_DATE"}
+    assert cv.mapping_key_columns(attrib) == ["SR_NO"]
+    assert cv.mapping_key_columns({**attrib, "CompFilterColName": "PARTICULARS|SR_NO"}) == ["PARTICULARS", "SR_NO"]
+    assert cv.mapping_key_columns({"FilterColumn": "REPORT_DATE"}) == []
+
+
+def test_repeated_labels_match_by_sr_no_not_by_label():
+    def rows(d, base):
+        return [{"REPORT_DATE": d, "SR_NO": n, "PARTICULARS": "Opening stock", "AMT": base + n} for n in (1, 2, 3)]
+    data = rows(datetime(2026, 8, 31), 100) + rows(datetime(2026, 7, 31), 0)
+    meta = {"filter_col": "REPORT_DATE", "report_freq": "M",
+            "comp_filter_col_names": cv.mapping_key_columns({"PrimaryColumn": "SR_NO|REPORT_DATE", "FilterColumn": "REPORT_DATE"})}
+    res = cv.calculate_variance("X", "T", "31-AUG-2026", lambda *a: meta, lambda q, *a: data)
+    assert "duplicate_identifiers" not in res
+    assert all(r["previous"]["previous_1"]["AMT"]["change"]["value"] == "100.00" for r in res["rows"])

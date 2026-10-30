@@ -84,12 +84,20 @@ def analyze_series(result: dict[str, Any], spec: AnalysisSpec, dates: list[str])
             known = [v for v in vals if v is not None]
             steps = [b - a for a, b in zip(vals, vals[1:]) if a is not None and b is not None]
             pcts = [_pct(a, b) for a, b in zip(vals, vals[1:]) if a is not None and b is not None]
+            # Each step is scored against the OTHER steps. Scoring it against a mean and
+            # deviation that include itself caps |z| at (n-1)/sqrt(n): 2.0 for five steps,
+            # so a six-period window could never flag anything.
             unusual: list[int] = []
             if len(steps) >= 3:
-                mu, sd = mean(steps), pstdev(steps)
-                if sd > 0:
-                    unusual = [k + 1 for k, s in enumerate(steps) if abs((s - mu) / sd) > Decimal(str(z_limit))]
+                limit = Decimal(str(z_limit))
+                for k, s in enumerate(steps):
+                    others = steps[:k] + steps[k + 1:]
+                    mu, sd = mean(others), pstdev(others)
+                    if (sd > 0 and abs((s - mu) / sd) > limit) or (sd == 0 and _q(s - mu) != 0):
+                        unusual.append(k + 1)
             first, last = known[0], known[-1]
+            # The trend shape spans gaps: [5, None, 10] has no adjacent step but did rise.
+            known_steps = [b - a for a, b in zip(known, known[1:])]
             total_pct = _pct(first, last)
             items.append({
                 "row": i,
@@ -99,7 +107,7 @@ def analyze_series(result: dict[str, Any], spec: AnalysisSpec, dates: list[str])
                 "values": [None if v is None else str(_q(v)) for v in vals],
                 "changes": [str(_q(s)) for s in steps],
                 "pct_changes": [None if p is None else str(_q(p)) for p in pcts],
-                "trend": _shape(steps),
+                "trend": _shape(known_steps),
                 "total_change": str(_q(last - first)),
                 "total_pct_change": None if total_pct is None else str(_q(total_pct)),
                 "unusual_steps": unusual,
@@ -117,7 +125,7 @@ def analyze_series(result: dict[str, Any], spec: AnalysisSpec, dates: list[str])
         picked = [it for it in picked if it["unusual_steps"]]
         notes.append(
             f"Rule: a period-to-period change is unusual when it is more than {z_limit:g} standard deviations "
-            "from that item's average change over the window (at least 3 changes are needed).")
+            "from the average of that item's other changes over the window (at least 3 changes are needed).")
     picked.sort(key=lambda it: it["_abs_total"], reverse=True)
     if spec.top_n:
         picked = picked[: spec.top_n]

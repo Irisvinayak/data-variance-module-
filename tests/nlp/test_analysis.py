@@ -128,3 +128,32 @@ def test_no_comparison_data_returns_input_unchanged():
 def test_non_numeric_cells_are_skipped():
     res = run("Show only increased values.", {"A": ("x", "y"), "B": ("1", "2")})
     assert ids(res) == ["B"]
+
+
+def test_direction_follows_the_sign_of_the_change_not_the_status():
+    data = {"UP": ("100", "150"), "NEG_NEW": ("0", "-40"), "NEG_TO_ZERO": ("-30", "0")}
+    assert set(ids(run("Show only increased values.", data))) == {"UP", "NEG_TO_ZERO"}
+    assert set(ids(run("Show only decreased values.", data))) == {"NEG_NEW"}
+
+
+def _series_result(values):
+    """values oldest -> newest for one row / column AMT."""
+    n = len(values) - 1
+    prev = {f"previous_{k}": {"AMT": {"value": values[n - k]}} for k in range(1, n + 1) if values[n - k] is not None}
+    return {"columns": ["AMT"], "rows": [{"identifier": "A", "display_label": "A",
+                                          "current": {"AMT": values[-1]}, "previous": prev}]}
+
+
+def test_one_spike_in_a_six_period_window_is_unusual():
+    from backend.nlp.series import analyze_series
+    dates = [f"d{i}" for i in range(6)]
+    res = analyze_series(_series_result(["10", "11", "12", "13", "500", "14"]),
+                         parse_operation("identify elements with unusual movement over the last six months"), dates)
+    items = res["series"]["items"]
+    assert items and 4 in items[0]["unusual_steps"]
+
+
+def test_a_gap_does_not_turn_a_rise_into_flat():
+    from backend.nlp.series import analyze_series
+    res = analyze_series(_series_result(["5", None, "10"]), parse_operation("show the trend of AMT"), ["c", "b", "a"])
+    assert res["series"]["items"][0]["trend"] == "increasing"

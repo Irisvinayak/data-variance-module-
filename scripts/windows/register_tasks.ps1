@@ -45,22 +45,9 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $bat  = Join-Path $PSScriptRoot "run_backend.bat"
 if (-not (Test-Path $bat)) { throw "Launcher not found: $bat" }
 
-# The ports come from the same settings the backend reads (code review M-27), so changing
-# DV_SERVER_PORT_55 / _60 in .env needs no edit here. Overlay file wins over the root .env;
-# defaults are the documented 8004 (5.5) and 8003 (6.0).
-function Get-DvPort([string] $Version) {
-    $default = if ($Version -eq "55") { 8004 } else { 8003 }
-    $files = @((Join-Path $root ".env"), (Join-Path $root "config\env\.env.$Version"))
-    $found = $null
-    foreach ($f in $files) {
-        if (-not (Test-Path $f)) { continue }
-        foreach ($line in Get-Content $f) {
-            if ($line -match "^\s*DV_SERVER_PORT_$Version\s*=\s*(\d+)\s*(#.*)?$") { $found = [int]$Matches[1] }
-            elseif (($line -match "^\s*DV_SERVER_PORT\s*=\s*(\d+)\s*(#.*)?$") -and ($null -eq $found)) { $found = [int]$Matches[1] }
-        }
-    }
-    if ($null -ne $found) { return $found } else { return $default }
-}
+# Port lookup, task names and the stale-process helpers are shared with the launcher
+# and the watchdog.
+. (Join-Path $PSScriptRoot "dv_common.ps1")
 $ports = @{}
 foreach ($v in @("55", "60")) { $ports[$v] = Get-DvPort $v }
 
@@ -69,7 +56,7 @@ if ($User -ne "SYSTEM") {
 }
 
 foreach ($v in $Versions) {
-    $name = "DataVariance-" + $(if ($v -eq "55") { "5.5" } else { "6.0" })
+    $name = Get-DvTaskName $v
     $port = $ports[$v]
 
     # Replace any previous registration and free the port, so the new task
@@ -116,6 +103,30 @@ foreach ($v in $Versions) {
             -Description "Data Variance backend, iDEAL $($name.Split('-')[1]) on port $port ($root)" | Out-Null
     }
     Write-Host "Registered $name  (port $port)"
+
+    # Watchdog: every 5 minutes, checks GET /app-config and restarts the backend when it
+    # is down for ANY reason (gave up at boot, clean exit, hung, stale port holder, task
+    # stuck as "Running"). See watchdog.ps1. Runs as SYSTEM; it only needs local access.
+    $wdName = "$name-Watchdog"
+    if (Get-ScheduledTask -TaskName $wdName -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $wdName -Confirm:$false
+    }
+    $wdScript = Join-Path $PSScriptRoot "watchdog.ps1"
+    $wdAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+        -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$wdScript`" -Version $v" `
+        -WorkingDirectory $root
+    $wdTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
+        -RepetitionInterval (New-TimeSpan -Minutes 5)
+    $wdBoot = New-ScheduledTaskTrigger -AtStartup
+    $wdBoot.Delay = "PT5M"     # first check 5 min after boot, after the backend's own start
+    $wdSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable -MultipleInstances IgnoreNew `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 4)
+    $wdPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName $wdName -Action $wdAction -Trigger @($wdTrigger, $wdBoot) `
+        -Settings $wdSettings -Principal $wdPrincipal `
+        -Description "Restarts $name when http://127.0.0.1:$port/app-config stops answering" | Out-Null
+    Write-Host "Registered $wdName  (every 5 min)"
 
     if ($StartNow) {
         Start-ScheduledTask -TaskName $name
