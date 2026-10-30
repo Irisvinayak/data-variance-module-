@@ -226,19 +226,18 @@ def test_ready_is_never_throttled(client, monkeypatch):
 
 # ── M-27: launcher and registration script ───────────────────────────────────
 
-def test_the_launcher_restarts_a_crashed_backend_but_not_a_clean_exit():
+def test_the_launcher_always_restarts_and_frees_the_port():
     text = (ROOT / "scripts" / "windows" / "run_backend.bat").read_text(encoding="utf-8")
-    assert ":run" in text and "goto run" in text and "MAXRESTARTS" in text
-    assert 'if "%RC%"=="0" exit /b 0' in text
+    assert ":run" in text and "goto run" in text
+    assert "MAXRESTARTS" not in text and "STOP" in text      # never gives up; STOP file is the only stop
+    assert "free_port.ps1" in text
     assert "ping -n" in text and "timeout /t" not in text.replace("REM", "")   # timeout.exe needs a console
 
 
-def test_the_registration_script_reads_ports_and_only_kills_python():
-    text = (ROOT / "scripts" / "windows" / "register_tasks.ps1").read_text(encoding="utf-8")
-    assert '$ports = @{ "55" = 8004; "60" = 8003 }' not in text
+def test_free_port_reads_ports_and_only_kills_python():
+    text = (ROOT / "scripts" / "windows" / "dv_common.ps1").read_text(encoding="utf-8")
     assert "Get-DvPort" in text and "DV_SERVER_PORT_" in text
     assert 'ProcessName -like "python*"' in text
-    assert "Start-Sleep -Seconds 20" not in text and "AddSeconds(120)" in text
 
 
 # ── L-22 / L-26 / L-30: repository hygiene ───────────────────────────────────

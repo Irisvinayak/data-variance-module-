@@ -5,8 +5,8 @@ REM
 REM   run_backend.bat 55   ->  iDEAL 5.5 on port 8004
 REM   run_backend.bat 60   ->  iDEAL 6.0 on port 8003
 REM
-REM Used by the scheduled tasks registered by register_tasks.ps1, and fine to
-REM run by hand. Both instances share the root .env (DB, paths, ports are all
+REM Started at boot by the Task Scheduler task DataVariance-<ver> (see
+REM docs), and fine to run by hand. Both instances share the root .env (DB, paths, ports are all
 REM version-keyed there); this script only picks the VERSION via a per-instance
 REM overlay (config\env\.env.55 / .env.60, see backend/config/settings.py
 REM DV_ENV_FILE) and gives each instance its own log folder, because two
@@ -52,7 +52,7 @@ REM not ready yet) used to outlast the old 20-try limit and leave the backend do
 REM the next reboot. The pause grows 10 s -> 60 s so a long outage does not spin.
 REM Any exit - crash or clean - is restarted; the only deliberate stop is the STOP file:
 REM     create  logs\55\STOP  (or logs\60\STOP)  then End the task
-REM and delete it again to allow starts. watchdog.ps1 honours the same file.
+REM and delete it again to allow starts.
 REM Before every start a stale copy of this backend holding the port is cleared
 REM (free_port.ps1), so "address already in use" (WinError 10048) cannot block a start.
 set "LOG=%DV_LOG_DIR%\service-console.log"

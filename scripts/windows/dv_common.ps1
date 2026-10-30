@@ -1,11 +1,7 @@
-# dv_common.ps1 - helpers shared by register_tasks.ps1, free_port.ps1 and watchdog.ps1.
+# dv_common.ps1 - helpers for free_port.ps1 (called by run_backend.bat).
 # Dot-source it:  . (Join-Path $PSScriptRoot "dv_common.ps1")
 
 $script:DvRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-
-function Get-DvTaskName([string] $Version) {
-    "DataVariance-" + $(if ($Version -eq "55") { "5.5" } else { "6.0" })
-}
 
 # The port comes from the same settings the backend reads, so changing
 # DV_SERVER_PORT_55 / _60 in .env needs no edit here. The overlay file wins over the
@@ -62,15 +58,6 @@ function Clear-DvPort([int] $Port, [string] $LogFile) {
     }
     Start-Sleep -Seconds 2
     return (@(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue).Count -eq 0)
-}
-
-function Test-DvHealthy([int] $Port, [int] $TimeoutSec = 20) {
-    try {
-        Invoke-RestMethod -Uri "http://127.0.0.1:$Port/app-config" -TimeoutSec $TimeoutSec | Out-Null
-        return $true
-    } catch {
-        return $false
-    }
 }
 
 function Write-DvLog([string] $LogFile, [string] $Message) {
