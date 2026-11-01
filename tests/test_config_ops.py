@@ -230,14 +230,14 @@ def test_the_launcher_always_restarts_and_frees_the_port():
     text = (ROOT / "scripts" / "windows" / "run_backend.bat").read_text(encoding="utf-8")
     assert ":run" in text and "goto run" in text
     assert "MAXRESTARTS" not in text and "STOP" in text      # never gives up; STOP file is the only stop
-    assert "free_port.ps1" in text
+    assert "Get-NetTCPConnection" in text
     assert "ping -n" in text and "timeout /t" not in text.replace("REM", "")   # timeout.exe needs a console
 
 
-def test_free_port_reads_ports_and_only_kills_python():
-    text = (ROOT / "scripts" / "windows" / "dv_common.ps1").read_text(encoding="utf-8")
-    assert "Get-DvPort" in text and "DV_SERVER_PORT_" in text
-    assert 'ProcessName -like "python*"' in text
+def test_the_launcher_reads_the_port_and_only_kills_python():
+    text = (ROOT / "scripts" / "windows" / "run_backend.bat").read_text(encoding="utf-8")
+    assert "DV_SERVER_PORT_%VER%" in text
+    assert "ProcessName -like 'python*'" in text
 
 
 # ── L-22 / L-26 / L-30: repository hygiene ───────────────────────────────────
