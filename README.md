@@ -129,7 +129,8 @@ npm run build:55 -- --outDir dist-55
 npm run build:60 -- --outDir dist-60
 
 for creating and activate the .venv file 
-> py -3.12 -m venv .venv
->> .\.venv\Scripts\Activate.ps1
->> python -m pip install --upgrade pip
->> pip install -r requirements.txt
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python --version
+python -m pip install --upgrade pip
+pip install -r requirements.txt

@@ -43,6 +43,25 @@ _DEPT_NX_ATTR_OVERRIDE    = os.getenv("XML_DEPT_NX_ATTR",    "").strip()
 
 _AUTH_TTL = AUTH_TTL_SEC
 
+# Admin roles: a user whose RoleId (user master) is listed here may access every
+# return in the returns masters, regardless of department. Comma/pipe separated, e.g. DV_ADMIN_ROLE_IDS=1,5. Empty = off,
+# so existing deployments behave exactly as before.
+_ADMIN_ROLE_IDS = frozenset(
+    t.strip()
+    for t in os.getenv("DV_ADMIN_ROLE_IDS", "").replace("|", ",").split(",")
+    if t.strip()
+)
+
+
+def is_admin_role(role_id) -> bool:
+    return bool(role_id) and str(role_id).strip() in _ADMIN_ROLE_IDS
+
+
+def _all_return_ids(ctx: RequestContext) -> set:
+    """Every return id in the XBRL + non-XBRL returns masters."""
+    from ..data.report_lookup import parse_all_returns  # local: avoid import cycle
+    return {str(r.get("Id", "")).strip() for r in parse_all_returns(ctx) if str(r.get("Id", "")).strip()}
+
 # Keyed by RequestContext.cache_key -> (tenant_id, login_id). Tenant is part of
 # the key in both modes: it is always "" under 5.5, and under 6.0 the same
 # login_id in two tenants is two different users with two different allow-lists.
@@ -198,6 +217,17 @@ def _resolve_allowed_forms(ctx: RequestContext):
         )
         return None
 
+    role_id = (matched_attrs.get(attrs["role"], "") or "").strip()
+    if _ADMIN_ROLE_IDS and is_admin_role(role_id):
+        try:
+            all_ids = _all_return_ids(ctx)
+        except Exception as exc:  # noqa: BLE001 - fall back to department grants
+            logger.error("[AUTH] admin role %r: cannot load returns master (%s) | %s", role_id, exc, ctx)
+            all_ids = set()
+        if all_ids:
+            logger.info("[AUTH] admin role %r -> all returns (%d) | %s", role_id, len(all_ids), ctx)
+            return all_ids | _dept_ids_or_empty(ctx, profile, attrs, dept_id)
+
     if not dept_id:
         # Known user, but no department on the row. Distinguished from
         # "user not found" so the operator sees a data problem, not a login one.
@@ -234,6 +264,21 @@ def _resolve_allowed_forms(ctx: RequestContext):
         dept_id, attrs["dept"], os.path.basename(dept_path), ctx, available,
         attrs["dept_id"],
     )
+    return set()
+
+
+def _dept_ids_or_empty(ctx, profile, attrs, dept_id) -> set:
+    """Department grants for an admin user; never raises (admin already has all)."""
+    if not dept_id:
+        return set()
+    dept_path = profile.department_xml_path(ctx)
+    dept_root = load_xml_tree(dept_path, os.path.basename(dept_path))
+    if dept_root is None:
+        return set()
+    for el in dept_root.findall("Row"):
+        if el.attrib.get(attrs["dept_id"], "").strip() == dept_id:
+            return (_split_ids(el.attrib.get(attrs["dept_forms"], ""), profile.forms_delimiter)
+                    | _split_ids(el.attrib.get(attrs["dept_nx"], ""), profile.forms_delimiter))
     return set()
 
 

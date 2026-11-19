@@ -221,7 +221,7 @@ The five open **High** issues are H-07, H-12, H-13, H-14 and H-16: four of them 
 | M-27 | 🟡 | Restart-on-failure doesn't cover a crash after launch; the ports are hardcoded and the script force-kills… | Restart loop or NSSM; read the ports from config; kill only `python.exe`; poll for about 120 s. |
 | M-28 | 🟡 | Unpinned dependencies (`>=`, caret ranges) with no lock file. | `pip-tools`/`uv` lock; `npm ci`. |
 | M-31 | 🟡 | Bare `int()`/`float()` on environment values at import; a typo crashes startup without naming the variable. | `pydantic-settings`. |
-| M-32 | 🟡 | Side-by-side 5.5/6.0 processes share `logs/<date>.log` by default (interleaving, lock collisions). | Default to `logs/<version>/` (the new `run_backend.bat` does this). |
+| M-32 | 🟡 | Side-by-side 5.5/6.0 processes share `logs/<date>.log` by default (interleaving, lock collisions). | Default to `logs/<version>/` (set `DV_LOG_DIR=logs\<ver>` in each WinSW service XML). |
 | L-17 | 🟢 | No metrics (latency, LLM, DB) and no `/ready` probe that checks the DB and LLM. | Prometheus metrics plus `/ready`. |
 | L-22 | 🟢 | `env/` also matches `config/env/`, so `!config/env/*.example` has no effect for new files. | `/env/`. |
 | L-23 | 🟢 | Mentions the old port 8002. | Update, or mark that file superseded by this report. |

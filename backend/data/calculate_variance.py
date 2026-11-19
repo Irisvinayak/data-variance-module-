@@ -510,13 +510,25 @@ def _column_metrics(
     return metrics
 
 
+# Placeholder text some loaders write instead of a real NULL (the F024 seed data
+# stores the string 'None' in its date column). Treated as an empty part.
+_NULL_TEXT = frozenset({"none", "null", "nan", "nat"})
+
+
+def _ident_part(value: Any) -> str:
+    """One identifier part as text. SQL NULL (None) and NULL-placeholder text are
+    an empty part, not the literal "None" — which leaked into labels as
+    "None_Stage one"."""
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in _NULL_TEXT else text
+
+
 def build_identifier(row: dict[str, Any], comp_filter_cols: list[str]) -> str:
     """Build a composite business-key string from the given columns."""
     row_upper = {k.upper(): v for k, v in row.items()}
-    parts = [
-        str(row_upper.get(col.upper(), "")).strip()
-        for col in comp_filter_cols
-    ]
+    parts = [_ident_part(row_upper.get(col.upper())) for col in comp_filter_cols]
     return "_".join(p for p in parts if p)
 
 
@@ -526,7 +538,7 @@ def build_key(row: dict[str, Any], comp_filter_cols: list[str]) -> tuple[str, ..
     display, which merges distinct rows ("A_B","C" vs "A","B_C") and rows whose empty
     part sits in a different column (code review H-14); matching must not use it."""
     row_upper = {k.upper(): v for k, v in row.items()}
-    return tuple(str(row_upper.get(col.upper(), "")).strip() for col in comp_filter_cols)
+    return tuple(_ident_part(row_upper.get(col.upper())) for col in comp_filter_cols)
 
 
 def build_query(

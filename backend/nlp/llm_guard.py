@@ -48,8 +48,31 @@ def make_session(pool_size: int | None = None):
     session = requests.Session()
     adapter = HTTPAdapter(pool_connections=4, pool_maxsize=size)
     session.mount("http://", adapter)
-    session.mount("https://", adapter)
+    session.mount("https://", _tls_adapter(HTTPAdapter, size) or adapter)
     return session
+
+
+def _tls_adapter(base, size: int):
+    """An HTTPS adapter that checks the certificate against DV_NLP_OLLAMA_TLS_HOSTNAME
+    instead of the host in the URL, or None when that setting is empty.
+
+    For an LLM proxy reached by IP whose certificate names a domain
+    (https://3.109.51.228 serving *.irisregtech.com): the certificate is still fully
+    verified (trusted CA, expiry, and a name match), just against the expected name
+    rather than the IP. The name is also sent as SNI. Verification is never disabled."""
+    import os
+
+    hostname = os.getenv("DV_NLP_OLLAMA_TLS_HOSTNAME", "").strip()
+    if not hostname:
+        return None
+
+    class _HostnameAdapter(base):
+        def init_poolmanager(self, *args, **kwargs):
+            kwargs["assert_hostname"] = hostname
+            kwargs["server_hostname"] = hostname
+            return super().init_poolmanager(*args, **kwargs)
+
+    return _HostnameAdapter(pool_connections=4, pool_maxsize=size)
 
 
 class CircuitBreaker:

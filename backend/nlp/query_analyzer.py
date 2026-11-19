@@ -289,6 +289,34 @@ def _distinctive_tokens_by_return(
     }
 
 
+_NAME_CODE_RE = re.compile(r"^([a-z]{1,3})(\d{2,4})$")
+_QUERY_CODE_RE = re.compile(r"^([a-z]{0,3})(\d{1,4})$")
+
+
+def _code_named(name_tok: str, query_tokens: set[str], name_words: set[str]) -> bool:
+    """Does the query name the code token `name_tok` ("f013") in shorthand?
+
+    Users type "QCB 13", "QCB F13" or "F13" for QCB_F013 — none of which is the
+    exact token "f013", so the return went unmatched and retrieval guessed
+    QCB_F024_113 from the digits. Numbers compare by value (013 == 13). A query
+    token with a letter prefix must use the same prefix ("f13"); a BARE number
+    ("13") counts only when the query also says one of the name's other words
+    ("qcb"), so a stray number in a metric query can never pin a return."""
+    m = _NAME_CODE_RE.match(name_tok)
+    if not m:
+        return False
+    prefix, num = m.group(1), int(m.group(2))
+    for q in query_tokens:
+        mq = _QUERY_CODE_RE.match(q)
+        if not mq or int(mq.group(2)) != num:
+            continue
+        if mq.group(1) == prefix:
+            return True
+        if not mq.group(1) and (query_tokens & (name_words - {name_tok})):
+            return True
+    return False
+
+
 def _match_named_returns(
     query: str, candidates: list[dict[str, Any]], corpus: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -309,6 +337,9 @@ def _match_named_returns(
         return []
 
     distinctive = _distinctive_tokens_by_return(candidates, corpus)
+    # Code shorthand ("qcb 13") is read from the DATE-FREE text, so the day or
+    # year of "as of 31-Mar-2025" can never be taken for return F031 / F2025.
+    code_tokens = set(_tokens(_extract_date_text(query)[0]))
 
     scored = []
     for r in candidates:
@@ -316,7 +347,9 @@ def _match_named_returns(
         name_tokens = distinctive.get(rid) or set()
         if not name_tokens:
             continue
-        matched = name_tokens & query_tokens
+        name_words = set(_tokens(r.get("Name", "")))
+        matched = {t for t in name_tokens
+                   if t in query_tokens or _code_named(t, code_tokens, name_words)}
         if not matched:
             continue
         # Share of the return's identity present in the query — a query naming
@@ -425,6 +458,12 @@ def _strip_return_mention(text: str, matched_returns: list[dict[str, Any]]) -> s
     name_tokens: set[str] = set()
     for r in matched_returns:
         name_tokens.update(t for t in _tokens(r.get("Name", "")) if len(t) > 1)
+    # Shorthand spellings of a code token ("f013" typed as "f13" or "13").
+    for t in list(name_tokens):
+        m = _NAME_CODE_RE.match(t)
+        if m:
+            num = str(int(m.group(2)))
+            name_tokens.update({num, m.group(1) + num})
     if not name_tokens:
         return text
     # Lookarounds on the alphanumeric class, NOT \b: "_" is a word character,
