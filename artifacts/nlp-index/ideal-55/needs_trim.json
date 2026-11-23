@@ -1,0 +1,85 @@
+{
+  "cims_ale_q_anx_1_bal": [
+    "description"
+  ],
+  "cims_ale_q_anx_1_loss_pro_ind": [
+    "description"
+  ],
+  "cims_ale_q_gen_info": [
+    "description"
+  ],
+  "cims_ale_q_sec2_e1": [
+    "item"
+  ],
+  "cims_ale_q_sec2_e2": [
+    "item"
+  ],
+  "cims_ale_q_sec2_f1": [
+    "item"
+  ],
+  "cims_ale_q_sec2_f2": [
+    "item"
+  ],
+  "cims_lr_cat_of_depositors": [
+    "description"
+  ],
+  "cims_raq_m_sec9_sensec_partb": [
+    "description"
+  ],
+  "cims_raq_q_gen_info": [
+    "description"
+  ],
+  "cims_raq_q_sec10": [
+    "description"
+  ],
+  "cims_raq_q_sec1_part_a_dom": [
+    "period_delinquency"
+  ],
+  "cims_raq_q_sec1_part_b_dom": [
+    "period_delinquency"
+  ],
+  "cims_raq_q_sec1_part_c_o": [
+    "period_delinquency"
+  ],
+  "cims_raq_q_sec1_part_d_o": [
+    "period_delinquency"
+  ],
+  "cims_raq_q_sec2_part_b": [
+    "movement_provision_npa"
+  ],
+  "cims_raq_q_sec2_part_c": [
+    "item"
+  ],
+  "cims_raq_q_sec3_part_b": [
+    "movement_restructure_std_la"
+  ],
+  "cims_raq_q_sec4_part_a": [
+    "movement_from"
+  ],
+  "cims_raq_q_sec4_part_b": [
+    "movement_from"
+  ],
+  "cims_raq_q_sec4_part_d": [
+    "description"
+  ],
+  "cims_raq_q_sec6_part_a": [
+    "category_investment_dom_opr"
+  ],
+  "cims_raq_q_sec6_part_c_2": [
+    "description"
+  ],
+  "cims_raq_q_sec9_sensec_partb": [
+    "description"
+  ],
+  "cims_ror_q_sec_a1": [
+    "line_item"
+  ],
+  "cims_ror_q_sec_b": [
+    "line_item"
+  ],
+  "cims_ror_q_sec_c": [
+    "country_code",
+    "country_name",
+    "line_item"
+  ]
+}

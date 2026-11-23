@@ -1084,6 +1084,19 @@ def _nlresolve_core(
 
     computed = _restrict_result_columns(computed, resolution["selected_columns"])
 
+    # The user described a specific line item ("Representative Office expenses") without
+    # an explicit "element ..." keyword: show only those rows, and say so. Never applied
+    # to a follow-up (date_query is set only then) or when the user already named elements/dimensions.
+    if (spec is not None and date_query is None and not spec.target_elements
+            and not spec.dimension_filters):
+        try:
+            from ..nlp.row_focus import focus_rows
+            computed, focus_note = focus_rows(computed, analysis.metric_text)
+            if focus_note:
+                spec.notes.append(focus_note)
+        except Exception:
+            logger.exception("[api.nlp] /variance/nlresolve | %s | row focus failed; keeping all rows", ctx)
+
     # What the user wants DONE with the numbers (filter, rank, unchanged, new/removed…).
     # Additive and fail-safe: an analysis problem must never cost the user their table.
     try:

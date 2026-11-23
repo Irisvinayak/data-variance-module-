@@ -104,8 +104,8 @@
       "b) Credit event payments(cash settled):",
       "paid",
       "received ",
-      "\u2022 paid",
-      "\u2022 received "
+      "• paid",
+      "• received "
     ]
   },
   "cims_ale_q_sec2_f2": {
@@ -123,8 +123,8 @@
       "b) Credit event payments(cash settled):",
       "paid",
       "received ",
-      "\u2022 paid",
-      "\u2022 received "
+      "• paid",
+      "• received "
     ]
   },
   "cims_ale_q_signatory": {
@@ -136,6 +136,154 @@
       "Mobile No.",
       "Name",
       "Place"
+    ]
+  },
+  "cims_lr_cat_of_depositors": {
+    "description": [
+      "     Any other, please specify",
+      "    Credit Societies",
+      "    HUFs",
+      "    Partnership Firms",
+      "    Proprietorship Firms",
+      "    Trusts",
+      "A. Individuals",
+      "B. Banks",
+      "C. Financial Institutions",
+      "D. PSUs",
+      "E. Pvt. Corporates",
+      "F. Govt./Local Bodies",
+      "G. Mutual Funds",
+      "H. Pension/Provident Funds/ Insurance",
+      "I. NBFCs",
+      "J. Others' Deposits",
+      "OTHERS",
+      "Total Deposits (A to J OR a + b) ",
+      "UDDZRTUDHZ",
+      "a. Core Deposits",
+      "b. Non Core Deposits"
+    ]
+  },
+  "cims_lr_gen_info": {
+    "description": [
+      "Address Of Reporting Institution",
+      "Bank Code",
+      "Categories Of Banks",
+      "Date Of Report",
+      "Date of Audit",
+      "General Remarks",
+      "Name Of Reporting Institution",
+      "Reporting Frequency",
+      "Reporting Period Start Date",
+      "Return Code",
+      "Return Name",
+      "Return Version",
+      "Status",
+      "Tool Name",
+      "Whether bank is required to submit CPR return to RBI?"
+    ]
+  },
+  "cims_lr_sign_info": {
+    "description": [
+      "Date",
+      "Designation",
+      "E-mail Id",
+      "Landline No.",
+      "Mobile No.",
+      "Name",
+      "Place"
+    ]
+  },
+  "cims_raq_m_sec9_sensec_parta": {
+    "description": [
+      "1. Convertible Bonds and Debentures",
+      "1. Financial Guarantees issued to Stock Exchanges on behalf of Stock Brokers",
+      "1. Individuals",
+      "2. Equities",
+      "2. Other Financial Guarantees",
+      "2. Share and Stock Brokers",
+      "2..Equities",
+      "2a. Not exempted from regulatory ceiling",
+      "2b. Exempted from regulatory ceiling",
+      "3. Any other (Pl. specify)",
+      "3. Equity Oriented Mutual Funds",
+      "3. Market Makers",
+      "4. Any other (to be specified)",
+      "4. IPO Financing",
+      "5. Other Corporates",
+      "6. Any other (Pl. specify)",
+      "A1. Advances to Capital Market (Fund based)_DOM_EXP",
+      "A2. Advances to Capital Market (Non-fund based)",
+      "A3. Investments in Capital Market",
+      "All other",
+      "NIL",
+      "Total Advances to Capital Market (1 to 6)",
+      "Total Capital Market Exposure (A1 + A2 + A3)",
+      "Total Investments in Capital Market",
+      "Total Non-fund based",
+      "VCF Exposure (86185) and JV/Associate(4847)",
+      "of which All Borrowers against security of shares"
+    ]
+  },
+  "cims_raq_m_sec9_sensec_partb": {
+    "description": [
+      " A.2.2 Any Other- Please Specify",
+      "A Total Credit",
+      "A.1 Direct",
+      "A.1.1 Residential Mortgages",
+      "A.1.1.a Residential Mortgages - Individual Housing Loans qualifying for Priority Sector",
+      "A.1.1.b Residential Mortgages - All Others",
+      "A.1.2 Commercial Real Estate",
+      "A.1.2.1 Commercial Real Estate - Residential Housing (CRE-RH)",
+      "A.1.2.2 Commercial Real Estate - Other",
+      "A.1.3 Any Other- Please Specify",
+      "A.2 Indirect",
+      "A.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
+      "Any Other- Please Specify ",
+      "B Total Investment",
+      "B.1 Direct",
+      "B.1.1 Commercial Real Estate",
+      "B.1.2 Investments in MBS and other securitized exposures",
+      "B.1.2.a Residential Real Estate",
+      "B.1.2.b Commercial Real Estate",
+      "B.1.3 Any Other- Please Specify",
+      "B.2 Indirect",
+      "B.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
+      "B.2.2 Any Other- Please Specify",
+      "C Total Credit and Investment",
+      "C.1 Direct (A.1 + B.1)",
+      "C.1.1 Residential Mortgages (A.1.1)",
+      "C.1.1.1 Residential Mortgages - Individual Housing Loans qualifying for Priority Sector (A.1.1.a)",
+      "C.1.1.2 Residential Mortgages - All Others (A.1.1.b)",
+      "C.1.2 Commercial Real Estate (A.1.2 + B.1.1)",
+      "C.1.3 Investments in MBS and other securitized exposures",
+      "C.1.3.1 Residential Real Estate (B.1.2.a)",
+      "C.1.3.2 Commercial Real Estate (B.1.2.b)",
+      "C.1.4 Any Other (A.1.3 + B.1.3)",
+      "C.2 Indirect (A.2+B.2)",
+      "C.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs) (A.2.1 + B.2.1)",
+      "C.2.2 Any Other- Indirect Exposure (A.2.2 + B.2.2)",
+      "NIL",
+      "OTHERS"
+    ]
+  },
+  "cims_raq_q_gen_info": {
+    "description": [
+      "Address",
+      "Bank Category",
+      "Bank Code",
+      "Date of Audit",
+      "Date of Report ",
+      "For the Period Ended",
+      "General Remarks",
+      "Reporting Frquency",
+      "Reporting Institution",
+      "Return Code",
+      "Return Name",
+      "Return Version",
+      "Start Date",
+      "Status ",
+      "Tool Name",
+      "Validation Status "
     ]
   },
   "cims_raq_q_sec10": {
@@ -161,6 +309,14 @@
       "F. Micro, Small and Medium Enterprises",
       "F.1 Direct Exposure",
       "F.2 Indirect Exposure"
+    ]
+  },
+  "cims_raq_q_sec11": {
+    "country_brw_cuntr_party": [
+      "Ninc"
+    ],
+    "country_risk": [
+      "LOW RISK"
     ]
   },
   "cims_raq_q_sec1_exc_govt_paper": {
@@ -282,6 +438,37 @@
       "D. Amount of Provisions for NPAs at end of the FY/Period"
     ]
   },
+  "cims_raq_q_sec2_part_c": {
+    "item": [
+      "        - (Loss provision)",
+      "        - Amount",
+      "1  Inter-bank assets",
+      "2   Commercial paper",
+      "3     Notes and bonds",
+      "4     SLR Securities",
+      "5    Receivables",
+      "6 Guarantee outstanding",
+      "7 Letters of credit (Docy+Clean) outstanding",
+      "8 Other contingent credit exposures",
+      "Grand-Total ( 1 to 8)",
+      "Sub-Total (1 to 5)",
+      "Sub-total(6 to 8)"
+    ]
+  },
+  "cims_raq_q_sec3_part_a": {
+    "category": [
+      "Doubtful Advances",
+      "Loss Advances",
+      "Standard Advances",
+      "Sub-standard Advances",
+      "Total"
+    ],
+    "description": [
+      "Amount",
+      "Number of borrowers",
+      "Sacrifice on diminution"
+    ]
+  },
   "cims_raq_q_sec3_part_b": {
     "movement_restructure_std_la": [
       "       Of  which increase in outstanding due to additional /fresh sanctions to existing restructured accounts",
@@ -343,6 +530,31 @@
       "G. NPAs at the end of the Period"
     ]
   },
+  "cims_raq_q_sec4_part_d": {
+    "description": [
+      "Cases Decided at the beginning of the Quarter",
+      "Cases Transferred/Filed with DRTs",
+      "Cases decided at the end of the Quarter",
+      "Cases decided by DRTs",
+      "Cases decided during the Quarter",
+      "Cases pending with DRTs",
+      "Cases where Compromise Proposals Received",
+      "Cases where Recovery Effected - at the beginning of the Quarter",
+      "Cases where Recovery Effected - at the end of the Quarter",
+      "Cases where Recovery Effected - during the Quarter",
+      "Cost of Filing Cases with DRT",
+      "DRT - Cumulative since Inception of the DRTs",
+      "Lok Adalat - Cumulative since Inception Lok Adalat",
+      "New cases during the Quarter",
+      "No. of Notices Issued",
+      "Of Compromise Proposal, Cases where Amount was Recovered",
+      "Of Total Notices Issued, cases where Amount was Recovered",
+      "Recovery in cases decided by DRTs ",
+      "SARFAESI - Cumulative since Inception of the Act",
+      "Total Cases at the beginning of the Quarter",
+      "Total Cases at the end of the Quarter"
+    ]
+  },
   "cims_raq_q_sec6_part_a": {
     "category_investment_dom_opr": [
       "        - GOI Securities(Dated)",
@@ -369,6 +581,46 @@
       "Investments (Overseas Operation)",
       "Out of C Equities - Total - investments in equity - oriented mutual funds",
       "TOTAL Investments (A+B+C) - Domestic Operations"
+    ]
+  },
+  "cims_raq_q_sec6_part_b": {
+    "item": [
+      "AFS to HFT",
+      "AFS to HTM",
+      "HFT to AFS",
+      "HFT to HTM",
+      "HTM to AFS",
+      "HTM to HFT"
+    ]
+  },
+  "cims_raq_q_sec6_part_c": {
+    "category": [
+      "A. Listed",
+      "B. Unlisted",
+      "C. Equities",
+      "Grand Total (I+II+III)"
+    ],
+    "item": [
+      "1 .Listed",
+      "1.PSU Bonds",
+      "2.Unlisted",
+      "2.Venture Capital Fund",
+      "3.Mortgage backed Securities",
+      "4.Securities issued by ARCs",
+      "5.Other Asset backed Securities",
+      "6.Other Corporate Bonds and Debentures",
+      "7.Mutual funds(Including Units)",
+      "8.Others",
+      "I. Sub Total (Listed)",
+      "II. Sub Total (Unlisted)",
+      "III. Equities: ( 1+2)"
+    ]
+  },
+  "cims_raq_q_sec6_part_c_2": {
+    "description": [
+      "D. Investments in non-SLR securities (as per extant DBOD guidelines for monitoring prudential limits on investments in non-SLR securities) as at end of previous March",
+      "E. Investments in non-SLR securities which are excluded from  monitoring of prudential limits on unlisted securities , as per extant DBOD guidelines ",
+      "F. Investments in unlisted non-SLR securities as % of non-SLR investments"
     ]
   },
   "cims_raq_q_sec8_ind_brkup": {
@@ -527,6 +779,15 @@
       "III. Non-Food Credit ( 1 to 5)"
     ]
   },
+  "cims_raq_q_sec8_sec_credit_1": {
+    "description": [
+      "F. Investments on Account of Short fall in Priority Sector Lending for the Previous Financial Year",
+      "G. Investments on Account of Expected Short fall in Priority Sector Lending for the Current Financial Year",
+      "H. ANBC (Adjusted Net Bank Credit) - as per Extant FIDD Circular",
+      "I PSLC Certificate Sold(-)/Bought(+)",
+      "J. Priority Sector Lending as % of ANBC [ (Sub - Total - A ( 1 to 3) + G + I)*100/ H]]"
+    ]
+  },
   "cims_raq_q_sec9_sensec_parta": {
     "description": [
       "1. Convertible Bonds and Debentures",
@@ -637,6 +898,445 @@
       "Regulatory Retail",
       "Total Advances",
       "Wholesale Advances"
+    ]
+  },
+  "cims_raq_q_signatory": {
+    "description": [
+      "Date",
+      "Designation",
+      "E-mail Id",
+      "Landline No.",
+      "Mobile No.",
+      "Name",
+      "Place"
+    ]
+  },
+  "cims_ror_q_sec_a": {
+    "item": [
+      "(MEMORANDUM ITEM) Interest receivable on NPAs not recognized as income",
+      "(i) Profit/(loss) on Sale of Fixed Assets",
+      "(ii) Pension Expenses/Provisions",
+      "(ii) Profit/(loss) on Sale of Other Assets",
+      "(iii) Gratuity Expenses/Provisions",
+      "(iv) Leave Encashment/Provisions",
+      "(v) Provisions for Wage Revision",
+      "(vi) Others Expenses/Provisions",
+      "A. Interest Income (including Interest Tax) [I to V]",
+      "I. Interest on balances with RBI/ Foreign Central Banks/ FIs/ Banks",
+      "I. Value Adjustment of Securities held for Trading",
+      "I.1 Interest on balances with RBI/ Foreign Central Banks",
+      "I.2 Interest on dues from FIs / Central Counter Parties (CCPs) in India",
+      "I.3 Interest on Interbank Deposits and Placements",
+      "II. Interest on Loans & Advances (Non-bank) (II.1 to II.5 = II.A + II.B)",
+      "II.(i) Loans to Real Estate (incl.Non Real Estate Loans secured by Real Estate)",
+      "II.(i).1 Loans to Commercial Real Estate",
+      "II.(i).2 Housing Loans",
+      "II.1 Agricultural Loans/Advances",
+      "II.2 Industrial Loans/Advances",
+      "II.3 Service Loans/Advances",
+      "II.4 Retail Loans/Advances",
+      "II.4.1 Secured Retail Loans/Advances",
+      "II.4.2 Unsecured Loans/Advances",
+      "II.5 Other Loans/Advances",
+      "II.A Regulatory Retail Loans/Advances",
+      "II.B Wholesale Loans/Advances",
+      "J. Net Operating Income [G-H-I]",
+      "K. Capital Gains/(Losses)",
+      "L. Other Non-operating Income/ (expenses)",
+      "M. Earning Before Provisions & Taxes (EBPT) [J + K + L]",
+      "X.1 LCs",
+      "X.2 BGs",
+      "XIV.1 Issue/Renewal of Credit/Debit Cards/Other PPIs",
+      "XIV.4 Income from other Parabanking Activities",
+      "XIV.5 Income from Demat Services",
+      "XIX All other Operating Expenses",
+      "a) Payments to Outsourced Agencies *",
+      "b) AUDITORS' FEES AND EXPENSES",
+      "c) Others",
+      "dfdsf",
+      "dfdsfsf",
+      "gdfg",
+      "i.Balance at the beginning of the period",
+      "ii.Interest receivable not recognized during the period (i.e. suspended interest)",
+      "iii.Interest received and reversed to income from (i)during the period on NPAs upgraded to Performing / accrual basis",
+      "iv.Interest Receivable (part of (i)) from NPA accounts, written-off during the period",
+      "of which, income from Credit Card Dues",
+      "tretrett",
+      "v.Balance at the end of the quarter [(i) + (ii) - (iii) - (iv)]"
+    ]
+  },
+  "cims_ror_q_sec_a1": {
+    "line_item": [
+      " (i) CEOs/MDs/CMD",
+      " (iii) Clerical Staff",
+      "(ii) Officer Staff",
+      "(iv) Subordinate Staff",
+      "Total Number of Staff"
+    ]
+  },
+  "cims_ror_q_sec_b": {
+    "line_item": [
+      "A Earnings Before Provisions & Taxes",
+      "B Risk Provisions",
+      "B1 For Standard Advances",
+      "B2 For Restructured Standard Advances",
+      "B3 For Country Risk",
+      "B4 For Non-Performing Loans & Advances",
+      "B41 Provisions made out of EBPT (A)",
+      "B42 Provisions taken back from the Provisions made earlier (including for upgradations and write-offs)",
+      "B5 For Depreciation in Securities and Investments",
+      "B6 For Other Impaired Assets",
+      "B7 For Contingent Credit Exposures",
+      "B8 For Other Losses",
+      "C Write Offs",
+      "C1 Bad and doubtful debts",
+      "C11 Amount of W/O out of EBPT (A)",
+      "C12 Amount of W/O out of the Provisions made earlier",
+      "C2 Other assets",
+      "D Provisions For Liabilities",
+      "E Profit/Loss Before Tax (PBT) [A - B - C - D]",
+      "F Provision For Income Taxes",
+      "G Net Profit/Loss (PAT) [E - F]",
+      "H Below the line adjustment",
+      "I   Prior Period Credits",
+      "I Dividend Payable",
+      "II  Prior Period Charges",
+      "III Extra-ordinary Credits",
+      "IV Extra-ordinary Charges",
+      "J Retained Earnings [G -H-I]",
+      "K Appropriations",
+      "K1 Transfer to Statutory Reserves",
+      "K2 Transfer to Other Reserves",
+      "K3 Transfer to Govt / Remittance to HO",
+      "L Unallocated Surplus [J-K]",
+      "M Balance of Profit/(Loss) Brought FORWARD",
+      "MEMORANDUM ITEM                                                                                                                                                                                            ",
+      "N Surplus/(Loss) On Profit & Loss Account Carried Forward [L+M]",
+      "V Net Profit after extra-ordinary and prior period items [N +I- II+III-IV]"
+    ]
+  },
+  "cims_ror_q_sec_c": {
+    "country_code": [
+      " BH - BAHRAIN",
+      "SG",
+      "ZZ"
+    ],
+    "country_name": [
+      " BH - BAHRAIN",
+      "ALL Countries",
+      "SG - Singapore"
+    ],
+    "line_item": [
+      "1 Management fees/ Supervisory charges received",
+      "1 Total Amount of Capital Remitted by HO to Br/Sub/JVs",
+      "2 Dividend income from",
+      "2 For Retained Earnings Remitted",
+      "3 Total Amount of HO support Funds Remitted for Funding Requirements of Br/Sub/JVs",
+      "3 Total Profits of the country",
+      "4 Any other - please specify",
+      "4 Total  Amount of Provisions transferred from HO to  Br/Sub/JVs (a+b+c)",
+      "5 Amount transferred on account of write offs ",
+      "6 Any other",
+      "Net Inflows (Total Inflows -Total Outflows)",
+      "Total Inflows ( 1+2+3+4)",
+      "Total Outflows (1+2+3+4+5+6)",
+      "a Provisions transferred from HO to   Br/Sub/JVs on account of Non Performing Loans",
+      "a Rep Office expenses ",
+      "a out of which amount of profits repatriated  (please specify period) to parent bank and % of  total profit",
+      "b Other Outflow (specify) ",
+      "b Provisions transferred from HO  to Br/Sub/JVs on account of Special Mention Loans etc",
+      "c Provisions  transferred from HO to  Br/Sub/JVs on account of  Non performing Investments"
+    ]
+  },
+  "cims_lr_part_a1": {
+    "description": [
+      "Capital",
+      "Reserves & Surplus",
+      "Deposits",
+      "Current Deposits",
+      "Savings Bank Deposits",
+      "Term Deposits",
+      "Certificates of Deposit",
+      "Borrowings",
+      "Call and Short Notice",
+      "Inter-Bank (Term)",
+      "Refinances",
+      "Others (specify)",
+      "Other Liabilities & Provisions",
+      "Bills Payable",
+      "Inter-Office Adjustments",
+      "Provisions",
+      "Others",
+      "Lines of Credit committed to",
+      "Institutions",
+      "Customers",
+      "Unavailed portion of Cash Credit / Overdraft / Demand Loan component of Working Capital",
+      "Letters of credit /Guarantees",
+      "Repos",
+      "Bills Rediscounted (DUPN)",
+      "Swaps (Buy / Sell) /Maturing / Forwards",
+      "Interest Payable",
+      "Total Outflows",
+      "Cumulative Outflows",
+      "Cash",
+      "Balances with RBI",
+      "Balances with other Banks",
+      "Current Account",
+      "Money at Call and Short Notice, Term Deposits and other placements",
+      "Investments (including those under Repos but excluding Reverse Repos)",
+      "Advances Performing",
+      "Bills Purchased and Discounted (including bills under DUPN)",
+      "Cash Credits, Overdrafts and Loans repayable on demand",
+      "Term Loans",
+      "NPAs (Advances and Investments)",
+      "Fixed Assets",
+      "Other Assets",
+      "Leased Assets",
+      "Reverse Repos",
+      "Swaps (Sell / Buy) /maturing forwards",
+      "Interest receivable",
+      "Committed Lines of Credit",
+      "Export Refinance from RBI",
+      "Total Inflows",
+      "Mismatch (C-A)",
+      "Mismatch as % to Outflows (D as % to A)",
+      "Cumulative Mismatch",
+      "Cumulative Mismatch as a% to Cumulative Outflows (F as a% to B)"
+    ]
+  },
+  "cims_lr_part_a2": {
+    "description": [
+      "Off balance sheet items",
+      "Merchant Sales",
+      "Interbank Sales",
+      "Overseas Sales",
+      "Sales to RBI",
+      "Foreign currency rupee swaps - Sale against INR",
+      "Cross Currency Swaps - Sale against Cross Currency",
+      "Options",
+      "Currency Futures",
+      "LCs and Guarantees",
+      "Others - Pl specify",
+      "On-Balance Sheet items",
+      "FCNR(B)",
+      "EEFC",
+      "RFC and RFC (D)",
+      "USD",
+      "Overdrafts in Nostro A/c.",
+      "Inter-bank/borrowings",
+      "LOC/BAF",
+      "Total Outflows",
+      "Total Outflows (in Rupees Lakh)",
+      "Off Balance Sheet Items",
+      "Merchant Purchases",
+      "Inter-bank Purchases",
+      "Overseas Purchases",
+      "Purchases from RBI",
+      "Foreign currency rupee swaps- purchases against INR",
+      "Cross currency Swaps - Purchases against cross currency",
+      "On- Balance Sheet items",
+      "Nostro Balances (Cash and Bank Balances)",
+      "Short Term Investments",
+      "Loans:",
+      "PCFC",
+      "Bills Discounted",
+      "FCNR (B) Loans",
+      "Other FC loans",
+      "Inter-bank lending",
+      "Others",
+      "Total Inflows",
+      "Total Inflows (in Rupees Lakh)",
+      "Gap (Total Inflows - Total outflows)"
+    ],
+    "currency": [
+      "USD"
+    ]
+  },
+  "cims_lr_trm_dep_amt_wise_tb_2": {
+    "description": [
+      "below 3%",
+      "3% and below 5%",
+      "5% and below 7%",
+      "7% and below 9%",
+      "9% and below 11%",
+      "11% and below 13%",
+      "13% and below 15%",
+      "15% and below 17%",
+      "17% and above",
+      "Total"
+    ]
+  },
+  "cims_lr_part_b1": {
+    "description": [
+      "Capital /HO funds",
+      "Reserves & Surplus",
+      "Deposits",
+      "Current Deposits",
+      "Savings Bank Deposits",
+      "Term Deposits",
+      "Certificates of Deposit",
+      "Borrowings",
+      "Call and Short Notice",
+      "Inter-Bank (Term)",
+      "Refinances",
+      "Others (specify)",
+      "Other Liabilities & Provisions",
+      "Bills Payable",
+      "Provisions",
+      "Others",
+      "Lines of Credit committed to",
+      "Institutions",
+      "Customers",
+      "Unavailed portion of Cash Credit / Overdraft / Demand Loan component of Working Capital",
+      "Letters of credit /Guarantees",
+      "Repos",
+      "Bills Rediscounted (DUPN)",
+      "Swaps (Buy / Sell) /Maturing / Forwards",
+      "Interest Payable",
+      "Total Outflows",
+      "Cumulative Outflows",
+      "Cash",
+      "Balances with Central Bank",
+      "Balances with other Banks",
+      "Current Account",
+      "Money at Call and Short Notice, Term Deposits and other placements",
+      "Investments (including those under Repos but excluding Reverse Repos)",
+      "Advances Performing",
+      "Bills Purchased and Discounted (including bills under DUPN)",
+      "Cash Credits, Overdrafts and Loans repayable on demand",
+      "Term Loans",
+      "NPAs (Advances and Investments)",
+      "Fixed Assets",
+      "Other Assets",
+      "Leased Assets",
+      "Reverse Repos",
+      "Swaps (Sell / Buy) /maturing forwards",
+      "Interest receivable",
+      "Committed Lines of Credit",
+      "Export Refinance from RBI",
+      "Total Inflows",
+      "Mismatch (C-A)",
+      "Mismatch as % to Outflows (D as % to A)",
+      "Cumulative Mismatch",
+      "Cumulative Mismatch as a% to Cumulative Outflows (F as a% to B)",
+      "Cumulative Mismatches",
+      "Cumulative Mismatches as a percentage to Cumulative Outflows"
+    ],
+    "country": [
+      "AD - ANDORA"
+    ]
+  },
+  "cims_lr_part_b2": {
+    "description": [
+      "Capital /HO funds",
+      "Reserves & Surplus",
+      "Deposits",
+      "Current Deposits",
+      "Savings Bank Deposits",
+      "Term Deposits",
+      "Certificates of Deposit",
+      "Borrowings",
+      "Call and Short Notice",
+      "Inter-Bank (Term)",
+      "Refinances",
+      "Others (specify)",
+      "Other Liabilities & Provisions",
+      "Bills Payable",
+      "Provisions",
+      "Others",
+      "Lines of Credit committed to",
+      "Institutions",
+      "Customers",
+      "Unavailed portion of Cash Credit / Overdraft / Demand Loan component of Working Capital",
+      "Letters of credit /Guarantees",
+      "Repos",
+      "Bills Rediscounted (DUPN)",
+      "Swaps (Buy / Sell) /Maturing / Forwards",
+      "Interest Payable",
+      "Total Outflows",
+      "Cumulative Outflows",
+      "Cash",
+      "Balances with Central Bank",
+      "Balances with other Banks",
+      "Current Account",
+      "Money at Call and Short Notice, Term Deposits and other placements",
+      "Investments (including those under Repos but excluding Reverse Repos)",
+      "Advances Performing",
+      "Bills Purchased and Discounted (including bills under DUPN)",
+      "Cash Credits, Overdrafts and Loans repayable on demand",
+      "Term Loans",
+      "NPAs (Advances and Investments)",
+      "Fixed Assets",
+      "Other Assets",
+      "Leased Assets",
+      "Reverse Repos",
+      "Swaps (Sell / Buy) /maturing forwards",
+      "Interest receivable",
+      "Committed Lines of Credit",
+      "Export Refinance from RBI",
+      "Total Inflows",
+      "Mismatch (C-A)",
+      "Mismatch as % to Outflows (D as % to A)",
+      "Cumulative Mismatch",
+      "Cumulative Mismatch as a% to Cumulative Outflows (F as a% to B)",
+      "Cumulative Mismatches",
+      "Cumulative Mismatches as a percentage to Cumulative Outflows"
+    ],
+    "country": [
+      "JO - Jordan"
+    ]
+  },
+  "cims_raq_q_sec5_top_cr_tl": {
+    "description": [
+      "Total",
+      "Doubtful-1",
+      "Sub-standard",
+      "Doubtful-3",
+      "Doubtful-2"
+    ]
+  },
+  "cims_raq_q_sec6_part_d": {
+    "description": [
+      "A. Amount of Provisions for NPIs at beginning of the FY",
+      "B. New additions during the Period (April to Date)",
+      "C. Reductions during the Period (April to Date)",
+      "C1. On account of Write Offs (Prov. Utilised for write-off)",
+      "C2. Others",
+      "D. Amount of Provisions for NPIs at end of the FY/Period"
+    ]
+  },
+  "cims_raq_m_gen_info": {
+    "description": [
+      "Return Name",
+      "Return Code",
+      "Reporting Institution",
+      "Bank Code",
+      "Address",
+      "For the Period Ended",
+      "Reporting Frquency",
+      "Date of Report",
+      "Status",
+      "Date of Audit",
+      "Validation Status",
+      "Bank Category",
+      "Return Version",
+      "Tool Name",
+      "General Remarks",
+      "Start Date"
+    ],
+    "value": [
+      "2021-01-31",
+      "999",
+      "Abcd",
+      "Audited",
+      "Demo Bank",
+      "Domestic bank without overseas branches",
+      "Monthly",
+      "R107",
+      "Report on Asset Quality",
+      "V2.3",
+      "Validated",
+      "iDEAL"
     ]
   }
 }

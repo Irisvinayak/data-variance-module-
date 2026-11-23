@@ -1,0 +1,642 @@
+{
+  "cims_ale_q_anx_1_bal": {
+    "description": [
+      "With banks Outside India ",
+      "With banks in India "
+    ]
+  },
+  "cims_ale_q_anx_1_loss_pro_iba": {
+    "description": [
+      "Loss provision made for Inter Branch Adjustments, if any"
+    ]
+  },
+  "cims_ale_q_anx_1_loss_pro_ind": {
+    "description": [
+      "Loss Provision made for accounts with banks in India, if any "
+    ]
+  },
+  "cims_ale_q_anx_1_loss_pro_ovr": {
+    "description": [
+      "Loss provision made for accounts with banks overseas, if any"
+    ]
+  },
+  "cims_ale_q_gen_info": {
+    "description": [
+      "Address of Reporting Institution",
+      "Bank Category",
+      "Bank Code",
+      "Date of Audit",
+      "Date of Report ",
+      "For the Period Ended",
+      "General Remarks",
+      "Reporting Frequency",
+      "Reporting Institution",
+      "Reporting period start date",
+      "Return Code",
+      "Return Name",
+      "Return Version",
+      "Status ",
+      "Tool Name",
+      "Validation Status "
+    ]
+  },
+  "cims_ale_q_sec2_e1": {
+    "item": [
+      "    (a)  LIBOR ($)",
+      "    (a)  LIBOR ($) ",
+      "    (a)  MIBOR / OIS - Fixed ",
+      "    (b)  MIBOR / OIS - Floating",
+      "    (b)  Others (FCY)",
+      "    (c)  INBMK / INCMT - Fixed",
+      "    (d)  INBMK / INCMT - Floating",
+      "    (e) MIFOR / MIOCS / MITOR - Fixed",
+      "    (f) MIFOR / MIOCS / MITOR - Floating",
+      "    (g) Others - Fixed **",
+      "    (h) Others - Floating **",
+      "(I) Rupee - Foreign Currency Forward Contracts",
+      "(II) IRS (Rupee)*",
+      "(III) CDS - Premium Paid",
+      "(IV) CDS - Premium Received",
+      "(V) Sub-Total (I) to (IV)",
+      "(VI) IRS (FCY)*",
+      "(X) Total (V) + (VI)",
+      "(Y) Networth at end of Previous March",
+      "Memo: IRS (FCY) in terms of USD equivalent",
+      "PVBP 01 of X/Y*100"
+    ]
+  },
+  "cims_ale_q_sec2_e2": {
+    "item": [
+      "    (a)  LIBOR ($)",
+      "    (a)  LIBOR ($) ",
+      "    (a)  MIBOR / OIS - Fixed ",
+      "    (b)  MIBOR / OIS - Floating",
+      "    (b)  Others (FCY)",
+      "    (c)  INBMK / INCMT - Fixed",
+      "    (d)  INBMK / INCMT - Floating",
+      "    (e) MIFOR / MIOCS / MITOR - Fixed",
+      "    (f) MIFOR / MIOCS / MITOR - Floating",
+      "    (g) Others - Fixed **",
+      "    (h) Others - Floating **",
+      "(I) Rupee - Foreign Currency Forward Contracts",
+      "(II) IRS (Rupee)*",
+      "(III) CDS - Premium Paid",
+      "(IV) CDS - Premium Received",
+      "(V) Sub-Total (I) to (IV)",
+      "(VI) IRS (FCY)*",
+      "(X) Total (V) + (VI)",
+      "(Y) Networth at end of Previous March",
+      "Memo: IRS (FCY) in terms of USD equivalent",
+      "PVBP 01 of X/Y*100"
+    ]
+  },
+  "cims_ale_q_sec2_f1": {
+    "item": [
+      "    a) Physically Settled",
+      "    a) physically settled",
+      "    b) Cash Settled",
+      "    b) cash settled",
+      "(I) No. of Transactions,  of which",
+      "(II) Amount of Protection Bought / Sold, of which",
+      "HGJHFGJ",
+      "Rating-wise (reference entities) distribution of Protection Bought / Sold for each Broad Rating Grade",
+      "a) premium paid / received",
+      "b) Credit event payments(cash settled):",
+      "paid",
+      "received ",
+      "\u2022 paid",
+      "\u2022 received "
+    ]
+  },
+  "cims_ale_q_sec2_f2": {
+    "item": [
+      "    a) Physically Settled",
+      "    a) physically settled",
+      "    b) Cash Settled",
+      "    b) cash settled",
+      "(I) No. of Transactions,  of which",
+      "(II) Amount of Protection Bought / Sold, of which",
+      "GHKHGDJG",
+      "HGJHFGJ",
+      "Rating-wise (reference entities) distribution of Protection Bought / Sold for each Broad Rating Grade",
+      "a) premium paid / received",
+      "b) Credit event payments(cash settled):",
+      "paid",
+      "received ",
+      "\u2022 paid",
+      "\u2022 received "
+    ]
+  },
+  "cims_ale_q_signatory": {
+    "description": [
+      "Date",
+      "Designation",
+      "E-mail Id",
+      "Landline No.",
+      "Mobile No.",
+      "Name",
+      "Place"
+    ]
+  },
+  "cims_raq_q_sec10": {
+    "description": [
+      "    B.2.1 Micro Enterprises",
+      "    B.2.2 Small Enterprises",
+      "    B.2.3 Medium Enterprises",
+      "    F.2.1 Micro Enterprises",
+      "    F.2.2 Small Enterprises",
+      "    F.2.3 Medium Enterprises",
+      "   B.1.1 Micro Enterprises",
+      "   B.1.2 Small Enterprises",
+      "   B.1.3 Medium Enterprises",
+      "   F.1.1 Micro Enterprises",
+      "   F.1.2 Small Enterprises",
+      "   F.1.3 Medium Enterprises",
+      "A. Micro Finance Institutions/ Self Help Groups",
+      "B. Micro, Small and Medium Enterprises",
+      "B.1 Direct Exposure",
+      "B.2 Indirect Exposure",
+      "E. Micro Finance Institutions/ Self Help Groups",
+      "Exposures in Foreign Currencies_FE",
+      "F. Micro, Small and Medium Enterprises",
+      "F.1 Direct Exposure",
+      "F.2 Indirect Exposure"
+    ]
+  },
+  "cims_raq_q_sec1_exc_govt_paper": {
+    "description": [
+      "(a) Treasury bills",
+      "(b) GOI Securities(Bonds)",
+      "(c) State Govt. securities",
+      "Total"
+    ]
+  },
+  "cims_raq_q_sec1_last_date_port": {
+    "description": [
+      "* Last date of portfolio review (dd/mm/yyyy)"
+    ]
+  },
+  "cims_raq_q_sec1_part_a_dom": {
+    "period_delinquency": [
+      "    ii.a.1 Overdue less than 30 days (SMA -0)",
+      "    ii.a.2 Overdue for 30 to 60 days (SMA -1)",
+      "    ii.a.3 Overdue for 60 to 90 days (SMA -2)",
+      "A. PERFORMING(i + ii)",
+      "B. NON-PERFORMING (iii + iv + v) ",
+      "C. Total ( A + B)",
+      "i) Current",
+      "ii) Overdue [ii.a + ii.b]",
+      "ii.a) Loans and Advances where 90 day norms is applicable as per IRAC",
+      "ii.b) Loans and Advances where 90 day norms is NOT applicable as per IRAC",
+      "iii) Substandard",
+      "iv) Doubtful",
+      "v) Loss"
+    ]
+  },
+  "cims_raq_q_sec1_part_b_dom": {
+    "period_delinquency": [
+      "     3) Substandard",
+      "     4) Doubtful",
+      "     5) Loss",
+      "    2.1 Overdue less than 30 days",
+      "    2.2 Overdue for 30 to 60 days",
+      "    2.3 Overdue for 60 to 90 days",
+      "1) Current",
+      "2) Overdue",
+      "A. PERFORMING (1 + 2)",
+      "B. NON-PERFORMING (3 + 4 + 5)",
+      "C. TOTAL (A+B)"
+    ]
+  },
+  "cims_raq_q_sec1_part_c_o": {
+    "period_delinquency": [
+      "    ii.a.1 Overdue less than 30 days (SMA -0)",
+      "    ii.a.2 Overdue for 30 to 60 days (SMA -1)",
+      "    ii.a.3 Overdue for 60 to 90 days (SMA -2)",
+      "A. PERFORMING(i + ii)",
+      "B. NON-PERFORMING (iii + iv + v) ",
+      "C. Total ( A + B)",
+      "i) Current",
+      "ii) Overdue [ii.a + ii.b]",
+      "ii.a) Loans and Advances where 90 day norms is applicable as per IRAC",
+      "ii.b) Loans and Advances where 90 day norms is NOT applicable as per IRAC",
+      "iii) Substandard",
+      "iv) Doubtful",
+      "v) Loss"
+    ]
+  },
+  "cims_raq_q_sec1_part_d_o": {
+    "period_delinquency": [
+      "     3) Substandard",
+      "     4) Doubtful",
+      "     5) Loss",
+      "    2.1 Overdue less than 30 days",
+      "    2.2 Overdue for 30 to 60 days",
+      "    2.3 Overdue for 60 to 90 days",
+      "1) Current",
+      "2) Overdue ",
+      "A. PERFORMING (1 + 2)",
+      "B. NON-PERFORMING (3 + 4 + 5)",
+      "C. TOTAL (A+B)"
+    ]
+  },
+  "cims_raq_q_sec2_last_date_port": {
+    "description": [
+      "* Date of last portfolio review / classification (dd/mm/yyyy)",
+      "@ Date of last provisioning review (dd/mm/yyyy)"
+    ]
+  },
+  "cims_raq_q_sec2_part_a": {
+    "risk_category": [
+      "1. Standard #",
+      "2. Sub-Standard",
+      "3. Doubtful",
+      "3a. Doubtful 1",
+      "3b. Doubtful 2",
+      "3c. Doubtful 3",
+      "4. Loss",
+      "Total (1 to 4)"
+    ]
+  },
+  "cims_raq_q_sec2_part_a_memo": {
+    "memorandum_item": [
+      "# Include amount of loans & advances to Government or carrying Government guarantee which are non-performing",
+      "(a) for less than 18 months",
+      "(b) for 18 months and over",
+      "Amount of interest not recognised on the above Government & Government guaranteed loans (Break-up)"
+    ]
+  },
+  "cims_raq_q_sec2_part_a_npa": {
+    "risk_category": [
+      "Net NPAs",
+      "Netting Items for NPAs"
+    ]
+  },
+  "cims_raq_q_sec2_part_b": {
+    "movement_provision_npa": [
+      "    C1. On account of Write Offs (Prov. Utilised for write-off)",
+      "    C2. Others",
+      "A. Amount of Provisions for NPAs at beginning of the FY",
+      "B. New additions during the Period (April to Date)",
+      "C. Reductions during the Period (April to Date)",
+      "D. Amount of Provisions for NPAs at end of the FY/Period"
+    ]
+  },
+  "cims_raq_q_sec3_part_b": {
+    "movement_restructure_std_la": [
+      "       Of  which increase in outstanding due to additional /fresh sanctions to existing restructured accounts",
+      "     C1. Movement of Rest Std Adv to Normal Std Adv",
+      "     C2. Slipped to NPAs",
+      "     C3. Recovery",
+      "     C4. Sold to ARCs/Others",
+      "     C5. Write-offs",
+      "     C6. Others, please specify",
+      "A. Amount of Restructured Standard Loans/Advances at beginning of the FY/Period",
+      "Abcd",
+      "B. New additions during the FY/Period",
+      "B1. Due to Fresh Restructuring during the FY/Period",
+      "B2. Due to Upgradation of Rest NPAs to Rest Std Adv",
+      "C. Reductions in Rest Std Adv during the FY/Period",
+      "D. Amount of Restructured Standard Loans/Advances at end of the FY/Period"
+    ]
+  },
+  "cims_raq_q_sec4_part_a": {
+    "movement_from": [
+      "A. Loans and advances at the beginning of the period (Should be equal to the figure at end of previous period)",
+      "B. Loans and Advances Disbursed during April to Date             ",
+      "C. Actual Repayments / Recoveries",
+      "D. Write-offs / Technical Write offs / Compromise etc.",
+      "E. Others (+ / -)",
+      "F. Outstanding Loans and Advances at end of period (A+B-C-D+E)",
+      "From Doubtful",
+      "From Loss",
+      "From Sub-standard",
+      "G. Provisions Required on Current Balance (Estimate)",
+      "H. Provisions Held",
+      "I. Excess/Deficit in Provisions Held (G-H)",
+      "Migration -From Standard",
+      "Movement",
+      "Total Upgrade/Downgrade"
+    ]
+  },
+  "cims_raq_q_sec4_part_b": {
+    "movement_from": [
+      "A. NPAs at the beginning of the FY",
+      "B. New Addition to NPAs during the Period (Without Netting, pl. see Note 1)",
+      "B.1 From Standard Advances (incl. Devolvement of LCs, BGs, etc)",
+      "B.2 Due to Regulatory Instructions, Amalgamation, Compliance to RBI Inspection Action Points, etc.",
+      "B.a Out of B, from New Advances during the Period",
+      "C. Reduction in NPAs (incl. new additions to NPAs) effected during the Period",
+      "C.1 Due to Upgradation",
+      "C.2 Due to Actual Recoveries",
+      "C.3 Due to Write-offs",
+      "C.3.1 Technical/Prudential Write-offs/AUC ",
+      "C.3.2 Write-offs on Account of Compromise Settlements",
+      "C.3.3 Actual Write-offs, if any",
+      "C.4 Due to Regulatory Instructions, Amalgamation, Compliance to RBI Inspection Action Points, etc.",
+      "C.a Upgradations out of B.a",
+      "C.b Recoveries out of B.a",
+      "C.c Write-offs (all kind of write-offs, incl. compromise write-offs) out of B.a",
+      "D. Increase due to change in Asset Classification (excl. up-gradation)",
+      "E. Decrease due to change in Asset Classification (excl. up-gradation)",
+      "F. Increase in the same NPA Category",
+      "G. NPAs at the end of the Period"
+    ]
+  },
+  "cims_raq_q_sec6_part_a": {
+    "category_investment_dom_opr": [
+      "        - GOI Securities(Dated)",
+      "        - GOI Treasury bills",
+      "        - Other approved Securities",
+      "        - State Govt. Securities(Dated)",
+      "      (i) Quoted",
+      "      (ii) Unquoted",
+      "     (i) GOI Recapitalisation bonds",
+      "     (ii) PSU bonds(excluding Banks/FIs)",
+      "     (iii) Mutual funds(debt oriented)",
+      "     (iv) Bank Certificate of Deposits",
+      "     (v) All others excluding equities",
+      "    (i) PSU bonds (excluding Banks/FIs)  ",
+      "    (ii) Mutual funds(debt oriented)",
+      "    (iii) Bank Certificate of Deposits",
+      "    (iv) All others excluding equities",
+      "A. SLR Investments - Total",
+      "B. Debt Securities - Total(Ba + Bb)",
+      "B.a Debt Securities - Quoted - Total",
+      "B.b Debt Securities - Unquoted - Total",
+      "C. Equities - Total",
+      "Investments (Global Operations)",
+      "Investments (Overseas Operation)",
+      "Out of C Equities - Total - investments in equity - oriented mutual funds",
+      "TOTAL Investments (A+B+C) - Domestic Operations"
+    ]
+  },
+  "cims_raq_q_sec8_ind_brkup": {
+    "industry_name": [
+      "A. Mining and Quarrying",
+      "A.1 Coal",
+      "A.2 Others",
+      "All Industries (A to S)",
+      "B. Food Processing",
+      "B.1 Sugar",
+      "B.2 Edible Oils and Vanaspati",
+      "B.3 Tea",
+      "B.4 Coffee",
+      "B.5 Others",
+      "C. Beverages (excluding Tea & Coffee) and Tobacco",
+      "C.1 Tobacco and tobacco products",
+      "C.2 Others",
+      "D. Textiles",
+      "D.1 Cotton",
+      "D.2 Jute",
+      "D.3 Man-made",
+      "D.4 Others",
+      "E. Leather and Leather products",
+      "F. Wood and Wood Products",
+      "G. Paper and Paper Products",
+      "H. Petroleum (non-infra), Coal Products (non-mining) and Nuclear Fuels",
+      "I. Chemicals and Chemical Products (Dyes, Paints, etc.)",
+      "I.1 Fertilizers",
+      "I.2 Drugs and Pharmaceuticals",
+      "I.3 Petro-chemicals (excluding under Infrastructure)",
+      "I.4 Others",
+      "J. Rubber, Plastic and their Products",
+      "K. Glass, Glassware and other non-metallic mineral products (Except Cement and Cement products)",
+      "L. Cement and Cement Products",
+      "M. Basic Metal and Metal Products",
+      "M.1 Iron and Steel",
+      "M.2 Other Metal and Metal Products",
+      "N. All Engineering",
+      "N.1 Electronics",
+      "N.2 Others",
+      "O. Vehicles, Vehicle Parts and Transport Equipments",
+      "OTherIHSD",
+      "Othegdh",
+      "Out of D (i.e., Total Textiles) to Spinning Mills",
+      "P. Gems and Jewellery",
+      "Q. Construction",
+      "R. Infrastructure (Pertaining to Industries Sector Only)",
+      "S. Other Industries, pl. specify"
+    ]
+  },
+  "cims_raq_q_sec8_infra_brkup": {
+    "industry_name": [
+      "1. Transport and adjoining Infrastructure",
+      "1.1 Roads and Bridges",
+      "1.1.1 Highways",
+      "1.1.2 Other Roads",
+      "1.10 Logistics Infrastructure",
+      "1.11 Bulk Material Transportation Pipelines",
+      "1.2 Ports",
+      "1.3 Shipyards",
+      "1.4 Inland Waterways",
+      "1.5 Airport",
+      "1.6 Railway track including electrical & signalling system, tunnels, viaducts, bridges",
+      "1.7 Railway rolling stock along with workshop and associated maintenance facilities",
+      "1.8 Railway terminal infrastructure including stations and adjoining commercial infrastructure",
+      "1.9 Urban Public Transport (except rolling stock in case of urban road transport)",
+      "2. Energy",
+      "2.1 Electricity Generation",
+      "2.1.1 Central Govt PSUs",
+      "2.1.2 State Govt PSUs (incl. SEBs)",
+      "2.1.3 Private Sector",
+      "2.2 Electricity Transmission",
+      "2.2.1 Central Govt PSUs",
+      "2.2.2 State Govt PSUs (incl. SEBs)",
+      "2.2.3 Private Sector",
+      "2.3 Electricity Distribution",
+      "2.3.1 Central Govt PSUs",
+      "2.3.2 State Govt PSUs (incl. SEBs)",
+      "2.3.3 Private Sector",
+      "2.4 Oil/Gas/Liquefied Natural Gas (LNG) storage facility",
+      "3. Water and Sanitation",
+      "3.1 Solid Waste Management",
+      "3.2 Water supply pipelines",
+      "3.3 Water treatment plants",
+      "3.4 Sewage collection, treatment and disposal system",
+      "3.5 Irrigation (dams, channels, embankments etc)",
+      "3.6 Storm Water Drainage System",
+      "3.7 Slurry Pipelines",
+      "4. Communication",
+      "4.1 Telecommunication (Fixed network)",
+      "4.2 Telecommunication towers",
+      "4.3 Telecommunication and Telecom Services",
+      "5. Social and Commercial Infrastructure",
+      "5.1 Education Institutions (capital stock)",
+      "5.2 Sports Infrastructure",
+      "5.3 Hospitals (capital stock)",
+      "5.4 Tourism Infrastructure",
+      "5.4.1 Three-star or higher category classified hotels located outside cities with population of more than 1 million",
+      "5.4.2 Ropeways and cable cars",
+      "5.4.3 Others",
+      "5.5 Common infrastructure for Industrial Parks and other parks with industrialn activity such as food parks, textile parks, Special Economic Zones, tourism acilities and agriculture markets",
+      "5.6 Fertilizer (Capital investment)"
+    ]
+  },
+  "cims_raq_q_sec8_sec_credit": {
+    "item": [
+      "1. Agriculture and Allied Activities",
+      "1.1 Direct",
+      "1.2 Indirect",
+      "2. Industry (2.1 to 2.4)",
+      "2.1 Micro",
+      "2.2 Small",
+      "2.3 Medium",
+      "2.4 Large",
+      "3. Services (3.1 to 3.10 equals 3.a to 3.d)",
+      "3.1 Transport Operators",
+      "3.1. Land Transport and Pipelines",
+      "3.2 Post and Telecommunication Services",
+      "3.2 Water Transport",
+      "3.2.1 Post and courier activities",
+      "3.2.2 Telecommunication",
+      "3.3 Air Transport (Aviation)",
+      "3.3 Tourism, Hotel and Restaurants",
+      "3.4 Trade",
+      "3.4.1 Wholesale Trade (other than Food Procurement)",
+      "3.4.2 Retail Trade",
+      "3.5 Financial Intermediation",
+      "3.5.1 Banking & Finance other than NBFCs and DFIs",
+      "3.5.1.1 Scheduled Commercial Banks",
+      "3.5.1.2 Co-operative Banks",
+      "3.5.1.2.1 Urban Cooperative Banks",
+      "3.5.1.2.2 District Central Cooperative Banks",
+      "3.5.1.2.3 Other Cooperative Banks",
+      "3.5.2 MFIs, HFCs and NBFCs other than DFIs",
+      "3.5.2.1 Micro Financial Institutions (MFIs)",
+      "3.5.2.2 Housing Finance Companies (HFCs)",
+      "3.5.2.3 Other NBFCs",
+      "3.5.3 Other Financial Intermediation",
+      "3.5.3.1 Mutual Fund (MFs)",
+      "3.5.3.2 Insurance and Pension Funding, Except compulsory Social Security",
+      "3.5.3.3 DFIs",
+      "3.5.3.4 Other Financial Intermediation activities (please specify)",
+      "3.6 Real Estate Activities  (Other than Residential Mortgages)",
+      "3.7 Computer and Related Activities",
+      "3.8 Professional Services",
+      "3.9 Other Services",
+      "3.a Micro",
+      "3.b Small",
+      "ABCD",
+      "DSFKLDJ",
+      "I. Gross Advances (II + III)",
+      "II. 1 Food Corporation of India",
+      "II. 2 State Civil Supplies",
+      "II. 3. Other Food Credit",
+      "II. Food Credit",
+      "III. Non-Food Credit ( 1 to 5)"
+    ]
+  },
+  "cims_raq_q_sec9_sensec_parta": {
+    "description": [
+      "1. Convertible Bonds and Debentures",
+      "1. Financial Guarantees issued to Stock Exchanges on behalf of Stock Brokers",
+      "1. Individuals",
+      "2. Other Financial Guarantees",
+      "2. Share and Stock Brokers",
+      "2..Equities",
+      "2a. Not exempted from regulatory ceiling",
+      "2b. Exempted from regulatory ceiling",
+      "3. Any other (Pl. specify)",
+      "3. Equity Oriented Mutual Funds",
+      "3. Market Makers",
+      "4. Any other (to be specified)",
+      "4. IPO Financing",
+      "5. Other Corporates",
+      "6. Any other (Pl. specify)",
+      "A1. Advances to Capital Market (Fund based)_DOM_EXP",
+      "A2. Advances to Capital Market (Non-fund based)",
+      "A3. Investments in Capital Market",
+      "NIL",
+      "Total Advances to Capital Market (1 to 6)",
+      "Total Capital Market Exposure (A1 + A2 + A3)",
+      "Total Investments in Capital Market",
+      "Total Non-fund based",
+      "of which All Borrowers against security of shares"
+    ]
+  },
+  "cims_raq_q_sec9_sensec_partb": {
+    "description": [
+      " A.2.2 Any Other- Please Specify",
+      "A Total Credit",
+      "A.1 Direct",
+      "A.1.1 Residential Mortgages",
+      "A.1.1.a Residential Mortgages - Individual Housing Loans qualifying for Priority Sector",
+      "A.1.1.b Residential Mortgages - All Others",
+      "A.1.2 Commercial Real Estate",
+      "A.1.2.1 Commercial Real Estate - Residential Housing (CRE-RH)",
+      "A.1.2.2 Commercial Real Estate - Other",
+      "A.2 Indirect",
+      "A.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
+      "Any Other- Please Specify ",
+      "B Total Investment",
+      "B.1 Direct",
+      "B.1.1 Commercial Real Estate",
+      "B.1.2 Investments in MBS and other securitized exposures",
+      "B.1.2.a Residential Real Estate",
+      "B.1.2.b Commercial Real Estate",
+      "B.1.3 Any Other- Please Specify",
+      "B.2 Indirect",
+      "B.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs)",
+      "B.2.2 Any Other- Please Specify",
+      "C Total Credit and Investment",
+      "C.1 Direct (A.1 + B.1)",
+      "C.1.1 Residential Mortgages (A.1.1)",
+      "C.1.1.1 Residential Mortgages - Individual Housing Loans qualifying for Priority Sector (A.1.1.a)",
+      "C.1.1.2 Residential Mortgages - All Others (A.1.1.b)",
+      "C.1.2 Commercial Real Estate (A.1.2 + B.1.1)",
+      "C.1.3 Investments in MBS and other securitized exposures",
+      "C.1.3.1 Residential Real Estate (B.1.2.a)",
+      "C.1.3.2 Commercial Real Estate (B.1.2.b)",
+      "C.1.4 Any Other (A.1.3 + B.1.3)",
+      "C.2 Indirect (A.2+B.2)",
+      "C.2.1 Funded and Non-funded Exposures NHB and Housing Finance Companies(HFCs) (A.2.1 + B.2.1)",
+      "C.2.2 Any Other- Indirect Exposure (A.2.2 + B.2.2)",
+      "NIL",
+      "OTHERS"
+    ]
+  },
+  "cims_raq_q_sec_12_misc": {
+    "item": [
+      "1. Type of Gold Loan - Non Agricultural",
+      "2. Type of Gold Loan - Agricultural",
+      "a. Gold Loan O/s",
+      "b. Mean effective Interest rate charged",
+      "c. Value of Gold pledged against the loan",
+      "d. LTV Utilisation",
+      "e. Gross NPAs",
+      "f. Incremental NPAs during the Quarter",
+      "g. Gold pledged in lieu of such incremental NPAs at Beginning of Quarter (O/S in KG)",
+      "h. Gold auctioned in lieu of such incremental NPAs during the quarter (in KG)"
+    ]
+  },
+  "cims_raq_q_sec_12_misc_t2": {
+    "category": [
+      "Doubtful",
+      "Loss",
+      "Non SMA Standard",
+      "SMA-0",
+      "SMA-1",
+      "SMA-2",
+      "Sub Standard"
+    ]
+  },
+  "cims_raq_q_sec_12_misc_t3": {
+    "description": [
+      "Base Rate",
+      "External Benchmark based Lending Rate(EBLR)",
+      "Loans which are not linked to any benchmarks",
+      "MCLR",
+      "Other Benchmark",
+      "Repo",
+      "Total Retail Advances"
+    ]
+  },
+  "cims_raq_q_sec_12_misc_t4": {
+    "description": [
+      "Regulatory Retail",
+      "Total Advances",
+      "Wholesale Advances"
+    ]
+  }
+}

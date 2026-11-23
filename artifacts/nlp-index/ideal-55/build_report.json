@@ -1,0 +1,495 @@
+{
+  "built_at": "2026-11-22T11:19:39+00:00",
+  "out_dir": "D:\\Tools\\Embeding maker\\output\\vectorDb5.5\\index\\staging",
+  "returns": [
+    "CIMS_ALE_Domestic(Quarterly)",
+    "CIMS_LR (Fortnightly)",
+    "CIMS_LR (Monthly)",
+    "CIMS_LR (Quarterly)",
+    "CIMS_RAQ(Annually)",
+    "CIMS_RAQ(Monthly)",
+    "CIMS_RAQ(Quarterly)",
+    "CIMS_ROR"
+  ],
+  "force": false,
+  "sample_labels": false,
+  "with_member_index": false,
+  "schema": {
+    "shards": [
+      "CIMS_ALE_Domestic(Quarterly)",
+      "CIMS_LR (Fortnightly)",
+      "CIMS_LR (Monthly)",
+      "CIMS_LR (Quarterly)",
+      "CIMS_RAQ(Annually)",
+      "CIMS_RAQ(Monthly)",
+      "CIMS_RAQ(Quarterly)",
+      "CIMS_ROR"
+    ],
+    "total_tables": 81,
+    "shared_tables": [
+      "cims_ale_q_anx_1_loss_pro_iba",
+      "cims_ale_q_anx_1_loss_pro_ind",
+      "cims_ale_q_anx_1_loss_pro_ovr",
+      "cims_ale_q_sec2_f2",
+      "cims_lr_cat_of_depositors",
+      "cims_lr_gen_info",
+      "cims_lr_part_a1",
+      "cims_lr_part_a2",
+      "cims_lr_part_b1",
+      "cims_lr_part_b2",
+      "cims_lr_sign_info",
+      "cims_lr_trm_dep_amt_wise_tb_2",
+      "cims_raq_q_gen_info",
+      "cims_raq_q_sec10",
+      "cims_raq_q_sec11",
+      "cims_raq_q_sec1_exc_govt_paper",
+      "cims_raq_q_sec1_last_date_port",
+      "cims_raq_q_sec1_part_a_dom",
+      "cims_raq_q_sec1_part_b_dom",
+      "cims_raq_q_sec1_part_c_o",
+      "cims_raq_q_sec1_part_d_o",
+      "cims_raq_q_sec2_last_date_port",
+      "cims_raq_q_sec2_part_a",
+      "cims_raq_q_sec2_part_a_memo",
+      "cims_raq_q_sec2_part_a_npa",
+      "cims_raq_q_sec2_part_b",
+      "cims_raq_q_sec2_part_c",
+      "cims_raq_q_sec3_part_a",
+      "cims_raq_q_sec3_part_b",
+      "cims_raq_q_sec4_part_a",
+      "cims_raq_q_sec4_part_b",
+      "cims_raq_q_sec4_part_d",
+      "cims_raq_q_sec5_top_cr_tl",
+      "cims_raq_q_sec6_part_a",
+      "cims_raq_q_sec6_part_b",
+      "cims_raq_q_sec6_part_c",
+      "cims_raq_q_sec6_part_c_2",
+      "cims_raq_q_sec6_part_d",
+      "cims_raq_q_sec7_exp_cr",
+      "cims_raq_q_sec8_ind_brkup",
+      "cims_raq_q_sec8_infra_brkup",
+      "cims_raq_q_sec8_sec_credit",
+      "cims_raq_q_sec8_sec_credit_1",
+      "cims_raq_q_sec9_sensec_parta",
+      "cims_raq_q_sec9_sensec_partb",
+      "cims_raq_q_sec_12_misc",
+      "cims_raq_q_sec_12_misc_t2",
+      "cims_raq_q_sec_12_misc_t3",
+      "cims_raq_q_sec_12_misc_t4",
+      "cims_raq_q_signatory"
+    ],
+    "duplicate_tables": [],
+    "stale_text_tables": []
+  },
+  "qa": {
+    "shards": [
+      "CIMS_ALE_Domestic(Quarterly)",
+      "CIMS_LR (Fortnightly)",
+      "CIMS_LR (Monthly)",
+      "CIMS_LR (Quarterly)",
+      "CIMS_RAQ(Annually)",
+      "CIMS_RAQ(Monthly)",
+      "CIMS_RAQ(Quarterly)",
+      "CIMS_ROR"
+    ],
+    "total_pairs": 4864,
+    "by_return": {
+      "CIMS_ALE_Domestic(Quarterly)": 45,
+      "CIMS_LR (Fortnightly)": 240,
+      "CIMS_LR (Monthly)": 417,
+      "CIMS_LR (Quarterly)": 389,
+      "CIMS_RAQ(Annually)": 1633,
+      "CIMS_RAQ(Monthly)": 440,
+      "CIMS_RAQ(Quarterly)": 1497,
+      "CIMS_ROR": 203
+    },
+    "duplicates_dropped": [
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "reporting institution name"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "bank code"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "date of audit"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "return version"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "categories of banks"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "general remarks"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "tool name"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "reporting period start date"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "cumulative mismatch percentage outflows"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "signatory name"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "term deposit amount wise total"
+      },
+      {
+        "return_name": "CIMS_LR (Monthly)",
+        "question": "Rank interest rate slabs by FC term deposit amount, highest first"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "reporting institution name"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "date of audit"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "categories of banks"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "reporting period start date"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "LR A1 borrowings total"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "What is Merchant Sales in the 1 day bucket in LR Part A2 (USD)?"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "savings deposits 1 day overseas"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "signatory name"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "landline number"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "place of signing"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "signatory date"
+      },
+      {
+        "return_name": "CIMS_LR (Quarterly)",
+        "question": "What is the Rupee term deposit amount for the '5% and below 7%' slab?"
+      },
+      {
+        "return_name": "CIMS_RAQ(Annually)",
+        "question": "bank code"
+      },
+      {
+        "return_name": "CIMS_RAQ(Annually)",
+        "question": "reporting institution name"
+      },
+      {
+        "return_name": "CIMS_RAQ(Annually)",
+        "question": "return version"
+      },
+      {
+        "return_name": "CIMS_RAQ(Annually)",
+        "question": "date of audit"
+      },
+      {
+        "return_name": "CIMS_RAQ(Annually)",
+        "question": "reporting frequency"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "How much of the real estate exposure is via indirect funded and non-funded exposure to NHB and Housing Finance Companies?"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "bank code"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "reporting institution name"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "bank category"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "return version"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "date of audit"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "reporting frequency"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "Show the trend of domestic exposure for Total Advances to Capital Market (1 to 6) across periods."
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "Domestic gross amount outstanding for borrowers against security of shares?"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "Reporting flag"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "Signatory field code"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "grand total risk assets domestic"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "inter-bank assets standard domestic"
+      },
+      {
+        "return_name": "CIMS_RAQ(Monthly)",
+        "question": "What was the Rated holding for PSU Bonds in the previous reporting period?"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "What is the validation status of the Asset Quality return?"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "bank code"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "reporting institution name"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "validation status"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "date of audit"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "bank category"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "MFI SHG funded exposure Rupee"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "Rank sectors by provision held for country exposure, highest first."
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "country risk sovereigns total exposure"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "Treasury bills value"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "GOI Securities Bonds"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "last date of portfolio review"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "last portfolio review date"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "last provisioning review date"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "Doubtful 3 overseas provision"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "What is the Doubtful amount for Inter-bank assets in domestic operations?"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "inter-bank assets standard domestic"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "excess deficit provisions held overseas"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "Lok Adalat new cases quarter"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "Show all exposure measures for defaulter code 1020 (Doubtful-2) in Section 5 Top Defaulters."
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "SLR investments total book value"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "unlisted non-SLR securities percentage"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "non-SLR securities excluded from prudential limits"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "export credit disbursement"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "PSLC certificate sold bought"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "expected PSL shortfall current year"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "gold loan NPAs"
+      },
+      {
+        "return_name": "CIMS_RAQ(Quarterly)",
+        "question": "reporting flag"
+      },
+      {
+        "return_name": "CIMS_ROR",
+        "question": "reporting flag"
+      }
+    ]
+  },
+  "taxonomies": {
+    "shards": [
+      "CIMS_ALE_Domestic(Quarterly)",
+      "CIMS_LR (Fortnightly)",
+      "CIMS_LR (Monthly)",
+      "CIMS_LR (Quarterly)",
+      "CIMS_RAQ(Annually)",
+      "CIMS_RAQ(Monthly)",
+      "CIMS_RAQ(Quarterly)",
+      "CIMS_ROR"
+    ],
+    "resolved": 7,
+    "without_taxonomy": [
+      "CIMS_ALE_Domestic(Quarterly)"
+    ],
+    "shared_taxonomies": {}
+  },
+  "concept_map": {
+    "written": "D:\\Tools\\Embeding maker\\output\\vectorDb5.5\\index\\staging\\concept_map.json",
+    "returns": [
+      "CIMS_LR (Fortnightly)",
+      "CIMS_LR (Monthly)",
+      "CIMS_LR (Quarterly)",
+      "CIMS_RAQ(Annually)",
+      "CIMS_RAQ(Monthly)",
+      "CIMS_RAQ(Quarterly)",
+      "CIMS_ROR"
+    ],
+    "metrics": 0,
+    "metrics_dropped_as_orphans": 0,
+    "axes": 250,
+    "formulas": 1076,
+    "table_profiles": 0,
+    "profiles_dropped_as_orphans": 0,
+    "orphan_profile_tables": [],
+    "orphan_metric_tables": [],
+    "schema_validated": true,
+    "without_taxonomy": [
+      "CIMS_ALE_Domestic(Quarterly)"
+    ],
+    "unreadable": [],
+    "tables_remapped_to_physical": {},
+    "tables_unresolvable": {},
+    "shared_tables_in_profiles": {}
+  },
+  "embeddings": {
+    "enriched": true,
+    "tables": 81,
+    "columns": 873,
+    "label_sampling": "cached",
+    "label_tables_from_workbook": 8,
+    "row_labels": 1074,
+    "tables_with_samples": 62,
+    "columns_needing_trim": 29
+  },
+  "concept_index": {
+    "concepts": 0,
+    "members": 0
+  },
+  "bm25": {
+    "documents": 81,
+    "written": "D:\\Tools\\Embeding maker\\output\\vectorDb5.5\\index\\staging\\bm25_table_index.pkl"
+  },
+  "qa_index": {
+    "pairs": 4864,
+    "written": "D:\\Tools\\Embeding maker\\output\\vectorDb5.5\\index\\staging\\qa_index.faiss"
+  },
+  "superset_guard": {
+    "schema_json": "D:\\Tools\\Embeding maker\\output\\vectorDb5.5\\index\\staging\\schema.json",
+    "schema_json_exists": true,
+    "onboarded": [
+      "CIMS_ALE_Domestic(Quarterly)",
+      "CIMS_LR (Fortnightly)",
+      "CIMS_LR (Monthly)",
+      "CIMS_LR (Quarterly)",
+      "CIMS_RAQ(Annually)",
+      "CIMS_RAQ(Monthly)",
+      "CIMS_RAQ(Quarterly)",
+      "CIMS_ROR"
+    ],
+    "in_schema_json": [
+      "CIMS_ALE_Domestic(Monthly)",
+      "CIMS_ALE_Domestic(Quarterly)",
+      "CIMS_LR (Fortnightly)",
+      "CIMS_LR (Monthly)",
+      "CIMS_LR (Quarterly)",
+      "CIMS_RAQ(Annually)",
+      "CIMS_RAQ(Monthly)",
+      "CIMS_RAQ(Quarterly)",
+      "CIMS_ROR"
+    ],
+    "missing_from_schema_json": [],
+    "not_yet_registered": [
+      "CIMS_ALE_Domestic(Monthly)"
+    ],
+    "ok": true,
+    "reason": ""
+  }
+}
