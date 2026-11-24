@@ -712,8 +712,14 @@ def get_available_dates(
         return_id, table_name, return_meta=return_meta, ctx=ctx
     )
 
+    # Only dates that have rows for THIS return. compute_variance() reads a shared
+    # table through the same predicate (return-code column / frequency column);
+    # without it here, the list offered dates filed by another return or frequency
+    # (CIMS_LR_PART_A2 offered 30-NOV-2025 / 31-DEC-2025 that its own rows never
+    # had) and picking one ended in "No data found ... Dates available in DB".
     rows, err = _distinct_dates_desc(
         execute_query_fn, resolved_table_name, filter_col, _MAX_AVAILABLE_DATES,
+        extra_where=_return_filter_sql({**table_meta, "return_code": return_id}),
     )
     if err:
         raise RuntimeError(f"{err} | table_queried={resolved_table_name}")
