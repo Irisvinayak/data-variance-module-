@@ -96,6 +96,27 @@ def _restrict_result_columns(computed: dict, requested_columns: list) -> dict:
     return {**computed, "columns": keep, "display_columns": display_columns, "rows": filtered_rows}
 
 
+def _refill_retry_dates(
+    comparison_dates: list, return_id: str, table_name: str, filter_col: str, ctx: RequestContext,
+) -> list:
+    """The dates to retry with when the anchor date has no rows: drop the anchor and
+    top the list back up with the next older real dates, so the retry still compares
+    against as many periods as were asked for. Plain `comparison_dates[1:]` turned a
+    "latest vs previous" pair into a single date with nothing to compare it with.
+    Any failure reading the table's dates falls back to `comparison_dates[1:]`."""
+    retry = list(comparison_dates[1:])
+    try:
+        from datetime import datetime
+        from ..nlp.date_resolver import _DATE_FMT, _candidate_dates, _fmt
+
+        oldest = datetime.strptime(str(retry[-1]).strip(), _DATE_FMT).date()
+        older = [c for c in _candidate_dates(return_id, table_name, filter_col, ctx) if c < oldest]
+        retry += [_fmt(c) for c in older[: len(comparison_dates) - len(retry)]]
+    except Exception:
+        logger.exception("[api.nlp] /variance/nlresolve | %s | could not refill retry dates", ctx)
+    return retry
+
+
 def _target_columns(computed: dict, spec, fallback: list, table_name: str) -> list:
     """The computed columns matching the names in spec.target_columns (by identifier
     or schema description). Unmatched names become notes on `spec`; when nothing
@@ -1023,7 +1044,8 @@ def _nlresolve_core(
                 detail=f"Data is not available for {comparison_dates[0]} in this table.",
             )
         if is_no_data_error(result_error(computed)) and len(comparison_dates) > 1:
-            retry_dates = comparison_dates[1:]
+            retry_dates = _refill_retry_dates(
+                comparison_dates, found["return_id"], resolved_table["table_name"], filter_col, ctx)
             logger.info(
                 "[api.nlp] /variance/nlresolve | %s | no rows for %s — retrying from %s",
                 ctx, comparison_dates[0], retry_dates[0],
@@ -1082,6 +1104,27 @@ def _nlresolve_core(
     if spec is not None and spec.all_columns and not spec.target_columns:
         resolution["selected_columns"] = list(computed.get("columns") or resolution["selected_columns"])
 
+    # One-figure question ("what is total loan assets for Term Loans"): answer with one
+    # measure and one line item (backend/nlp/point_value.py). Never on a follow-up, and
+    # never when the narrowing cannot be proven — then the result is left as it was.
+    from ..nlp.nlp_config import VALUE_LOOKUP_ENABLED
+    value_lookup = False
+    if VALUE_LOOKUP_ENABLED and date_query is None:
+        try:
+            from ..nlp.point_value import lookup_applies, pick_column
+            value_lookup = lookup_applies(spec, query)
+            if value_lookup and len(resolution["selected_columns"]) > 1 and not (spec and spec.target_columns):
+                one = pick_column(
+                    [c for c in resolution["selected_columns"]
+                     if c.upper() in {x.upper() for x in computed.get("columns") or []}],
+                    analysis.metric_text,
+                    lambda c: schema_info.column_description(resolved_table["table_name"], c))
+                if one:
+                    resolution["selected_columns"] = [one]
+        except Exception:
+            logger.exception("[api.nlp] /variance/nlresolve | %s | value-lookup column pick failed", ctx)
+            value_lookup = False
+
     computed = _restrict_result_columns(computed, resolution["selected_columns"])
 
     # The user described a specific line item ("Representative Office expenses") without
@@ -1108,6 +1151,21 @@ def _nlresolve_core(
             computed = analyze_result(computed, spec)
     except Exception:
         logger.exception("[api.nlp] /variance/nlresolve | %s | analysis stage failed; returning plain variance", ctx)
+
+    if value_lookup:
+        try:
+            from ..nlp.point_value import apply_value_lookup
+            computed, lookup_notes = apply_value_lookup(
+                computed, query=query, metric_text=analysis.metric_text,
+                table_name=resolved_table["table_name"],
+                describe=lambda c: schema_info.column_description(resolved_table["table_name"], c),
+                matched_labels=(shortlist or {}).get("matched_labels") or [],
+            )
+            if lookup_notes:
+                computed = {**computed, "analysis_notes": list(computed.get("analysis_notes") or []) + [
+                    n for n in lookup_notes if n not in (computed.get("analysis_notes") or [])]}
+        except Exception:
+            logger.exception("[api.nlp] /variance/nlresolve | %s | value lookup failed; keeping the table", ctx)
 
     logger.info(
         "[api.nlp] 200 /variance/nlresolve | %s | return_id=%s | table=%s | rows=%d",

@@ -265,6 +265,11 @@ export default function LayoutContainer({ loginId = '' }) {
         if (cancelled) return
         setAvailableDates([])
         setDatesError(true)
+        // Not entitled to this return: say so plainly instead of leaving a
+        // generic "couldn't load dates" with nothing to act on.
+        if (err?.status === 403) {
+          setError(err.message || 'You do not have access to this return. Contact your administrator.')
+        }
         if (import.meta.env.DEV) console.warn('Failed to load available dates:', err.message)
       })
       .finally(() => {
@@ -767,6 +772,19 @@ export default function LayoutContainer({ loginId = '' }) {
     }
   }
 
+  // Esc leaves the full-screen view (same as pressing Restore).
+  useEffect(() => {
+    if (tableState !== 'expanded' && vizState !== 'expanded') return undefined
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (tableState === 'expanded') handleTableExpand()
+      else handleVizExpand()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableState, vizState])
+
   const handleVizMinimize = () => {
     if (vizState === 'minimized') {
       vizPanelRef.current?.expand()
@@ -850,7 +868,12 @@ export default function LayoutContainer({ loginId = '' }) {
           minSize={20} had the same issue (20px is effectively no floor at
           all). Always use string percentages ("20%"/"4%") for these props. */}
       {result && (
-        <div className="lc-bottom lc-bottom-enter">
+        <div
+          className={
+            'lc-bottom lc-bottom-enter' +
+            (tableState === 'expanded' || vizState === 'expanded' ? ' lc-bottom-fullscreen' : '')
+          }
+        >
           <Group
             orientation="horizontal"
             style={{ height: '100%' }}

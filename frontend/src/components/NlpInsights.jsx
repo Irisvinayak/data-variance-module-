@@ -57,6 +57,43 @@ function downloadCsv(result) {
   URL.revokeObjectURL(url)
 }
 
+// A question about one figure (backend/nlp/point_value.py): that line item and
+// measure, current vs previous. Every value is shown exactly as the backend sent it.
+function ValueCard({ card }) {
+  const show = (v) => (v === null || v === undefined || v === '' ? '—' : String(v))
+  const arrow = card.direction === 'up' ? '▲ ' : card.direction === 'down' ? '▼ ' : ''
+  const tone = card.direction === 'up' ? 'nlp-value-up' : card.direction === 'down' ? 'nlp-value-down' : ''
+  return (
+    <div className="nlp-value-card" role="group" aria-label="Value comparison">
+      <div className="nlp-value-title">
+        {card.measure}{card.item ? ` — ${card.item}` : ''}
+      </div>
+      <div className="nlp-value-grid">
+        <div>
+          <div className="nlp-value-label">Current{card.current?.date ? ` (${card.current.date})` : ''}</div>
+          <div className="nlp-value-num">{show(card.current?.value)}</div>
+        </div>
+        <div>
+          <div className="nlp-value-label">Previous{card.previous?.date ? ` (${card.previous.date})` : ''}</div>
+          <div className="nlp-value-num">{show(card.previous?.value)}</div>
+        </div>
+        <div>
+          <div className="nlp-value-label">Change</div>
+          <div className={`nlp-value-num ${tone}`}>{card.change != null ? arrow + show(card.change) : '—'}</div>
+        </div>
+        <div>
+          <div className="nlp-value-label">% Change</div>
+          <div className={`nlp-value-num ${tone}`}>{card.pct_change != null ? show(card.pct_change) : 'N/A'}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+ValueCard.propTypes = {
+  card: PropTypes.object.isRequired,
+}
+
 export default function NlpInsights({ result, onNewConversation }) {
   const [showSource, setShowSource] = useState(false)
   if (!result) return null
@@ -90,6 +127,8 @@ export default function NlpInsights({ result, onNewConversation }) {
           )}
         </div>
       </div>
+
+      {result.value_card && <ValueCard card={result.value_card} />}
 
       {followupOf && (
         <div className="nlp-insights-line nlp-insights-muted">Refining the previous answer: “{followupOf}”</div>

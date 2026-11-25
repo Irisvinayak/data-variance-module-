@@ -262,6 +262,10 @@ SIGNIFICANT_PCT_DEFAULT: float = env_float("DV_NLP_SIGNIFICANT_PCT", "10")
 DEFAULT_RANK_N: int = env_int("DV_NLP_DEFAULT_RANK_N", "10")
 # Follow-up questions refine the previous answer (conversation_state round-trip).
 CONVERSATION_ENABLED: bool = _flag("DV_NLP_CONVERSATION", "true")
+# A question about ONE figure ("what is total loan assets for Term Loans") is answered
+# with that one line item and measure, current vs previous (backend/nlp/point_value.py),
+# instead of the whole table. Off restores the earlier behaviour exactly.
+VALUE_LOOKUP_ENABLED: bool = _flag("DV_NLP_VALUE_LOOKUP", "true")
 # Trend / multi-period / anomaly analysis.
 TREND_ENABLED: bool = _flag("DV_NLP_TREND", "true")
 TREND_MAX_PERIODS: int = env_int("DV_NLP_TREND_MAX_PERIODS", "12")
